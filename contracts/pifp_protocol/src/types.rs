@@ -14,7 +14,35 @@ pub enum ProjectStatus {
     Expired,
 }
 
-/// On-chain representation of a funding project.
+/// Immutable project configuration, written once at registration.
+///
+/// Stored separately from mutable state to reduce write costs on deposits
+/// and verification (only ~20 bytes for state vs ~150 bytes for the full struct).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectConfig {
+    pub id: u64,
+    pub creator: Address,
+    pub token: Address,
+    pub goal: i128,
+    pub proof_hash: BytesN<32>,
+    pub deadline: u64,
+}
+
+/// Mutable project state, updated on deposits and verification.
+///
+/// Kept small (~20 bytes) so that frequent writes (deposits) are cheap.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectState {
+    pub balance: i128,
+    pub status: ProjectStatus,
+}
+
+/// Full on-chain representation of a funding project.
+///
+/// Used as the public API return type; reconstructed internally from
+/// the split `ProjectConfig` + `ProjectState` storage entries.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
