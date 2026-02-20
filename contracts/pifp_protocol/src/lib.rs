@@ -1,39 +1,15 @@
 #![no_std]
 
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
+
+mod storage;
+mod types;
+
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, BytesN,
-    Env, Symbol, Vec,
-};
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum MilestoneStatus {
-    Pending = 0,
-    Released = 1,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Milestone {
-    pub id: u32,
-    pub amount: i128,
-    pub status: MilestoneStatus,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Project {
-    pub id: BytesN<32>,
-    pub creator: Address,
-    pub oracle: Address,
-    pub token: Address,
-    pub goal: i128,
-    pub milestones: Vec<Milestone>,
-    pub balance: i128,
-}
+use storage::{get_and_increment_project_id, get_oracle, load_project, save_project, set_oracle};
+pub use types::{Project, ProjectStatus};
 
 #[contracttype]
 pub enum DataKey {
@@ -58,20 +34,20 @@ pub struct PifpProtocol;
 
 #[contractimpl]
 impl PifpProtocol {
-    /// Create a new project with milestones.
+    /// Register a new funding project.
     ///
     /// - `creator` must authorize the call.
-    /// - `goal` is the target amount to be funded.
-    /// - `milestones` defines how funds are released. Sum of milestone amounts must match `goal`.
-    /// - `oracle` is the address authorized to release milestones.
-    pub fn create_project(
+    /// - `goal` is the target funding amount (must be > 0).
+    /// - `proof_hash` is a content hash (e.g. IPFS CID digest) representing proof artifacts.
+    /// - `deadline` is a ledger timestamp by which the project must be completed (must be in the future).
+    ///
+    /// Returns the persisted `Project` with a unique auto-incremented `id`.
+    pub fn register_project(
         env: Env,
-        id: BytesN<32>,
         creator: Address,
-        oracle: Address,
-        token: Address,
         goal: i128,
-        milestones: Vec<Milestone>,
+        proof_hash: BytesN<32>,
+        deadline: u64,
     ) -> Project {
         creator.require_auth();
 
@@ -79,119 +55,80 @@ impl PifpProtocol {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
 
-        let mut total_milestone_amount = 0;
-        for milestone in milestones.iter() {
-            total_milestone_amount += milestone.amount;
+        if deadline <= env.ledger().timestamp() {
+            panic!("deadline must be in the future");
         }
 
-        if total_milestone_amount != goal {
-            panic_with_error!(&env, Error::GoalMismatch);
-        }
+        let id = get_and_increment_project_id(&env);
 
         let project = Project {
-            id: id.clone(),
-            creator: creator.clone(),
-            oracle,
-            token,
+            id,
+            creator,
             goal,
-            milestones,
             balance: 0,
+            proof_hash,
+            deadline,
+            status: ProjectStatus::Funding,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(id.clone()), &project);
-
-        // Emit project creation event
-        env.events().publish(
-            (Symbol::new(&env, "project_created"), id),
-            creator,
-        );
+        save_project(&env, &project);
 
         project
     }
 
-    /// Deposit funds into a project.
-    pub fn deposit(env: Env, project_id: BytesN<32>, donator: Address, amount: i128) {
-        donator.require_auth();
-
-        let mut project = Self::get_project(env.clone(), project_id.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, Error::ProjectNotFound));
-
-        // Transfer tokens from donator to contract
-        let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(&donator, &env.current_contract_address(), &amount);
-
-        project.balance += amount;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(project_id.clone()), &project);
-
-        // Emit donation event
-        env.events().publish(
-            (Symbol::new(&env, "donation_received"), project_id),
-            (donator, amount),
-        );
-    }
-
-    /// Release funds for a specific milestone.
+    /// Retrieve a project by its ID.
     ///
-    /// - `oracle` must authorize the call.
-    /// - Milestone must exist and be in `Pending` status.
-    /// - Project must have sufficient balance for the milestone amount.
-    pub fn release_milestone(env: Env, project_id: BytesN<32>, milestone_id: u32) {
-        let mut project = Self::get_project(env.clone(), project_id.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, Error::ProjectNotFound));
-
-        project.oracle.require_auth();
-
-        let mut milestone_index = None;
-        for i in 0..project.milestones.len() {
-            let m = project.milestones.get(i).unwrap();
-            if m.id == milestone_id {
-                milestone_index = Some(i);
-                break;
-            }
-        }
-
-        let index =
-            milestone_index.unwrap_or_else(|| panic_with_error!(&env, Error::MilestoneNotFound));
-        let mut milestone = project.milestones.get(index).unwrap();
-
-        if milestone.status == MilestoneStatus::Released {
-            panic_with_error!(&env, Error::MilestoneAlreadyReleased);
-        }
-
-        if project.balance < milestone.amount {
-            panic_with_error!(&env, Error::InsufficientBalance);
-        }
-
-        // Update state
-        milestone.status = MilestoneStatus::Released;
-        project.milestones.set(index, milestone.clone());
-        project.balance -= milestone.amount;
-
-        // Release funds to creator
-        let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &project.creator,
-            &milestone.amount,
-        );
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(project_id.clone()), &project);
-
-        // Emit milestone release event
-        env.events().publish(
-            (Symbol::new(&env, "milestone_released"), project_id),
-            milestone_id,
-        );
+    /// Panics if the project does not exist.
+    pub fn get_project(env: Env, id: u64) -> Project {
+        load_project(&env, id)
     }
 
-    /// Retrieve project details.
-    pub fn get_project(env: Env, project_id: BytesN<32>) -> Option<Project> {
-        env.storage().persistent().get(&DataKey::Project(project_id))
+    /// Set the trusted oracle/verifier address.
+    ///
+    /// - `admin` must authorize the call (the caller setting the oracle).
+    /// - `oracle` is the address that will be permitted to verify proofs.
+    pub fn set_oracle(env: Env, admin: Address, oracle: Address) {
+        admin.require_auth();
+        set_oracle(&env, &oracle);
+    }
+
+    /// Verify proof of impact and update project status.
+    ///
+    /// The registered oracle submits a proof hash. If it matches the project's
+    /// stored `proof_hash`, the project status transitions to `Completed`.
+    ///
+    /// NOTE: This is a mocked verification (hash equality).
+    /// The structure is prepared for future ZK-STARK verification.
+    ///
+    /// - Only the registered oracle may call this.
+    /// - The project must be in `Funding` or `Active` status.
+    /// - `submitted_proof_hash` must match the project's `proof_hash`.
+    pub fn verify_and_release(env: Env, project_id: u64, submitted_proof_hash: BytesN<32>) {
+        // Ensure caller is the registered oracle.
+        let oracle = get_oracle(&env);
+        oracle.require_auth();
+
+        // Load the project.
+        let mut project = load_project(&env, project_id);
+
+        // Ensure the project is in a verifiable state.
+        match project.status {
+            ProjectStatus::Funding | ProjectStatus::Active => {}
+            ProjectStatus::Completed => panic!("project already completed"),
+            ProjectStatus::Expired => panic!("project has expired"),
+        }
+
+        // Mocked ZK verification: compare submitted hash to stored hash.
+        if submitted_proof_hash != project.proof_hash {
+            panic!("proof verification failed: hash mismatch");
+        }
+
+        // Transition to Completed.
+        project.status = ProjectStatus::Completed;
+        save_project(&env, &project);
+
+        // Emit verification event.
+        env.events()
+            .publish((symbol_short!("verified"),), project_id);
     }
 }

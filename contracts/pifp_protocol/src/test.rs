@@ -1,153 +1,205 @@
-#![cfg(test)]
+extern crate std;
 
-use super::*;
-use soroban_sdk::{testutils::Address as _, token, Address, Env, Vec, BytesN};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
-#[test]
-fn test_create_project() {
+use crate::types::ProjectStatus;
+use crate::{PifpProtocol, PifpProtocolClient};
+
+fn setup() -> (Env, PifpProtocolClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register_contract(None, PifpProtocol);
+    let contract_id = env.register(PifpProtocol, ());
     let client = PifpProtocolClient::new(&env, &contract_id);
+    (env, client)
+}
+
+// ── Project Registry Tests ──────────────────────────────────────────
+
+#[test]
+fn test_register_project_success() {
+    let (env, client) = setup();
 
     let creator = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract(Address::generate(&env));
-    let project_id = BytesN::from_array(&env, &[0u8; 32]);
+    let proof_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let goal: i128 = 1_000;
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
 
-    let milestones = Vec::from_array(&env, [
-        Milestone { id: 1, amount: 500, status: MilestoneStatus::Pending },
-        Milestone { id: 2, amount: 500, status: MilestoneStatus::Pending },
-    ]);
+    let project = client.register_project(&creator, &goal, &proof_hash, &deadline);
 
-    let project = client.create_project(&project_id, &creator, &oracle, &token_id, &1000, &milestones);
-
-    assert_eq!(project.goal, 1000);
+    assert_eq!(project.id, 0);
     assert_eq!(project.creator, creator);
-    assert_eq!(project.oracle, oracle);
-    assert_eq!(project.milestones.len(), 2);
-
-    let fetched_project = client.get_project(&project_id).unwrap();
-    assert_eq!(fetched_project.goal, 1000);
+    assert_eq!(project.goal, goal);
+    assert_eq!(project.balance, 0);
+    assert_eq!(project.proof_hash, proof_hash);
+    assert_eq!(project.deadline, deadline);
+    assert_eq!(project.status, ProjectStatus::Funding);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #7)")]
-fn test_create_project_goal_mismatch() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, PifpProtocol);
-    let client = PifpProtocolClient::new(&env, &contract_id);
+fn test_register_second_project_unique_ids() {
+    let (env, client) = setup();
 
     let creator = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let token_id = Address::generate(&env);
-    let project_id = BytesN::from_array(&env, &[0u8; 32]);
+    let proof_hash = BytesN::from_array(&env, &[2u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
 
-    let milestones = Vec::from_array(&env, [
-        Milestone { id: 1, amount: 500, status: MilestoneStatus::Pending },
-    ]);
+    let p1 = client.register_project(&creator, &500, &proof_hash, &deadline);
+    let p2 = client.register_project(&creator, &700, &proof_hash, &deadline);
 
-    // Goal is 1000, but milestones sum to 500
-    client.create_project(&project_id, &creator, &oracle, &token_id, &1000, &milestones);
+    assert_eq!(p1.id, 0);
+    assert_eq!(p2.id, 1);
 }
 
 #[test]
-fn test_deposit_and_release() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, PifpProtocol);
-    let client = PifpProtocolClient::new(&env, &contract_id);
+#[should_panic(expected = "goal must be positive")]
+fn test_register_project_invalid_goal() {
+    let (env, client) = setup();
 
     let creator = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let donator = Address::generate(&env);
-    
-    // Setup token
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract(token_admin);
-    let sac_client = token::StellarAssetClient::new(&env, &token_id);
-    let token_client = token::Client::new(&env, &token_id);
+    let proof_hash = BytesN::from_array(&env, &[3u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
 
-    // Mint tokens to donator
-    sac_client.mint(&donator, &2000);
-
-    let project_id = BytesN::from_array(&env, &[1u8; 32]);
-    let milestones = Vec::from_array(&env, [
-        Milestone { id: 1, amount: 400, status: MilestoneStatus::Pending },
-        Milestone { id: 2, amount: 600, status: MilestoneStatus::Pending },
-    ]);
-
-    client.create_project(&project_id, &creator, &oracle, &token_id, &1000, &milestones);
-
-    // Deposit
-    client.deposit(&project_id, &donator, &1000);
-    assert_eq!(token_client.balance(&contract_id), 1000);
-    assert_eq!(client.get_project(&project_id).unwrap().balance, 1000);
-
-    // Release Milestone 1
-    client.release_milestone(&project_id, &1);
-
-    let updated_project = client.get_project(&project_id).unwrap();
-    assert_eq!(updated_project.balance, 600);
-    assert_eq!(updated_project.milestones.get(0).unwrap().status, MilestoneStatus::Released);
-    assert_eq!(token_client.balance(&creator), 400);
-    assert_eq!(token_client.balance(&contract_id), 600);
+    client.register_project(&creator, &0, &proof_hash, &deadline);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #4)")]
-fn test_release_insufficient_balance() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, PifpProtocol);
-    let client = PifpProtocolClient::new(&env, &contract_id);
+#[should_panic(expected = "deadline must be in the future")]
+fn test_register_project_invalid_deadline() {
+    let (env, client) = setup();
 
     let creator = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract(Address::generate(&env));
-    
-    let project_id = BytesN::from_array(&env, &[2u8; 32]);
-    let milestones = Vec::from_array(&env, [
-        Milestone { id: 1, amount: 1000, status: MilestoneStatus::Pending },
-    ]);
+    let proof_hash = BytesN::from_array(&env, &[4u8; 32]);
+    let deadline: u64 = 0;
 
-    client.create_project(&project_id, &creator, &oracle, &token_id, &1000, &milestones);
-
-    // No deposit made, try to release
-    client.release_milestone(&project_id, &1);
+    client.register_project(&creator, &100, &proof_hash, &deadline);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #3)")]
-fn test_cannot_release_twice() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let contract_id = env.register_contract(None, PifpProtocol);
-    let client = PifpProtocolClient::new(&env, &contract_id);
+fn test_get_project_success() {
+    let (env, client) = setup();
 
     let creator = Address::generate(&env);
+    let proof_hash = BytesN::from_array(&env, &[5u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
+
+    let registered = client.register_project(&creator, &999, &proof_hash, &deadline);
+    let retrieved = client.get_project(&registered.id);
+
+    assert_eq!(registered, retrieved);
+}
+
+#[test]
+#[should_panic(expected = "project not found")]
+fn test_get_project_not_found() {
+    let (_env, client) = setup();
+
+    client.get_project(&42);
+}
+
+// ── ZK-Proof Verification Tests ─────────────────────────────────────
+
+#[test]
+fn test_set_oracle() {
+    let (env, client) = setup();
+
+    let admin = Address::generate(&env);
     let oracle = Address::generate(&env);
-    let donator = Address::generate(&env);
-    let token_admin = Address::generate(&env);
-    let token_id = env.register_stellar_asset_contract(token_admin);
-    let sac_client = token::StellarAssetClient::new(&env, &token_id);
 
-    sac_client.mint(&donator, &1000);
+    client.set_oracle(&admin, &oracle);
 
-    let project_id = BytesN::from_array(&env, &[3u8; 32]);
-    let milestones = Vec::from_array(&env, [
-        Milestone { id: 1, amount: 1000, status: MilestoneStatus::Pending },
-    ]);
+    // Verify by using the oracle for verification (indirectly tested).
+    // Direct storage read is not possible from the test client,
+    // so we verify via a successful verify_and_release below.
+}
 
-    client.create_project(&project_id, &creator, &oracle, &token_id, &1000, &milestones);
-    client.deposit(&project_id, &donator, &1000);
+#[test]
+fn test_verify_and_release_success() {
+    let (env, client) = setup();
 
-    client.release_milestone(&project_id, &1); // First time
-    client.release_milestone(&project_id, &1); // Second time should fail
+    let creator = Address::generate(&env);
+    let proof_hash = BytesN::from_array(&env, &[10u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
+
+    let project = client.register_project(&creator, &500, &proof_hash, &deadline);
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    client.set_oracle(&admin, &oracle);
+
+    // Oracle verifies with the correct proof hash.
+    client.verify_and_release(&project.id, &proof_hash);
+
+    // Check project status is now Completed.
+    let updated = client.get_project(&project.id);
+    assert_eq!(updated.status, ProjectStatus::Completed);
+}
+
+#[test]
+#[should_panic(expected = "proof verification failed: hash mismatch")]
+fn test_verify_wrong_hash() {
+    let (env, client) = setup();
+
+    let creator = Address::generate(&env);
+    let proof_hash = BytesN::from_array(&env, &[10u8; 32]);
+    let wrong_hash = BytesN::from_array(&env, &[99u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
+
+    let project = client.register_project(&creator, &500, &proof_hash, &deadline);
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    client.set_oracle(&admin, &oracle);
+
+    client.verify_and_release(&project.id, &wrong_hash);
+}
+
+#[test]
+#[should_panic(expected = "project already completed")]
+fn test_verify_already_completed() {
+    let (env, client) = setup();
+
+    let creator = Address::generate(&env);
+    let proof_hash = BytesN::from_array(&env, &[10u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
+
+    let project = client.register_project(&creator, &500, &proof_hash, &deadline);
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    client.set_oracle(&admin, &oracle);
+
+    // First verification succeeds.
+    client.verify_and_release(&project.id, &proof_hash);
+
+    // Second verification should fail.
+    client.verify_and_release(&project.id, &proof_hash);
+}
+
+#[test]
+#[should_panic(expected = "project not found")]
+fn test_verify_nonexistent_project() {
+    let (env, client) = setup();
+
+    let admin = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    client.set_oracle(&admin, &oracle);
+
+    let fake_hash = BytesN::from_array(&env, &[0u8; 32]);
+    client.verify_and_release(&999, &fake_hash);
+}
+
+#[test]
+#[should_panic(expected = "oracle not set")]
+fn test_verify_without_oracle_set() {
+    let (env, client) = setup();
+
+    let creator = Address::generate(&env);
+    let proof_hash = BytesN::from_array(&env, &[10u8; 32]);
+    let deadline: u64 = env.ledger().timestamp() + 86_400;
+
+    let project = client.register_project(&creator, &500, &proof_hash, &deadline);
+
+    // No oracle set — should panic.
+    client.verify_and_release(&project.id, &proof_hash);
 }
