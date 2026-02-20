@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
-    Address, BytesN, Env, Symbol,
+    contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, BytesN,
+    Env, Symbol,
 };
 
 mod storage;
@@ -15,16 +15,11 @@ mod invariants;
 #[cfg(test)]
 mod test;
 
-use storage::{get_and_increment_project_id, get_oracle, load_project, save_project, set_oracle};
+use storage::{
+    get_and_increment_project_id, get_oracle, load_project, load_project_config,
+    load_project_state, save_project, save_project_state, set_oracle,
+};
 pub use types::{Project, ProjectStatus};
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    ProjectCount,
-    Project(u64),
-    OracleKey,
-}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -96,21 +91,26 @@ impl PifpProtocol {
     }
 
     /// Deposit funds into a project.
+    ///
+    /// Reads only the immutable config (for the token address) and the mutable
+    /// state, then writes back only the small state entry (~20 bytes) instead
+    /// of the full project struct (~150 bytes).
     pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
         donator.require_auth();
 
-        let mut project = Self::get_project(env.clone(), project_id);
+        // Read config for token address; read state for balance.
+        let config = load_project_config(&env, project_id);
+        let mut state = load_project_state(&env, project_id);
 
-        // Transfer tokens from donator to contract
-        let token_client = token::Client::new(&env, &project.token);
+        // Transfer tokens from donator to contract.
+        let token_client = token::Client::new(&env, &config.token);
         token_client.transfer(&donator, &env.current_contract_address(), &amount);
 
-        project.balance += amount;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(project_id), &project);
+        // Update only the mutable state.
+        state.balance += amount;
+        save_project_state(&env, project_id, &state);
 
-        // Emit donation event
+        // Emit donation event.
         env.events().publish(
             (Symbol::new(&env, "donation_received"), project_id),
             (donator, amount),
@@ -134,32 +134,32 @@ impl PifpProtocol {
     /// NOTE: This is a mocked verification (hash equality).
     /// The structure is prepared for future ZK-STARK verification.
     ///
-    /// - Only the registered oracle may call this.
-    /// - The project must be in `Funding` or `Active` status.
-    /// - `submitted_proof_hash` must match the project's `proof_hash`.
+    /// Reads the immutable config (for proof_hash) and mutable state (for status),
+    /// then writes back only the small state entry.
     pub fn verify_and_release(env: Env, project_id: u64, submitted_proof_hash: BytesN<32>) {
         // Ensure caller is the registered oracle.
         let oracle = get_oracle(&env);
         oracle.require_auth();
 
-        // Load the project.
-        let mut project = load_project(&env, project_id);
+        // Read immutable config for proof hash, mutable state for status.
+        let config = load_project_config(&env, project_id);
+        let mut state = load_project_state(&env, project_id);
 
         // Ensure the project is in a verifiable state.
-        match project.status {
+        match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic!("project already completed"),
             ProjectStatus::Expired => panic!("project has expired"),
         }
 
         // Mocked ZK verification: compare submitted hash to stored hash.
-        if submitted_proof_hash != project.proof_hash {
+        if submitted_proof_hash != config.proof_hash {
             panic!("proof verification failed: hash mismatch");
         }
 
-        // Transition to Completed.
-        project.status = ProjectStatus::Completed;
-        save_project(&env, &project);
+        // Transition to Completed — only write the state entry.
+        state.status = ProjectStatus::Completed;
+        save_project_state(&env, project_id, &state);
 
         // Emit verification event.
         env.events()
