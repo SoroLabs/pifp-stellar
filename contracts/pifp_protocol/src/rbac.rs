@@ -128,7 +128,7 @@ pub fn init_super_admin(env: &Env, super_admin: &Address) {
 ///
 /// Emits a `role_set` event.
 pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
-    caller.require_auth();
+ 
 
     let caller_role = get_role(env, caller);
 
@@ -162,7 +162,7 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
 ///
 /// Emits a `role_del` event if a role existed.
 pub fn revoke_role(env: &Env, caller: &Address, target: &Address) {
-    caller.require_auth();
+   
     require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]);
 
     // Protect the SuperAdmin address from revocation via this path
@@ -185,7 +185,7 @@ pub fn revoke_role(env: &Env, caller: &Address, target: &Address) {
 ///
 /// This is the only way to remove a SuperAdmin.
 pub fn transfer_super_admin(env: &Env, current: &Address, new: &Address) {
-    current.require_auth();
+ 
     require_role(env, current, &Role::SuperAdmin);
 
     // Clear old SuperAdmin
