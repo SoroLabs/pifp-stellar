@@ -22,6 +22,8 @@ pub struct Project {
     pub id: u64,
     /// Address that created the project and receives funds.
     pub creator: Address,
+    /// Address of the token representing the funding asset.
+    pub token: Address,
     /// Target funding amount.
     pub goal: i128,
     /// Current funded amount.

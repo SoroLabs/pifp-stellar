@@ -1,18 +1,9 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env};
-
-mod storage;
-mod types;
-
-#[cfg(test)]
-mod test;
-
-use storage::{get_and_increment_project_id, load_project, save_project};
-pub use types::{Project, ProjectStatus};
-#[cfg(test)]
-mod test;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
+    Address, BytesN, Env, Symbol,
+};
 
 mod storage;
 mod types;
@@ -24,8 +15,11 @@ use storage::{get_and_increment_project_id, get_oracle, load_project, save_proje
 pub use types::{Project, ProjectStatus};
 
 #[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
-    Project(BytesN<32>),
+    ProjectCount,
+    Project(u64),
+    OracleKey,
 }
 
 #[contracterror]
@@ -57,6 +51,7 @@ impl PifpProtocol {
     pub fn register_project(
         env: Env,
         creator: Address,
+        token: Address,
         goal: i128,
         proof_hash: BytesN<32>,
         deadline: u64,
@@ -76,6 +71,7 @@ impl PifpProtocol {
         let project = Project {
             id,
             creator,
+            token,
             goal,
             balance: 0,
             proof_hash,
@@ -96,11 +92,10 @@ impl PifpProtocol {
     }
 
     /// Deposit funds into a project.
-    pub fn deposit(env: Env, project_id: BytesN<32>, donator: Address, amount: i128) {
+    pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
         donator.require_auth();
 
-        let mut project = Self::get_project(env.clone(), project_id.clone())
-            .unwrap_or_else(|| panic_with_error!(&env, Error::ProjectNotFound));
+        let mut project = Self::get_project(env.clone(), project_id);
 
         // Transfer tokens from donator to contract
         let token_client = token::Client::new(&env, &project.token);
@@ -109,7 +104,7 @@ impl PifpProtocol {
         project.balance += amount;
         env.storage()
             .persistent()
-            .set(&DataKey::Project(project_id.clone()), &project);
+            .set(&DataKey::Project(project_id), &project);
 
         // Emit donation event
         env.events().publish(
