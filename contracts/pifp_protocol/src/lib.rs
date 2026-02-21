@@ -15,6 +15,30 @@
 //   8. `register_project` uses `rbac::require_can_register` — SuperAdmin, Admin, and
 //      ProjectManager may register; an unauthenticated address cannot.
 
+//! # PIFP Protocol Contract
+//!
+//! This is the root crate of the **Proof-of-Impact Funding Protocol (PIFP)**.
+//! It exposes the single Soroban contract `PifpProtocol` whose entry points cover
+//! the full project lifecycle:
+//!
+//! | Phase        | Entry Point(s)                              |
+//! |--------------|---------------------------------------------|
+//! | Bootstrap    | [`PifpProtocol::init`]                      |
+//! | Role admin   | `grant_role`, `revoke_role`, `transfer_super_admin`, `set_oracle` |
+//! | Registration | [`PifpProtocol::register_project`]          |
+//! | Funding      | [`PifpProtocol::deposit`]                   |
+//! | Verification | [`PifpProtocol::verify_and_release`]        |
+//! | Queries      | `get_project`, `role_of`, `has_role`        |
+//!
+//! ## Architecture
+//!
+//! Authorization is fully delegated to [`rbac`].  Storage access is fully
+//! delegated to [`storage`].  This file contains **only** the public entry
+//! points and event emissions — no business logic lives here directly.
+//!
+//! See [`ARCHITECTURE.md`](../../../../ARCHITECTURE.md) for the full system
+//! architecture and threat model.
+
 #![no_std]
 
 use soroban_sdk::{

@@ -1,3 +1,32 @@
+//! # Types
+//!
+//! Shared data structures used across all modules of the PIFP protocol.
+//!
+//! ## Design decisions
+//!
+//! ### Config / State split
+//!
+//! A `Project` is internally stored as two separate ledger entries:
+//!
+//! - [`ProjectConfig`] — written once at registration; never mutated.
+//! - [`ProjectState`] — written on every deposit and on verification.
+//!
+//! The public API exposes the reconstructed [`Project`] struct for convenience.
+//!
+//! ### Status as a Finite-State Machine
+//!
+//! [`ProjectStatus`] enforces a strict forward-only lifecycle:
+//!
+//! ```text
+//! Funding ──► Active ──► Completed
+//!     └──────────────────►┘
+//!     └──► Expired
+//! Active ──► Expired
+//! ```
+//!
+//! Backward transitions and transitions out of terminal states (`Completed`,
+//! `Expired`) are rejected by `verify_and_release`.
+
 use soroban_sdk::{contracttype, Address, BytesN};
 
 /// Lifecycle status of a project.
