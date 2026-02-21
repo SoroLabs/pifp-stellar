@@ -34,12 +34,14 @@ mod types;
 pub mod rbac;
 pub mod events;
 
-// #[cfg(test)]
-// mod fuzz_test;
 #[cfg(test)]
 mod invariants;
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+mod rbac_test;
+#[cfg(test)]
+mod fuzz_test;
 #[cfg(test)]
 mod test_events;
 
@@ -72,7 +74,7 @@ pub struct PifpProtocol;
 #[contractimpl]
 impl PifpProtocol {
     // ─────────────────────────────────────────────────────────
-    // Initialisation (new)
+    // Initialisation
     // ─────────────────────────────────────────────────────────
 
     /// Initialise the contract and set the first SuperAdmin.
@@ -87,7 +89,7 @@ impl PifpProtocol {
     }
 
     // ─────────────────────────────────────────────────────────
-    // Role management (new)
+    // Role management
     // ─────────────────────────────────────────────────────────
 
     /// Grant `role` to `target`.
@@ -125,7 +127,7 @@ impl PifpProtocol {
     }
 
     // ─────────────────────────────────────────────────────────
-    // Existing entry points — updated to use RBAC
+    // Project lifecycle
     // ─────────────────────────────────────────────────────────
 
     /// Register a new funding project.
@@ -157,7 +159,6 @@ impl PifpProtocol {
         }
 
         let id = get_and_increment_project_id(&env);
-
         let project = Project {
             id,
             creator: creator.clone(),
@@ -171,7 +172,7 @@ impl PifpProtocol {
 
         save_project(&env, &project);
 
-        // Standardized event emission (using the first token as a reference for the created event)
+        // Standardized event emission
         if let Some(token) = accepted_tokens.get(0) {
             events::emit_project_created(&env, id, creator, token, goal);
         }
@@ -179,9 +180,19 @@ impl PifpProtocol {
         project
     }
 
-    /// Retrieve a project by its ID.
     pub fn get_project(env: Env, id: u64) -> Project {
         load_project(&env, id)
+    }
+
+    /// Return the balance of `token` for `project_id`.
+    pub fn get_balance(env: Env, project_id: u64, token: Address) -> i128 {
+        storage::get_token_balance(&env, project_id, &token)
+    }
+
+    /// Return a snapshot of all balances for `project_id`.
+    pub fn get_balances(env: Env, project_id: u64) -> types::ProjectBalances {
+        let project = load_project(&env, project_id);
+        storage::get_all_balances(&env, &project)
     }
 
     /// Deposit funds into a project.
@@ -227,11 +238,6 @@ impl PifpProtocol {
     ///
     /// Replaces the original `set_oracle(admin, oracle)`.
     /// - `caller` must hold `SuperAdmin` or `Admin`.
-    ///
-    /// If an address already holds the Oracle role, calling this with a new
-    /// address will grant Oracle to the new one; the old one retains its role
-    /// unless explicitly revoked. If you want a single oracle, revoke the old
-    /// one first, then call `set_oracle`.
     pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
@@ -244,10 +250,6 @@ impl PifpProtocol {
     /// stored `proof_hash`, the project status transitions to `Completed`.
     ///
     /// NOTE: This is a mocked verification (hash equality).
-    /// The structure is prepared for future ZK-STARK verification.
-    ///
-    /// Reads the immutable config (for proof_hash) and mutable state (for status),
-    /// then writes back only the small state entry.
     pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, submitted_proof_hash: BytesN<32>) {
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
