@@ -16,6 +16,7 @@ testutils = ["soroban-sdk/testutils"]
 
 [dev-dependencies]
 soroban-sdk = { version = "22.0.10", features = ["testutils"] }
+proptest = "1.5"
 
 [profile.release]
 opt-level = "z"

@@ -1,20 +1,48 @@
-// contracts/pifp_protocol/src/storage.rs
-//
-// Storage helpers for PifpProtocol.
-//
-// Multi-asset additions:
-//   - DataKey::TokenBalance(project_id, token) → i128
-//       Stores the balance of a specific token held for a project.
-//       Written on every deposit, read during release.
-//   - get_token_balance / set_token_balance / add_to_token_balance
-//   - get_all_balances — iterates accepted_tokens and reads each balance
+use soroban_sdk::{contracttype, Address, Env};
 
-use soroban_sdk::{panic_with_error, Address, Env, Vec};
+use crate::types::{Project, ProjectConfig, ProjectState};
 
-use crate::{
-    types::{Project, ProjectBalances, TokenBalance},
-    DataKey, Error,
-};
+// ── TTL Constants ────────────────────────────────────────────────────
+
+/// Approximate ledgers per day (~5 seconds per ledger).
+const DAY_IN_LEDGERS: u32 = 17_280;
+
+/// Instance storage: bump by 7 days when below 1 day remaining.
+const INSTANCE_BUMP_AMOUNT: u32 = 7 * DAY_IN_LEDGERS;
+const INSTANCE_LIFETIME_THRESHOLD: u32 = DAY_IN_LEDGERS;
+
+/// Persistent storage: bump by 30 days when below 7 days remaining.
+const PERSISTENT_BUMP_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+const PERSISTENT_LIFETIME_THRESHOLD: u32 = 7 * DAY_IN_LEDGERS;
+
+// ── Storage Keys ─────────────────────────────────────────────────────
+
+/// All contract storage keys.
+///
+/// Instance-tier keys (`ProjectCount`, `OracleKey`) live as long as the
+/// contract and are extended together. Persistent-tier keys (`ProjConfig`,
+/// `ProjState`) hold per-project data with independent TTLs.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataKey {
+    /// Global auto-increment counter for project IDs (Instance).
+    ProjectCount,
+    /// Trusted oracle/verifier address (Instance).
+    OracleKey,
+    /// Immutable project configuration keyed by ID (Persistent).
+    ProjConfig(u64),
+    /// Mutable project state keyed by ID (Persistent).
+    ProjState(u64),
+}
+
+// ── Instance Storage Helpers ─────────────────────────────────────────
+
+/// Extend instance storage TTL if it falls below the threshold.
+fn bump_instance(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
+}
 
 // ─────────────────────────────────────────────────────────
 // Project counter
@@ -23,54 +51,116 @@ use crate::{
 /// Atomically read and increment the project counter.
 /// Returns the ID that should be used for the next project.
 pub fn get_and_increment_project_id(env: &Env) -> u64 {
-    let id: u64 = env
+    bump_instance(env);
+    let current: u64 = env
         .storage()
-        .persistent()
+        .instance()
         .get(&DataKey::ProjectCount)
         .unwrap_or(0);
     env.storage()
-        .persistent()
-        .set(&DataKey::ProjectCount, &(id + 1));
-    id
+        .instance()
+        .set(&DataKey::ProjectCount, &(current + 1));
+    current
 }
 
-// ─────────────────────────────────────────────────────────
-// Project CRUD
-// ─────────────────────────────────────────────────────────
+/// Store the trusted oracle address in instance storage.
+pub fn set_oracle(env: &Env, oracle: &Address) {
+    env.storage()
+        .instance()
+        .set(&DataKey::OracleKey, oracle);
+    bump_instance(env);
+}
 
-/// Persist a project. Overwrites any existing record at the same ID.
+/// Retrieve the trusted oracle address.
+/// Panics if no oracle has been set.
+pub fn get_oracle(env: &Env) -> Address {
+    bump_instance(env);
+    env.storage()
+        .instance()
+        .get(&DataKey::OracleKey)
+        .expect("oracle not set")
+}
+
+// ── Persistent Storage Helpers ───────────────────────────────────────
+
+/// Extend the TTL for a persistent storage key.
+fn bump_persistent(env: &Env, key: &DataKey) {
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+}
+
+/// Save both the immutable config and initial mutable state for a new project.
 pub fn save_project(env: &Env, project: &Project) {
-    env.storage()
-        .persistent()
-        .set(&DataKey::Project(project.id), project);
+    let config_key = DataKey::ProjConfig(project.id);
+    let state_key = DataKey::ProjState(project.id);
+
+    let config = ProjectConfig {
+        id: project.id,
+        creator: project.creator.clone(),
+        token: project.token.clone(),
+        goal: project.goal,
+        proof_hash: project.proof_hash.clone(),
+        deadline: project.deadline,
+    };
+
+    let state = ProjectState {
+        balance: project.balance,
+        status: project.status.clone(),
+    };
+
+    env.storage().persistent().set(&config_key, &config);
+    env.storage().persistent().set(&state_key, &state);
+    bump_persistent(env, &config_key);
+    bump_persistent(env, &state_key);
 }
 
-/// Load a project by ID. Panics with `Error::ProjectNotFound` if missing.
+/// Load the full `Project` by combining config and state.
+/// Panics if the project does not exist.
 pub fn load_project(env: &Env, id: u64) -> Project {
-    env.storage()
-        .persistent()
-        .get(&DataKey::Project(id))
-        .unwrap_or_else(|| panic_with_error!(env, Error::ProjectNotFound))
+    let config = load_project_config(env, id);
+    let state = load_project_state(env, id);
+    Project {
+        id: config.id,
+        creator: config.creator,
+        token: config.token,
+        goal: config.goal,
+        balance: state.balance,
+        proof_hash: config.proof_hash,
+        deadline: config.deadline,
+        status: state.status,
+    }
 }
 
-// ─────────────────────────────────────────────────────────
-// Per-token balance helpers
-// ─────────────────────────────────────────────────────────
-
-/// Read the current balance of `token` held for `project_id`.
-/// Returns 0 if no deposit has ever been made for this (project, token) pair.
-pub fn get_token_balance(env: &Env, project_id: u64, token: &Address) -> i128 {
-    env.storage()
+/// Load only the immutable project configuration.
+pub fn load_project_config(env: &Env, id: u64) -> ProjectConfig {
+    let key = DataKey::ProjConfig(id);
+    let config: ProjectConfig = env
+        .storage()
         .persistent()
-        .get(&DataKey::TokenBalance(project_id, token.clone()))
-        .unwrap_or(0i128)
+        .get(&key)
+        .expect("project not found");
+    bump_persistent(env, &key);
+    config
 }
 
-/// Overwrite the balance of `token` for `project_id`.
-pub fn set_token_balance(env: &Env, project_id: u64, token: &Address, balance: i128) {
-    env.storage()
+/// Load only the mutable project state.
+pub fn load_project_state(env: &Env, id: u64) -> ProjectState {
+    let key = DataKey::ProjState(id);
+    let state: ProjectState = env
+        .storage()
         .persistent()
-        .set(&DataKey::TokenBalance(project_id, token.clone()), &balance);
+        .get(&key)
+        .expect("project not found");
+    bump_persistent(env, &key);
+    state
+}
+
+/// Save only the mutable project state (optimized for deposits/verification).
+pub fn save_project_state(env: &Env, id: u64, state: &ProjectState) {
+    let key = DataKey::ProjState(id);
+    env.storage().persistent().set(&key, state);
+    bump_persistent(env, &key);
 }
 
 /// Add `amount` to the existing balance of `token` for `project_id`.

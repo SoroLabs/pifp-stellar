@@ -1,21 +1,25 @@
 // contracts/pifp_protocol/src/lib.rs
 //
-// Multi-Asset Funding — changes on top of the RBAC-integrated version:
+// RBAC-integrated PifpProtocol contract.
 //
-//   1. DataKey gains `TokenBalance(u64, Address)` — per-(project, token) balance.
-//   2. Error gains `TokenNotAccepted = 10`, `ZeroAmount = 11`,
-//      `TooManyTokens = 12`, `TokenAlreadyAccepted = 13`.
-//   3. `register_project`: `token: Address` → `accepted_tokens: Vec<Address>` (1–10).
-//   4. `deposit`: new `token_address: Address` param; whitelist check; per-token storage.
-//   5. `verify_and_release`: iterates all accepted tokens, releases each balance.
-//   6. New admin functions: `whitelist_token`, `remove_token`.
-//   7. New queries: `get_token_balance`, `get_project_balances`, `is_token_accepted`.
+// Changes from the original:
+//   1. Added `mod rbac` — the new Role-Based Access Control module.
+//   2. `DataKey` gains no new variants (role storage lives in `RbacKey` inside rbac.rs).
+//   3. `Error` gains two new variants: `AlreadyInitialized` and `RoleNotFound`.
+//   4. New entry point: `init(env, super_admin)` — must be called once after deployment.
+//   5. New entry points for role management: `grant_role`, `revoke_role`,
+//      `transfer_super_admin`, `role_of`, `has_role`.
+//   6. `set_oracle` now calls `rbac::grant_role(..., Role::Oracle)` instead of writing
+//      a bare address — the oracle is just an address with the Oracle role.
+//   7. `verify_and_release` uses `rbac::require_oracle` instead of the old `get_oracle`.
+//   8. `register_project` uses `rbac::require_can_register` — SuperAdmin, Admin, and
+//      ProjectManager may register; an unauthenticated address cannot.
 
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error,
-    symbol_short, token, Address, BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, BytesN,
+    Env, Symbol,
 };
 
 mod storage;
@@ -23,42 +27,33 @@ mod types;
 pub mod rbac;
 
 #[cfg(test)]
+mod fuzz_test;
+#[cfg(test)]
+mod invariants;
+#[cfg(test)]
 mod test;
 
 use storage::{
-    add_to_token_balance, drain_token_balance, get_all_balances,
-    get_and_increment_project_id, get_token_balance as storage_get_token_balance,
-    load_project, save_project,
+    get_and_increment_project_id, get_oracle, load_project, load_project_config,
+    load_project_state, save_project, save_project_state, set_oracle,
 };
-pub use types::{Project, ProjectBalances, ProjectStatus, TokenBalance};
+pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    ProjectCount,
-    Project(u64),
-    /// Per-(project_id, token_address) balance: i128
-    TokenBalance(u64, Address),
-}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    ProjectNotFound          = 1,
-    MilestoneNotFound        = 2,
+    ProjectNotFound       = 1,
+    MilestoneNotFound     = 2,
     MilestoneAlreadyReleased = 3,
-    InsufficientBalance      = 4,
-    InvalidMilestones        = 5,
-    NotAuthorized            = 6,
-    GoalMismatch             = 7,
-    AlreadyInitialized       = 8,
-    RoleNotFound             = 9,
-    TokenNotAccepted         = 10,
-    ZeroAmount               = 11,
-    TooManyTokens            = 12,
-    TokenAlreadyAccepted     = 13,
+    InsufficientBalance   = 4,
+    InvalidMilestones     = 5,
+    NotAuthorized         = 6,
+    GoalMismatch          = 7,
+    // New in RBAC integration:
+    AlreadyInitialized    = 8,
+    RoleNotFound          = 9,
 }
 
 #[contract]
@@ -66,55 +61,66 @@ pub struct PifpProtocol;
 
 #[contractimpl]
 impl PifpProtocol {
+    // ─────────────────────────────────────────────────────────
+    // Initialisation (new)
+    // ─────────────────────────────────────────────────────────
 
-    // ═══════════════════════════════════════════════════
-    // Initialisation
-    // ═══════════════════════════════════════════════════
-
+    /// Initialise the contract and set the first SuperAdmin.
+    ///
+    /// Must be called exactly once immediately after deployment.
+    /// Subsequent calls panic with `Error::AlreadyInitialized`.
+    ///
+    /// - `super_admin` is granted the `SuperAdmin` role and must sign the transaction.
     pub fn init(env: Env, super_admin: Address) {
         super_admin.require_auth();
         rbac::init_super_admin(&env, &super_admin);
     }
 
-    // ═══════════════════════════════════════════════════
-    // RBAC management (unchanged from RBAC session)
-    // ═══════════════════════════════════════════════════
+    // ─────────────────────────────────────────────────────────
+    // Role management (new)
+    // ─────────────────────────────────────────────────────────
 
+    /// Grant `role` to `target`.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    /// - Only `SuperAdmin` can grant `SuperAdmin`.
     pub fn grant_role(env: Env, caller: Address, target: Address, role: Role) {
         rbac::grant_role(&env, &caller, &target, role);
     }
 
+    /// Revoke any role from `target`.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    /// - Cannot be used to remove the SuperAdmin; use `transfer_super_admin`.
     pub fn revoke_role(env: Env, caller: Address, target: Address) {
         rbac::revoke_role(&env, &caller, &target);
     }
 
+    /// Transfer SuperAdmin to `new_super_admin`.
+    ///
+    /// - `current_super_admin` must authorize and hold the `SuperAdmin` role.
+    /// - The previous SuperAdmin loses the role immediately.
     pub fn transfer_super_admin(env: Env, current_super_admin: Address, new_super_admin: Address) {
         rbac::transfer_super_admin(&env, &current_super_admin, &new_super_admin);
     }
 
+    /// Return the role held by `address`, or `None`.
     pub fn role_of(env: Env, address: Address) -> Option<Role> {
         rbac::role_of(&env, address)
     }
 
+    /// Return `true` if `address` holds `role`.
     pub fn has_role(env: Env, address: Address, role: Role) -> bool {
         rbac::has_role(&env, address, role)
     }
 
-    pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
-        caller.require_auth();
-        rbac::require_admin_or_above(&env, &caller);
-        rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
-    }
+    // ─────────────────────────────────────────────────────────
+    // Existing entry points — updated to use RBAC
+    // ─────────────────────────────────────────────────────────
 
-    // ═══════════════════════════════════════════════════
-    // Project registration (updated)
-    // ═══════════════════════════════════════════════════
-
-    /// Register a new multi-asset funding project.
+    /// Register a new funding project.
     ///
-    /// # Changed from single-token version
-    /// `token: Address` is replaced by `accepted_tokens: Vec<Address>` (1–10 SAC addresses).
-    /// To migrate: pass `vec![&env, old_token_address]`.
+    /// `creator` must hold the `ProjectManager`, `Admin`, or `SuperAdmin` role.
     pub fn register_project(
         env: Env,
         creator: Address,
@@ -124,6 +130,7 @@ impl PifpProtocol {
         deadline: u64,
     ) -> Project {
         creator.require_auth();
+        // RBAC gate: only authorised roles may create projects.
         rbac::require_can_register(&env, &creator);
 
         if accepted_tokens.len() == 0 {
@@ -153,12 +160,6 @@ impl PifpProtocol {
         };
 
         save_project(&env, &project);
-
-        env.events().publish(
-            (symbol_short!("proj_new"), id),
-            project.accepted_tokens.clone(),
-        );
-
         project
     }
 
@@ -167,189 +168,86 @@ impl PifpProtocol {
         load_project(&env, id)
     }
 
-    // ═══════════════════════════════════════════════════
-    // Multi-asset deposit
-    // ═══════════════════════════════════════════════════
-
-    /// Donate `amount` of `token_address` to a project.
+    /// Deposit funds into a project.
     ///
-    /// - `token_address` must be on the project whitelist.
-    /// - `amount` must be > 0.
-    /// - Uses `token::Client::transfer` (standard SAC interface).
-    pub fn deposit(
-        env: Env,
-        project_id: u64,
-        donator: Address,
-        token_address: Address,
-        amount: i128,
-    ) {
+    /// Reads only the immutable config (for the token address) and the mutable
+    /// state, then writes back only the small state entry (~20 bytes) instead
+    /// of the full project struct (~150 bytes).
+    pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
         donator.require_auth();
 
-        if amount <= 0 {
-            panic_with_error!(&env, Error::ZeroAmount);
-        }
+        // Read config for token address; read state for balance.
+        let config = load_project_config(&env, project_id);
+        let mut state = load_project_state(&env, project_id);
 
-        let mut project = load_project(&env, project_id);
-
-        match project.status {
-            ProjectStatus::Funding | ProjectStatus::Active => {}
-            ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired   => panic_with_error!(&env, Error::ProjectNotFound),
-        }
-
-        if !project.accepts_token(&token_address) {
-            panic_with_error!(&env, Error::TokenNotAccepted);
-        }
-
-        // Pull tokens from donator into the contract via the SAC interface
-        let token_client = token::Client::new(&env, &token_address);
+        // Transfer tokens from donator to contract.
+        let token_client = token::Client::new(&env, &config.token);
         token_client.transfer(&donator, &env.current_contract_address(), &amount);
 
-        let new_balance = add_to_token_balance(&env, project_id, &token_address, amount);
+        // Update only the mutable state.
+        state.balance += amount;
+        save_project_state(&env, project_id, &state);
 
-        project.donation_count += 1;
-        save_project(&env, &project);
-
+        // Emit donation event.
         env.events().publish(
             (Symbol::new(&env, "donation_received"), project_id, token_address),
             (donator, amount, new_balance),
         );
     }
 
-    // ═══════════════════════════════════════════════════
-    // Token whitelist management
-    // ═══════════════════════════════════════════════════
-
-    /// Add a token to a project's accepted list. Admin/SuperAdmin only.
-    pub fn whitelist_token(
-        env: Env,
-        caller: Address,
-        project_id: u64,
-        token_address: Address,
-    ) {
+    /// Grant the Oracle role to `oracle`.
+    ///
+    /// Replaces the original `set_oracle(admin, oracle)`.
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    ///
+    /// If an address already holds the Oracle role, calling this with a new
+    /// address will grant Oracle to the new one; the old one retains its role
+    /// unless explicitly revoked. If you want a single oracle, revoke the old
+    /// one first, then call `set_oracle`.
+    pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
-
-        let mut project = load_project(&env, project_id);
-
-        if project.accepted_tokens.len() >= 10 {
-            panic_with_error!(&env, Error::TooManyTokens);
-        }
-        if project.accepts_token(&token_address) {
-            panic_with_error!(&env, Error::TokenAlreadyAccepted);
-        }
-
-        project.accepted_tokens.push_back(token_address.clone());
-        save_project(&env, &project);
-
-        env.events().publish(
-            (symbol_short!("tok_add"), project_id),
-            token_address,
-        );
+        rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
     }
 
-    /// Remove a token from a project's accepted list. Admin/SuperAdmin only.
-    /// At least one token must remain. Drain any balance first.
-    pub fn remove_token(
-        env: Env,
-        caller: Address,
-        project_id: u64,
-        token_address: Address,
-    ) {
-        caller.require_auth();
-        rbac::require_admin_or_above(&env, &caller);
-
-        let mut project = load_project(&env, project_id);
-
-        if !project.accepts_token(&token_address) {
-            panic_with_error!(&env, Error::TokenNotAccepted);
-        }
-        if project.accepted_tokens.len() <= 1 {
-            panic_with_error!(&env, Error::InvalidMilestones);
-        }
-
-        let mut new_tokens: Vec<Address> = Vec::new(&env);
-        for t in project.accepted_tokens.iter() {
-            if t != token_address {
-                new_tokens.push_back(t);
-            }
-        }
-        project.accepted_tokens = new_tokens;
-        save_project(&env, &project);
-
-        env.events().publish(
-            (symbol_short!("tok_del"), project_id),
-            token_address,
-        );
-    }
-
-    // ═══════════════════════════════════════════════════
-    // Verification and fund release (multi-asset)
-    // ═══════════════════════════════════════════════════
-
-    /// Verify proof and release ALL token balances to the creator.
-    /// Iterates every accepted token and transfers non-zero balances.
-    pub fn verify_and_release(
-        env: Env,
-        oracle: Address,
-        project_id: u64,
-        submitted_proof_hash: BytesN<32>,
-    ) {
+    /// Verify proof of impact and release funds to the creator.
+    ///
+    /// The registered oracle submits a proof hash. If it matches the project's
+    /// stored `proof_hash`, the project status transitions to `Completed`.
+    ///
+    /// NOTE: This is a mocked verification (hash equality).
+    /// The structure is prepared for future ZK-STARK verification.
+    ///
+    /// Reads the immutable config (for proof_hash) and mutable state (for status),
+    /// then writes back only the small state entry.
+    pub fn verify_and_release(env: Env, project_id: u64, submitted_proof_hash: BytesN<32>) {
+        // Ensure caller is the registered oracle.
+        let oracle = get_oracle(&env);
         oracle.require_auth();
+        // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
 
-        let mut project = load_project(&env, project_id);
+        // Read immutable config for proof hash, mutable state for status.
+        let config = load_project_config(&env, project_id);
+        let mut state = load_project_state(&env, project_id);
 
-        match project.status {
+        // Ensure the project is in a verifiable state.
+        match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
             ProjectStatus::Expired   => panic_with_error!(&env, Error::ProjectNotFound),
         }
 
-        if submitted_proof_hash != project.proof_hash {
-            panic_with_error!(&env, Error::GoalMismatch);
+        // Mocked ZK verification: compare submitted hash to stored hash.
+        if submitted_proof_hash != config.proof_hash {
+            panic!("proof verification failed: hash mismatch");
         }
 
-        // Release every accepted token balance to the creator
-        for token_address in project.accepted_tokens.iter() {
-            let balance = drain_token_balance(&env, project_id, &token_address);
-            if balance > 0 {
-                token::Client::new(&env, &token_address).transfer(
-                    &env.current_contract_address(),
-                    &project.creator,
-                    &balance,
-                );
-                env.events().publish(
-                    (symbol_short!("released"), project_id, token_address),
-                    (project.creator.clone(), balance),
-                );
-            }
-        }
+        // Transition to Completed — only write the state entry.
+        state.status = ProjectStatus::Completed;
+        save_project_state(&env, project_id, &state);
 
-        project.status = ProjectStatus::Completed;
-        save_project(&env, &project);
-
-        env.events().publish((symbol_short!("verified"),), project_id);
-    }
-
-    // ═══════════════════════════════════════════════════
-    // Read-only queries
-    // ═══════════════════════════════════════════════════
-
-    /// Balance of one specific token held for a project.
-    pub fn get_token_balance(env: Env, project_id: u64, token_address: Address) -> i128 {
-        storage_get_token_balance(&env, project_id, &token_address)
-    }
-
-    /// All token balances for a project.
-    pub fn get_project_balances(env: Env, project_id: u64) -> ProjectBalances {
-        let project = load_project(&env, project_id);
-        get_all_balances(&env, &project)
-    }
-
-    /// Whether a token is on the project's whitelist.
-    pub fn is_token_accepted(env: Env, project_id: u64, token_address: Address) -> bool {
-        let project = load_project(&env, project_id);
-        project.accepts_token(&token_address)
+        env.events()
+            .publish((symbol_short!("verified"),), project_id);
     }
 }
