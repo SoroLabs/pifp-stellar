@@ -1,7 +1,7 @@
 extern crate std;
 
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger, LedgerInfo},
     token, Address, BytesN, Env, Vec,
 };
 
@@ -12,6 +12,19 @@ use crate::{PifpProtocol, PifpProtocolClient, Role, ProjectStatus};
 fn setup() -> (Env, PifpProtocolClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();
+    
+    // Initialize ledger with a non-zero timestamp
+    env.ledger().set(LedgerInfo {
+        timestamp: 100_000,
+        protocol_version: 22,
+        sequence_number: 100,
+        network_id: [0u8; 32],
+        base_reserve: 10,
+        min_temp_entry_ttl: 10,
+        min_persistent_entry_ttl: 10,
+        max_entry_ttl: 1000,
+    });
+
     let contract_id = env.register_contract(None, PifpProtocol);
     let client = PifpProtocolClient::new(&env, &contract_id);
     (env, client)
@@ -41,7 +54,7 @@ fn future_deadline(env: &Env) -> u64 {
 
 #[test]
 fn test_init_sets_super_admin() {
-    let (env, client, super_admin) = setup_with_init();
+    let (_env, client, super_admin) = setup_with_init();
     assert!(client.has_role(&super_admin, &Role::SuperAdmin));
     assert_eq!(client.role_of(&super_admin), Some(Role::SuperAdmin));
 }
@@ -49,7 +62,7 @@ fn test_init_sets_super_admin() {
 #[test]
 #[should_panic]
 fn test_init_twice_panics() {
-    let (env, client, super_admin) = setup_with_init();
+    let (_env, client, super_admin) = setup_with_init();
     client.init(&super_admin);
 }
 
@@ -79,5 +92,73 @@ fn test_register_project_success() {
     assert_eq!(project.status, ProjectStatus::Funding);
 }
 
-// Note: Many other tests are in rbac_test.rs and test_events.rs.
-// This file serves as a basic integration verification.
+// ─── 3. Security Hardening Tests ─────────────────────────
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #12)")]
+fn test_register_duplicate_tokens_fails() {
+    let (env, client, admin) = setup_with_init();
+    let token = Address::generate(&env);
+    let tokens = Vec::from_array(&env, [token.clone(), token.clone()]);
+    
+    client.register_project(&admin, &tokens, &1000i128, &dummy_proof(&env), &future_deadline(&env));
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #7)")]
+fn test_register_zero_goal_fails() {
+    let (env, client, admin) = setup_with_init();
+    let tokens = Vec::from_array(&env, [Address::generate(&env)]);
+    
+    client.register_project(&admin, &tokens, &0i128, &dummy_proof(&env), &future_deadline(&env));
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #13)")]
+fn test_register_past_deadline_fails() {
+    let (env, client, admin) = setup_with_init();
+    let tokens = Vec::from_array(&env, [Address::generate(&env)]);
+    let past_deadline = env.ledger().timestamp() - 1;
+    
+    client.register_project(&admin, &tokens, &1000i128, &dummy_proof(&env), &past_deadline);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #11)")]
+fn test_deposit_zero_amount_fails() {
+    let (env, client, admin) = setup_with_init();
+    let creator = Address::generate(&env);
+    let token = Address::generate(&env);
+    let tokens = Vec::from_array(&env, [token.clone()]);
+    
+    client.grant_role(&admin, &creator, &Role::ProjectManager);
+    let project = client.register_project(&creator, &tokens, &1000i128, &dummy_proof(&env), &future_deadline(&env));
+    
+    client.deposit(&project.id, &creator, &token, &0i128);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #14)")]
+fn test_deposit_after_deadline_fails() {
+    let (env, client, admin) = setup_with_init();
+    let token = Address::generate(&env);
+    let tokens = Vec::from_array(&env, [token.clone()]);
+    
+    let pm = Address::generate(&env);
+    client.grant_role(&admin, &pm, &Role::ProjectManager);
+    let project = client.register_project(&pm, &tokens, &1000i128, &dummy_proof(&env), &future_deadline(&env));
+    
+    // Fast-forward time
+    env.ledger().set(LedgerInfo {
+        timestamp: future_deadline(&env) + 1,
+        protocol_version: 22,
+        sequence_number: 100,
+        network_id: [0u8; 32],
+        base_reserve: 10,
+        min_temp_entry_ttl: 10,
+        min_persistent_entry_ttl: 10,
+        max_entry_ttl: 1000,
+    });
+    
+    client.deposit(&project.id, &admin, &token, &100i128);
+}

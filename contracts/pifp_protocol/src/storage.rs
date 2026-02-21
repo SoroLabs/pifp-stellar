@@ -143,7 +143,7 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
-        donation_count: 0, // In a real system, this might be tracked in ProjectState
+        donation_count: 0, 
     }
 }
 
@@ -197,7 +197,7 @@ pub fn set_token_balance(env: &Env, project_id: u64, token: &Address, balance: i
 /// Returns the new balance.
 pub fn add_to_token_balance(env: &Env, project_id: u64, token: &Address, amount: i128) -> i128 {
     let current = get_token_balance(env, project_id, token);
-    let new_balance = current + amount;
+    let new_balance = current.checked_add(amount).expect("balance overflow");
     set_token_balance(env, project_id, token, new_balance);
     new_balance
 }
@@ -219,7 +219,7 @@ pub fn get_all_balances(env: &Env, project: &Project) -> ProjectBalances {
     let mut balances: Vec<TokenBalance> = Vec::new(env);
     for token in project.accepted_tokens.iter() {
         let balance = get_token_balance(env, project.id, &token);
-        balances.push_back(TokenBalance { token, balance });
+        balances.push_back(TokenBalance { token: token.clone(), balance });
     }
     ProjectBalances {
         project_id: project.id,

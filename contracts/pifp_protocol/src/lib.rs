@@ -62,10 +62,18 @@ pub enum Error {
     InsufficientBalance   = 4,
     InvalidMilestones     = 5,
     NotAuthorized         = 6,
-    GoalMismatch          = 7,
-    AlreadyInitialized    = 8,
-    RoleNotFound          = 9,
-    TooManyTokens         = 10,
+    InvalidGoal          = 7,
+    AlreadyInitialized   = 8,
+    RoleNotFound         = 9,
+    TooManyTokens        = 10,
+    InvalidAmount        = 11,
+    DuplicateToken       = 12,
+    InvalidDeadline      = 13,
+    ProjectExpired       = 14,
+    ProjectNotActive     = 15,
+    VerificationFailed   = 16,
+    EmptyAcceptedTokens  = 17,
+    Overflow             = 18,
 }
 
 #[contract]
@@ -146,16 +154,31 @@ impl PifpProtocol {
         rbac::require_can_register(&env, &creator);
 
         if accepted_tokens.len() == 0 {
-            panic_with_error!(&env, Error::InvalidMilestones);
+            panic_with_error!(&env, Error::EmptyAcceptedTokens);
         }
         if accepted_tokens.len() > 10 {
             panic_with_error!(&env, Error::TooManyTokens);
         }
-        if goal <= 0 {
-            panic_with_error!(&env, Error::InvalidMilestones);
+
+        // Check for duplicate tokens
+        for i in 0..accepted_tokens.len() {
+            let t_i = accepted_tokens.get(i).unwrap();
+            for j in (i + 1)..accepted_tokens.len() {
+                if t_i == accepted_tokens.get(j).unwrap() {
+                    panic_with_error!(&env, Error::DuplicateToken);
+                }
+            }
         }
-        if deadline <= env.ledger().timestamp() {
-            panic_with_error!(&env, Error::InvalidMilestones);
+
+        if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 { // 10^30
+            panic_with_error!(&env, Error::InvalidGoal);
+        }
+
+        let now = env.ledger().timestamp();
+        // Max 5 years deadline (5 * 365 * 24 * 60 * 60)
+        let max_deadline = now + 157_680_000;
+        if deadline <= now || deadline > max_deadline {
+            panic_with_error!(&env, Error::InvalidDeadline);
         }
 
         let id = get_and_increment_project_id(&env);
@@ -201,14 +224,23 @@ impl PifpProtocol {
     pub fn deposit(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
         donator.require_auth();
 
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+
         // Read config to verify token; read state for status check.
         let config = load_project_config(&env, project_id);
         let state = load_project_state(&env, project_id);
 
+        // Check expiration
+        if env.ledger().timestamp() >= config.deadline {
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+
         // Basic status check: must be Funding or Active.
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
-            _ => panic!("project not accepting deposits"),
+            _ => panic_with_error!(&env, Error::ProjectNotActive),
         }
 
         // Verify token is accepted.
@@ -220,7 +252,7 @@ impl PifpProtocol {
             }
         }
         if !found {
-            panic!("token not accepted by this project");
+            panic_with_error!(&env, Error::NotAuthorized);
         }
 
         // Transfer tokens from donator to contract.
@@ -268,7 +300,7 @@ impl PifpProtocol {
 
         // Mocked ZK verification: compare submitted hash to stored hash.
         if submitted_proof_hash != config.proof_hash {
-            panic!("proof verification failed: hash mismatch");
+            panic_with_error!(&env, Error::VerificationFailed);
         }
 
         // Transition to Completed — only write the state entry.
