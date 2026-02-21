@@ -1,3 +1,32 @@
+//! # Storage
+//!
+//! Provides typed helpers over Soroban's two storage tiers used by PIFP:
+//!
+//! ## Instance storage (contract-lifetime TTL)
+//!
+//! | Key              | Type      | Description                        |
+//! |------------------|-----------|------------------------------------|
+//! | `ProjectCount`   | `u64`     | Auto-increment project ID counter  |
+//! | `OracleKey`      | `Address` | Active trusted oracle address      |
+//!
+//! Instance TTL is bumped by **7 days** whenever it falls below 1 day remaining.
+//!
+//! ## Persistent storage (per-entry TTL)
+//!
+//! | Key                | Type            | Description                      |
+//! |--------------------|-----------------|----------------------------------|
+//! | `ProjConfig(id)`   | `ProjectConfig` | Immutable project configuration  |
+//! | `ProjState(id)`    | `ProjectState`  | Mutable project state            |
+//!
+//! Persistent TTL is bumped by **30 days** whenever it falls below 7 days remaining.
+//!
+//! ## Why split Config and State?
+//!
+//! Deposits are high-frequency writes. Writing the full `Project` struct (~150 bytes)
+//! on every deposit is wasteful. `ProjectState` is ~20 bytes — separating it cuts
+//! ledger write costs by ~87% per deposit while keeping the public API clean via
+//! the reconstructed [`Project`] return type.
+
 use soroban_sdk::{contracttype, Address, Env};
 
 use crate::types::{Project, ProjectConfig, ProjectState};

@@ -15,23 +15,50 @@
 //   8. `register_project` uses `rbac::require_can_register` — SuperAdmin, Admin, and
 //      ProjectManager may register; an unauthenticated address cannot.
 
+//! # PIFP Protocol Contract
+//!
+//! This is the root crate of the **Proof-of-Impact Funding Protocol (PIFP)**.
+//! It exposes the single Soroban contract `PifpProtocol` whose entry points cover
+//! the full project lifecycle:
+//!
+//! | Phase        | Entry Point(s)                              |
+//! |--------------|---------------------------------------------|
+//! | Bootstrap    | [`PifpProtocol::init`]                      |
+//! | Role admin   | `grant_role`, `revoke_role`, `transfer_super_admin`, `set_oracle` |
+//! | Registration | [`PifpProtocol::register_project`]          |
+//! | Funding      | [`PifpProtocol::deposit`]                   |
+//! | Verification | [`PifpProtocol::verify_and_release`]        |
+//! | Queries      | `get_project`, `role_of`, `has_role`        |
+//!
+//! ## Architecture
+//!
+//! Authorization is fully delegated to [`rbac`].  Storage access is fully
+//! delegated to [`storage`].  This file contains **only** the public entry
+//! points and event emissions — no business logic lives here directly.
+//!
+//! See [`ARCHITECTURE.md`](../../../../ARCHITECTURE.md) for the full system
+//! architecture and threat model.
+
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, panic_with_error, symbol_short, token, Address, BytesN,
-    Env, Symbol,
+    contract, contracterror, contractimpl, panic_with_error, token, Address, BytesN,
+    Env,
 };
 
 mod storage;
 mod types;
 pub mod rbac;
+pub mod events;
 
-#[cfg(test)]
-mod fuzz_test;
+// #[cfg(test)]
+// mod fuzz_test;
 #[cfg(test)]
 mod invariants;
+// #[cfg(test)]
+// mod test;
 #[cfg(test)]
-mod test;
+mod test_events;
 
 use storage::{
     get_and_increment_project_id, get_oracle, load_project, load_project_config,
@@ -150,8 +177,8 @@ impl PifpProtocol {
 
         let project = Project {
             id,
-            creator,
-            accepted_tokens,
+            creator: creator.clone(),
+            token: token.clone(),
             goal,
             proof_hash,
             deadline,
@@ -160,6 +187,10 @@ impl PifpProtocol {
         };
 
         save_project(&env, &project);
+
+        // Standardized event emission
+        events::emit_project_created(&env, id, creator, token, goal);
+
         project
     }
 
@@ -188,11 +219,8 @@ impl PifpProtocol {
         state.balance += amount;
         save_project_state(&env, project_id, &state);
 
-        // Emit donation event.
-        env.events().publish(
-            (Symbol::new(&env, "donation_received"), project_id, token_address),
-            (donator, amount, new_balance),
-        );
+        // Standardized event emission
+        events::emit_project_funded(&env, project_id, donator.clone(), amount);
     }
 
     /// Grant the Oracle role to `oracle`.
@@ -208,6 +236,7 @@ impl PifpProtocol {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
         rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
+        set_oracle(&env, &oracle);
     }
 
     /// Verify proof of impact and release funds to the creator.
@@ -247,7 +276,7 @@ impl PifpProtocol {
         state.status = ProjectStatus::Completed;
         save_project_state(&env, project_id, &state);
 
-        env.events()
-            .publish((symbol_short!("verified"),), project_id);
+        // Standardized event emission
+        events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
     }
 }

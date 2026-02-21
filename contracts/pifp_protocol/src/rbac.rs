@@ -26,6 +26,39 @@
 // All admin mutations emit events so that off-chain indexers can maintain a
 // complete audit trail without storing full membership lists on-chain.
 
+//! # RBAC — Role-Based Access Control
+//!
+//! Manages the five-role hierarchy used by PIFP:
+//!
+//! ```text
+//! SuperAdmin
+//!     ├── Admin
+//!     ├── Oracle
+//!     ├── Auditor
+//!     └── ProjectManager
+//! ```
+//!
+//! ## Storage layout
+//!
+//! - `RbacKey::SuperAdmin` → `Address`  — the one and only super-admin.
+//! - `RbacKey::Role(addr)` → `Role`     — the role held by `addr`, if any.
+//!
+//! ## Event emissions
+//!
+//! Every mutation emits an on-chain event so that off-chain indexers can
+//! reconstruct a complete audit trail without storing membership lists on-chain:
+//!
+//! | Event topic prefix | Trigger |
+//! |--------------------|---------|
+//! | `role_set`         | Role granted or replaced |
+//! | `role_del`         | Role revoked |
+//!
+//! ## Threat model notes
+//!
+//! - `Admin` cannot escalate to `SuperAdmin` — only `SuperAdmin` may grant that role.
+//! - `SuperAdmin` cannot be removed via `revoke_role`; use `transfer_super_admin`.
+//! - An address holds **at most one role** at a time; granting a new role replaces the old one.
+
 #![allow(unused)]
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};

@@ -1,14 +1,33 @@
-// contracts/pifp_protocol/src/types.rs
-//
-// Multi-asset update:
-//   - `Project.token: Address`   removed  (single-token field)
-//   - `Project.balance: i128`    removed  (single-balance field)
-//   - `Project.accepted_tokens`  added    (Vec<Address> whitelist, 1–10 tokens)
-//   - `Project.total_raised_xlm` added    (informational aggregate, updated on deposit)
-//
-// Per-token balances are stored separately under DataKey::TokenBalance(project_id, token)
-// so the Project struct itself stays a fixed size and avoids a Vec<(Address, i128)>
-// that would grow with every donation.
+//! # Types
+//!
+//! Shared data structures used across all modules of the PIFP protocol.
+//!
+//! ## Design decisions
+//!
+//! ### Config / State split
+//!
+//! A `Project` is internally stored as two separate ledger entries:
+//!
+//! - [`ProjectConfig`] — written once at registration; never mutated.
+//! - [`ProjectState`] — written on every deposit and on verification.
+//!
+//! The public API exposes the reconstructed [`Project`] struct for convenience.
+//!
+//! ### Status as a Finite-State Machine
+//!
+//! [`ProjectStatus`] enforces a strict forward-only lifecycle:
+//!
+//! ```text
+//! Funding ──► Active ──► Completed
+//!     └──────────────────►┘
+//!     └──► Expired
+//! Active ──► Expired
+//! ```
+//!
+//! Backward transitions and transitions out of terminal states (`Completed`,
+//! `Expired`) are rejected by `verify_and_release`.
+
+use soroban_sdk::{contracttype, Address, BytesN};
 
 use soroban_sdk::{contracttype, Address, Env, Vec};
 
