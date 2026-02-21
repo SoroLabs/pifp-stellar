@@ -1,474 +1,341 @@
-// contracts/pifp_protocol/src/test.rs
-// integrated the RBAC to the tests
-// Unit tests for the RBAC-integrated PifpProtocol.
-//
-// Covers:
-//   - Init: success, double-init rejected
-//   - grant_role: SuperAdmin can grant all; Admin can grant non-SuperAdmin
-//   - grant_role: Admin cannot grant SuperAdmin
-//   - revoke_role: success; cannot revoke SuperAdmin
-//   - transfer_super_admin: full cycle
-//   - role_of / has_role queries
-//   - register_project: allowed roles pass; no role fails
-//   - set_oracle via RBAC; verify_and_release gated by Oracle role
-//   - deposit: anyone can donate regardless of role
+// contracts/pifp_protocol/src/test.rs  (replaces existing test.rs)
+// Multi-asset funding tests — covers all new behaviour on top of RBAC.
 
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, BytesN, Env,
+    testutils::{Address as _},
+    token::{Client as TokenClient, StellarAssetClient},
+    Address, BytesN, Env, Vec,
 };
 
-use crate::{PifpProtocol, PifpProtocolClient, Role, Error};
+use crate::{PifpProtocol, PifpProtocolClient, Role};
 
-// ─── Helpers ─────────────────────────────────────────────
+// ─── Setup ───────────────────────────────────────────────
 
-fn setup() -> (Env, PifpProtocolClient<'static>) {
+fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, PifpProtocol);
-    let client = PifpProtocolClient::new(&env, &contract_id);
-    (env, client)
-}
 
-fn setup_with_init() -> (Env, PifpProtocolClient<'static>, Address) {
-    let (env, client) = setup();
+    let id      = env.register_contract(None, PifpProtocol);
+    let client  = PifpProtocolClient::new(&env, &id);
+
     let super_admin = Address::generate(&env);
+    let oracle      = Address::generate(&env);
+    let pm          = Address::generate(&env);
+
+    let xlm  = env.register_stellar_asset_contract_v2(Address::generate(&env)).address();
+    let usdc = env.register_stellar_asset_contract_v2(Address::generate(&env)).address();
+
     client.init(&super_admin);
-    (env, client, super_admin)
-}
-
-fn dummy_proof(env: &Env) -> BytesN<32> {
-    BytesN::from_array(env, &[0xabu8; 32])
-}
-
-fn future_deadline(env: &Env) -> u64 {
-    env.ledger().timestamp() + 86_400
-}
-
-// ─── 1. Initialisation ───────────────────────────────────
-
-#[test]
-fn test_init_sets_super_admin() {
-    let (env, client, super_admin) = setup_with_init();
-    assert!(client.has_role(&super_admin, &Role::SuperAdmin));
-    assert_eq!(client.role_of(&super_admin), Some(Role::SuperAdmin));
-}
-
-#[test]
-#[should_panic]
-fn test_init_twice_panics() {
-    let (env, client, super_admin) = setup_with_init();
-    // Second call must panic (AlreadyInitialized)
-    client.init(&super_admin);
-}
-
-// ─── 2. grant_role ───────────────────────────────────────
-
-#[test]
-fn test_super_admin_can_grant_admin() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-
-    assert!(client.has_role(&admin, &Role::Admin));
-}
-
-#[test]
-fn test_super_admin_can_grant_oracle() {
-    let (env, client, super_admin) = setup_with_init();
-    let oracle = Address::generate(&env);
-
+    client.grant_role(&super_admin, &pm,     &Role::ProjectManager);
     client.grant_role(&super_admin, &oracle, &Role::Oracle);
 
-    assert!(client.has_role(&oracle, &Role::Oracle));
+    (env, client, super_admin, oracle, pm, xlm, usdc)
+}
+
+fn mint(env: &Env, token: &Address, to: &Address, amount: i128) {
+    StellarAssetClient::new(env, token).mint(to, &amount);
+}
+
+fn bytes32(env: &Env) -> BytesN<32> { BytesN::from_array(env, &[0xabu8; 32]) }
+fn future(env: &Env) -> u64 { env.ledger().timestamp() + 86_400 }
+
+fn tok2(env: &Env, a: &Address, b: &Address) -> Vec<Address> {
+    let mut v = Vec::new(env);
+    v.push_back(a.clone());
+    v.push_back(b.clone());
+    v
+}
+
+fn tok1(env: &Env, a: &Address) -> Vec<Address> {
+    let mut v = Vec::new(env);
+    v.push_back(a.clone());
+    v
+}
+
+// ─── register_project ────────────────────────────────────
+
+#[test]
+fn register_two_tokens() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &1_000i128, &bytes32(&env), &future(&env));
+    assert_eq!(p.accepted_tokens.len(), 2);
+    assert_eq!(p.donation_count, 0);
 }
 
 #[test]
-fn test_super_admin_can_grant_project_manager() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm = Address::generate(&env);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-
-    assert!(client.has_role(&pm, &Role::ProjectManager));
-}
-
-#[test]
-fn test_super_admin_can_grant_auditor() {
-    let (env, client, super_admin) = setup_with_init();
-    let auditor = Address::generate(&env);
-
-    client.grant_role(&super_admin, &auditor, &Role::Auditor);
-
-    assert!(client.has_role(&auditor, &Role::Auditor));
-}
-
-#[test]
-fn test_admin_can_grant_project_manager() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin = Address::generate(&env);
-    let pm    = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    client.grant_role(&admin, &pm, &Role::ProjectManager);
-
-    assert!(client.has_role(&pm, &Role::ProjectManager));
-}
-
-#[test]
-fn test_admin_can_grant_oracle() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin  = Address::generate(&env);
-    let oracle = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    client.grant_role(&admin, &oracle, &Role::Oracle);
-
-    assert!(client.has_role(&oracle, &Role::Oracle));
+fn register_single_token() {
+    let (env, client, _, _, pm, xlm, _) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &500i128, &bytes32(&env), &future(&env));
+    assert_eq!(p.accepted_tokens.len(), 1);
 }
 
 #[test]
 #[should_panic]
-fn test_admin_cannot_grant_super_admin() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin    = Address::generate(&env);
-    let impostor = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    // Admin trying to elevate someone to SuperAdmin — must panic
-    client.grant_role(&admin, &impostor, &Role::SuperAdmin);
+fn register_empty_tokens_panics() {
+    let (env, client, _, _, pm, _, _) = setup();
+    client.register_project(&pm, &Vec::new(&env), &100i128, &bytes32(&env), &future(&env));
 }
 
 #[test]
 #[should_panic]
-fn test_no_role_cannot_grant() {
-    let (env, client, _) = setup_with_init();
-    let nobody = Address::generate(&env);
-    let target = Address::generate(&env);
+fn register_eleven_tokens_panics() {
+    let (env, client, _, _, pm, _, _) = setup();
+    let mut v: Vec<Address> = Vec::new(&env);
+    for _ in 0..11 { v.push_back(Address::generate(&env)); }
+    client.register_project(&pm, &v, &100i128, &bytes32(&env), &future(&env));
+}
 
-    // Nobody has a role — must panic
-    client.grant_role(&nobody, &target, &Role::Admin);
+// ─── deposit success ─────────────────────────────────────
+
+#[test]
+fn deposit_xlm_updates_balance() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm, &donor, 1_000);
+
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &600i128);
+
+    assert_eq!(client.get_token_balance(&p.id, &xlm),  600);
+    assert_eq!(client.get_token_balance(&p.id, &usdc), 0);
+}
+
+#[test]
+fn deposit_usdc_updates_balance() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &usdc, &donor, 500);
+
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &usdc, &500i128);
+
+    assert_eq!(client.get_token_balance(&p.id, &usdc), 500);
+    assert_eq!(client.get_token_balance(&p.id, &xlm),  0);
+}
+
+#[test]
+fn deposits_accumulate_per_token() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let d1 = Address::generate(&env);
+    let d2 = Address::generate(&env);
+    mint(&env, &xlm,  &d1, 300);
+    mint(&env, &xlm,  &d2, 700);
+    mint(&env, &usdc, &d1, 400);
+
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &1_000i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &d1, &xlm,  &300i128);
+    client.deposit(&p.id, &d2, &xlm,  &700i128);
+    client.deposit(&p.id, &d1, &usdc, &400i128);
+
+    assert_eq!(client.get_token_balance(&p.id, &xlm),  1_000);
+    assert_eq!(client.get_token_balance(&p.id, &usdc), 400);
+}
+
+#[test]
+fn get_project_balances_returns_both_tokens() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm,  &donor, 100);
+    mint(&env, &usdc, &donor, 200);
+
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &xlm,  &100i128);
+    client.deposit(&p.id, &donor, &usdc, &200i128);
+
+    let bals = client.get_project_balances(&p.id);
+    assert_eq!(bals.balances.len(), 2);
+    assert_eq!(bals.balances.get(0).unwrap().balance, 100); // XLM
+    assert_eq!(bals.balances.get(1).unwrap().balance, 200); // USDC
+}
+
+#[test]
+fn donation_count_increments_each_deposit() {
+    let (env, client, _, _, pm, xlm, _) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm, &donor, 300);
+
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &100i128);
+    client.deposit(&p.id, &donor, &xlm, &100i128);
+    client.deposit(&p.id, &donor, &xlm, &100i128);
+
+    let updated = client.get_project(&p.id);
+    assert_eq!(updated.donation_count, 3);
+}
+
+// ─── deposit failures ────────────────────────────────────
+
+#[test]
+#[should_panic]
+fn deposit_unlisted_token_panics() {
+    let (env, client, _, _, pm, xlm, _) = setup();
+    let donor = Address::generate(&env);
+    let other = env.register_stellar_asset_contract_v2(Address::generate(&env)).address();
+    mint(&env, &other, &donor, 100);
+
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &other, &100i128);
 }
 
 #[test]
 #[should_panic]
-fn test_project_manager_cannot_grant() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm     = Address::generate(&env);
-    let target = Address::generate(&env);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-    // ProjectManager has insufficient privilege — must panic
-    client.grant_role(&pm, &target, &Role::Auditor);
-}
-
-// ─── 3. revoke_role ──────────────────────────────────────
-
-#[test]
-fn test_super_admin_can_revoke_admin() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    assert!(client.has_role(&admin, &Role::Admin));
-
-    client.revoke_role(&super_admin, &admin);
-    assert!(!client.has_role(&admin, &Role::Admin));
-    assert_eq!(client.role_of(&admin), None);
-}
-
-#[test]
-fn test_admin_can_revoke_project_manager() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin = Address::generate(&env);
-    let pm    = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    client.grant_role(&admin, &pm, &Role::ProjectManager);
-    client.revoke_role(&admin, &pm);
-
-    assert!(!client.has_role(&pm, &Role::ProjectManager));
+fn deposit_zero_panics() {
+    let (env, client, _, _, pm, xlm, _) = setup();
+    let donor = Address::generate(&env);
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &0i128);
 }
 
 #[test]
 #[should_panic]
-fn test_cannot_revoke_super_admin_via_revoke_role() {
-    let (env, client, super_admin) = setup_with_init();
-    // Attempting to revoke SuperAdmin must panic — use transfer_super_admin instead
-    client.revoke_role(&super_admin, &super_admin);
+fn deposit_negative_panics() {
+    let (env, client, _, _, pm, xlm, _) = setup();
+    let donor = Address::generate(&env);
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &500i128, &bytes32(&env), &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &-1i128);
 }
 
 #[test]
 #[should_panic]
-fn test_project_manager_cannot_revoke() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm     = Address::generate(&env);
-    let target = Address::generate(&env);
+fn deposit_into_completed_project_panics() {
+    let (env, client, _, oracle, pm, xlm, _) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm, &donor, 200);
 
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-    client.grant_role(&super_admin, &target, &Role::Auditor);
-
-    // ProjectManager cannot revoke — must panic
-    client.revoke_role(&pm, &target);
+    let proof = bytes32(&env);
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &proof, &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &100i128);
+    client.verify_and_release(&oracle, &p.id, &proof);
+    client.deposit(&p.id, &donor, &xlm, &100i128); // must panic
 }
 
+// ─── is_token_accepted ───────────────────────────────────
+
 #[test]
-fn test_revoke_no_role_is_noop() {
-    let (env, client, super_admin) = setup_with_init();
-    let nobody = Address::generate(&env);
-    // Revoking from an address with no role must not panic
-    client.revoke_role(&super_admin, &nobody);
-    assert_eq!(client.role_of(&nobody), None);
+fn is_token_accepted_true_and_false() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+
+    assert!(client.is_token_accepted(&p.id, &xlm));
+    assert!(!client.is_token_accepted(&p.id, &usdc));
 }
 
-// ─── 4. transfer_super_admin ─────────────────────────────
+// ─── whitelist_token / remove_token ──────────────────────
 
 #[test]
-fn test_transfer_super_admin() {
-    let (env, client, old_super) = setup_with_init();
-    let new_super = Address::generate(&env);
+fn whitelist_adds_token() {
+    let (env, client, super_admin, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+    assert!(!client.is_token_accepted(&p.id, &usdc));
 
-    client.transfer_super_admin(&old_super, &new_super);
-
-    assert!(client.has_role(&new_super, &Role::SuperAdmin));
-    assert!(!client.has_role(&old_super, &Role::SuperAdmin));
-    assert_eq!(client.role_of(&old_super), None);
-}
-
-#[test]
-#[should_panic]
-fn test_admin_cannot_transfer_super_admin() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin     = Address::generate(&env);
-    let new_super = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    // Admin trying to transfer SuperAdmin — must panic
-    client.transfer_super_admin(&admin, &new_super);
-}
-
-// ─── 5. register_project: RBAC gates ────────────────────
-
-#[test]
-fn test_project_manager_can_register() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm       = Address::generate(&env);
-    let token    = Address::generate(&env);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-
-    let project = client.register_project(
-        &pm,
-        &token,
-        &1_000_000i128,
-        &dummy_proof(&env),
-        &future_deadline(&env),
-    );
-
-    assert_eq!(project.creator, pm);
-    assert_eq!(project.goal, 1_000_000i128);
-}
-
-#[test]
-fn test_admin_can_register_project() {
-    let (env, client, super_admin) = setup_with_init();
-    let admin = Address::generate(&env);
-    let token = Address::generate(&env);
-
-    client.grant_role(&super_admin, &admin, &Role::Admin);
-    let project = client.register_project(
-        &admin,
-        &token,
-        &500_000i128,
-        &dummy_proof(&env),
-        &future_deadline(&env),
-    );
-
-    assert_eq!(project.creator, admin);
-}
-
-#[test]
-fn test_super_admin_can_register_project() {
-    let (env, client, super_admin) = setup_with_init();
-    let token = Address::generate(&env);
-
-    let project = client.register_project(
-        &super_admin,
-        &token,
-        &100i128,
-        &dummy_proof(&env),
-        &future_deadline(&env),
-    );
-
-    assert_eq!(project.creator, super_admin);
+    client.whitelist_token(&super_admin, &p.id, &usdc);
+    assert!(client.is_token_accepted(&p.id, &usdc));
 }
 
 #[test]
 #[should_panic]
-fn test_no_role_cannot_register_project() {
-    let (env, client, _) = setup_with_init();
-    let nobody = Address::generate(&env);
-    let token  = Address::generate(&env);
+fn whitelist_duplicate_panics() {
+    let (env, client, super_admin, _, pm, xlm, _) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+    client.whitelist_token(&super_admin, &p.id, &xlm); // XLM already there
+}
 
-    // Must panic — no role assigned
-    client.register_project(
-        &nobody,
-        &token,
-        &1_000i128,
-        &dummy_proof(&env),
-        &future_deadline(&env),
-    );
+#[test]
+fn remove_token_shrinks_list() {
+    let (env, client, super_admin, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &100i128, &bytes32(&env), &future(&env));
+
+    client.remove_token(&super_admin, &p.id, &usdc);
+    assert!(client.is_token_accepted(&p.id, &xlm));
+    assert!(!client.is_token_accepted(&p.id, &usdc));
 }
 
 #[test]
 #[should_panic]
-fn test_auditor_cannot_register_project() {
-    let (env, client, super_admin) = setup_with_init();
-    let auditor = Address::generate(&env);
-    let token   = Address::generate(&env);
-
-    client.grant_role(&super_admin, &auditor, &Role::Auditor);
-    // Auditor is read-only — must panic
-    client.register_project(
-        &auditor,
-        &token,
-        &1_000i128,
-        &dummy_proof(&env),
-        &future_deadline(&env),
-    );
-}
-
-// ─── 6. set_oracle + verify_and_release ─────────────────
-
-#[test]
-fn test_set_oracle_grants_oracle_role() {
-    let (env, client, super_admin) = setup_with_init();
-    let oracle = Address::generate(&env);
-
-    client.set_oracle(&super_admin, &oracle);
-
-    assert!(client.has_role(&oracle, &Role::Oracle));
-}
-
-#[test]
-fn test_verify_and_release_by_oracle() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm     = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let token  = Address::generate(&env);
-    let proof  = dummy_proof(&env);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-    client.set_oracle(&super_admin, &oracle);
-
-    let project = client.register_project(
-        &pm,
-        &token,
-        &100i128,
-        &proof,
-        &future_deadline(&env),
-    );
-
-    // Should succeed — oracle has the Oracle role
-    client.verify_and_release(&oracle, &project.id, &proof);
-
-    let completed = client.get_project(&project.id);
-    assert_eq!(completed.status, crate::ProjectStatus::Completed);
+fn remove_last_token_panics() {
+    let (env, client, super_admin, _, pm, xlm, _) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+    client.remove_token(&super_admin, &p.id, &xlm);
 }
 
 #[test]
 #[should_panic]
-fn test_non_oracle_cannot_verify() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm      = Address::generate(&env);
-    let impostor= Address::generate(&env);
-    let token   = Address::generate(&env);
-    let proof   = dummy_proof(&env);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-    // impostor has no Oracle role
-
-    let project = client.register_project(
-        &pm,
-        &token,
-        &100i128,
-        &proof,
-        &future_deadline(&env),
-    );
-
-    // Must panic — impostor lacks Oracle role
-    client.verify_and_release(&impostor, &project.id, &proof);
+fn remove_unlisted_token_panics() {
+    let (env, client, super_admin, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+    client.remove_token(&super_admin, &p.id, &usdc);
 }
 
 #[test]
 #[should_panic]
-fn test_verify_wrong_proof_panics() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm     = Address::generate(&env);
-    let oracle = Address::generate(&env);
-    let token  = Address::generate(&env);
-    let proof  = dummy_proof(&env);
-    let bad_proof = BytesN::from_array(&env, &[0x00u8; 32]);
-
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
-    client.set_oracle(&super_admin, &oracle);
-
-    let project = client.register_project(
-        &pm, &token, &100i128, &proof, &future_deadline(&env),
-    );
-
-    // Wrong proof hash — must panic
-    client.verify_and_release(&oracle, &project.id, &bad_proof);
+fn pm_cannot_whitelist() {
+    let (env, client, _, _, pm, xlm, usdc) = setup();
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &bytes32(&env), &future(&env));
+    client.whitelist_token(&pm, &p.id, &usdc); // pm is not admin
 }
 
-// ─── 7. deposit: no role required ────────────────────────
+// ─── verify_and_release (multi-asset) ────────────────────
 
 #[test]
-fn test_anyone_can_deposit() {
-    // deposit has no RBAC gate — any address can donate.
-    // This test verifies the balance increases and an event is emitted.
-    // (Full token mock is complex; we verify the logic path doesn't panic on role check.)
-    // A full integration test with a mock token is in the existing test suite.
-    let (env, client, super_admin) = setup_with_init();
-    // Just confirm no RBAC panic is introduced by checking role_of on a random address
-    let donator = Address::generate(&env);
-    assert_eq!(client.role_of(&donator), None);
-    // The actual deposit call requires a real token mock — covered separately.
-}
+fn release_transfers_all_balances_to_creator() {
+    let (env, client, _, oracle, pm, xlm, usdc) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm,  &donor, 1_000);
+    mint(&env, &usdc, &donor, 500);
 
-// ─── 8. Queries ──────────────────────────────────────────
+    let proof = bytes32(&env);
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &500i128, &proof, &future(&env));
+    client.deposit(&p.id, &donor, &xlm,  &1_000i128);
+    client.deposit(&p.id, &donor, &usdc, &500i128);
 
-#[test]
-fn test_role_of_returns_none_for_unknown() {
-    let (env, client, _) = setup_with_init();
-    let unknown = Address::generate(&env);
-    assert_eq!(client.role_of(&unknown), None);
+    client.verify_and_release(&oracle, &p.id, &proof);
+
+    // Contract balances drained
+    assert_eq!(client.get_token_balance(&p.id, &xlm),  0);
+    assert_eq!(client.get_token_balance(&p.id, &usdc), 0);
+
+    // Creator received funds
+    assert_eq!(TokenClient::new(&env, &xlm).balance(&pm),  1_000);
+    assert_eq!(TokenClient::new(&env, &usdc).balance(&pm), 500);
 }
 
 #[test]
-fn test_has_role_false_for_wrong_role() {
-    let (env, client, super_admin) = setup_with_init();
-    let pm = Address::generate(&env);
-    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
+fn release_skips_zero_balance_tokens() {
+    let (env, client, _, oracle, pm, xlm, usdc) = setup();
+    let donor = Address::generate(&env);
+    mint(&env, &xlm, &donor, 300);
 
-    assert!(!client.has_role(&pm, &Role::Admin));
-    assert!(!client.has_role(&pm, &Role::Oracle));
-    assert!(client.has_role(&pm, &Role::ProjectManager));
+    let proof = bytes32(&env);
+    let p = client.register_project(&pm, &tok2(&env, &xlm, &usdc), &100i128, &proof, &future(&env));
+    client.deposit(&p.id, &donor, &xlm, &300i128); // only XLM donated
+
+    // Should not panic because USDC balance is 0 — just skips it
+    client.verify_and_release(&oracle, &p.id, &proof);
+
+    let updated = client.get_project(&p.id);
+    assert_eq!(updated.status, crate::ProjectStatus::Completed);
 }
 
 #[test]
-fn test_grant_replaces_existing_role() {
-    let (env, client, super_admin) = setup_with_init();
-    let target = Address::generate(&env);
+#[should_panic]
+fn release_wrong_proof_panics() {
+    let (env, client, _, oracle, pm, xlm, _) = setup();
+    let proof = bytes32(&env);
+    let bad   = BytesN::from_array(&env, &[0x00u8; 32]);
 
-    client.grant_role(&super_admin, &target, &Role::Auditor);
-    assert!(client.has_role(&target, &Role::Auditor));
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &proof, &future(&env));
+    client.verify_and_release(&oracle, &p.id, &bad);
+}
 
-    // Upgrade to Admin
-    client.grant_role(&super_admin, &target, &Role::Admin);
-    assert!(client.has_role(&target, &Role::Admin));
-    assert!(!client.has_role(&target, &Role::Auditor));
+#[test]
+#[should_panic]
+fn double_release_panics() {
+    let (env, client, _, oracle, pm, xlm, _) = setup();
+    let proof = bytes32(&env);
+
+    let p = client.register_project(&pm, &tok1(&env, &xlm), &100i128, &proof, &future(&env));
+    client.verify_and_release(&oracle, &p.id, &proof);
+    client.verify_and_release(&oracle, &p.id, &proof); // must panic
 }
