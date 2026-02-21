@@ -27,9 +27,9 @@
 //! ledger write costs by ~87% per deposit while keeping the public API clean via
 //! the reconstructed [`Project`] return type.
 
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
-use crate::types::{Project, ProjectConfig, ProjectState};
+use crate::types::{Project, ProjectBalances, ProjectConfig, ProjectState, TokenBalance};
 
 // ── TTL Constants ────────────────────────────────────────────────────
 
@@ -62,6 +62,8 @@ pub enum DataKey {
     ProjConfig(u64),
     /// Mutable project state keyed by ID (Persistent).
     ProjState(u64),
+    /// Token balance for a specific project and token (Persistent).
+    TokenBalance(u64, Address),
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -127,14 +129,13 @@ pub fn save_project(env: &Env, project: &Project) {
     let config = ProjectConfig {
         id: project.id,
         creator: project.creator.clone(),
-        token: project.token.clone(),
+        accepted_tokens: project.accepted_tokens.clone(),
         goal: project.goal,
         proof_hash: project.proof_hash.clone(),
         deadline: project.deadline,
     };
 
     let state = ProjectState {
-        balance: project.balance,
         status: project.status.clone(),
     };
 
@@ -142,6 +143,11 @@ pub fn save_project(env: &Env, project: &Project) {
     env.storage().persistent().set(&state_key, &state);
     bump_persistent(env, &config_key);
     bump_persistent(env, &state_key);
+
+    // Initialise balances to 0 for all accepted tokens.
+    for token in project.accepted_tokens.iter() {
+        set_token_balance(env, project.id, &token, 0);
+    }
 }
 
 /// Load the full `Project` by combining config and state.
@@ -152,12 +158,12 @@ pub fn load_project(env: &Env, id: u64) -> Project {
     Project {
         id: config.id,
         creator: config.creator,
-        token: config.token,
+        accepted_tokens: config.accepted_tokens,
         goal: config.goal,
-        balance: state.balance,
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
+        donation_count: 0, // In a real system, this might be tracked in ProjectState
     }
 }
 
@@ -189,6 +195,21 @@ pub fn load_project_state(env: &Env, id: u64) -> ProjectState {
 pub fn save_project_state(env: &Env, id: u64, state: &ProjectState) {
     let key = DataKey::ProjState(id);
     env.storage().persistent().set(&key, state);
+    bump_persistent(env, &key);
+}
+
+/// Retrieve the balance of `token` for `project_id`.
+pub fn get_token_balance(env: &Env, project_id: u64, token: &Address) -> i128 {
+    let key = DataKey::TokenBalance(project_id, token.clone());
+    let balance = env.storage().persistent().get(&key).unwrap_or(0);
+    bump_persistent(env, &key);
+    balance
+}
+
+/// Set the balance of `token` for `project_id`.
+pub fn set_token_balance(env: &Env, project_id: u64, token: &Address, balance: i128) {
+    let key = DataKey::TokenBalance(project_id, token.clone());
+    env.storage().persistent().set(&key, &balance);
     bump_persistent(env, &key);
 }
 

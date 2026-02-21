@@ -1,20 +1,3 @@
-// contracts/pifp_protocol/src/lib.rs
-//
-// RBAC-integrated PifpProtocol contract.
-//
-// Changes from the original:
-//   1. Added `mod rbac` — the new Role-Based Access Control module.
-//   2. `DataKey` gains no new variants (role storage lives in `RbacKey` inside rbac.rs).
-//   3. `Error` gains two new variants: `AlreadyInitialized` and `RoleNotFound`.
-//   4. New entry point: `init(env, super_admin)` — must be called once after deployment.
-//   5. New entry points for role management: `grant_role`, `revoke_role`,
-//      `transfer_super_admin`, `role_of`, `has_role`.
-//   6. `set_oracle` now calls `rbac::grant_role(..., Role::Oracle)` instead of writing
-//      a bare address — the oracle is just an address with the Oracle role.
-//   7. `verify_and_release` uses `rbac::require_oracle` instead of the old `get_oracle`.
-//   8. `register_project` uses `rbac::require_can_register` — SuperAdmin, Admin, and
-//      ProjectManager may register; an unauthenticated address cannot.
-
 //! # PIFP Protocol Contract
 //!
 //! This is the root crate of the **Proof-of-Impact Funding Protocol (PIFP)**.
@@ -43,7 +26,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, panic_with_error, token, Address, BytesN,
-    Env,
+    Env, Vec,
 };
 
 mod storage;
@@ -61,8 +44,8 @@ mod invariants;
 mod test_events;
 
 use storage::{
-    get_and_increment_project_id, get_oracle, load_project, load_project_config,
-    load_project_state, save_project, save_project_state, set_oracle,
+    get_and_increment_project_id, load_project, load_project_config,
+    load_project_state, save_project, save_project_state,
 };
 pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
@@ -78,9 +61,9 @@ pub enum Error {
     InvalidMilestones     = 5,
     NotAuthorized         = 6,
     GoalMismatch          = 7,
-    // New in RBAC integration:
     AlreadyInitialized    = 8,
     RoleNotFound          = 9,
+    TooManyTokens         = 10,
 }
 
 #[contract]
@@ -178,7 +161,7 @@ impl PifpProtocol {
         let project = Project {
             id,
             creator: creator.clone(),
-            token: token.clone(),
+            accepted_tokens: accepted_tokens.clone(),
             goal,
             proof_hash,
             deadline,
@@ -188,8 +171,10 @@ impl PifpProtocol {
 
         save_project(&env, &project);
 
-        // Standardized event emission
-        events::emit_project_created(&env, id, creator, token, goal);
+        // Standardized event emission (using the first token as a reference for the created event)
+        if let Some(token) = accepted_tokens.get(0) {
+            events::emit_project_created(&env, id, creator, token, goal);
+        }
 
         project
     }
@@ -201,26 +186,41 @@ impl PifpProtocol {
 
     /// Deposit funds into a project.
     ///
-    /// Reads only the immutable config (for the token address) and the mutable
-    /// state, then writes back only the small state entry (~20 bytes) instead
-    /// of the full project struct (~150 bytes).
-    pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
+    /// The `token` must be one of the project's accepted tokens.
+    pub fn deposit(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
         donator.require_auth();
 
-        // Read config for token address; read state for balance.
+        // Read config to verify token; read state for status check.
         let config = load_project_config(&env, project_id);
-        let mut state = load_project_state(&env, project_id);
+        let state = load_project_state(&env, project_id);
+
+        // Basic status check: must be Funding or Active.
+        match state.status {
+            ProjectStatus::Funding | ProjectStatus::Active => {}
+            _ => panic!("project not accepting deposits"),
+        }
+
+        // Verify token is accepted.
+        let mut found = false;
+        for t in config.accepted_tokens.iter() {
+            if t == token {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            panic!("token not accepted by this project");
+        }
 
         // Transfer tokens from donator to contract.
-        let token_client = token::Client::new(&env, &config.token);
+        let token_client = token::Client::new(&env, &token);
         token_client.transfer(&donator, &env.current_contract_address(), &amount);
 
-        // Update only the mutable state.
-        state.balance += amount;
-        save_project_state(&env, project_id, &state);
+        // Update the per-token balance.
+        storage::add_to_token_balance(&env, project_id, &token, amount);
 
         // Standardized event emission
-        events::emit_project_funded(&env, project_id, donator.clone(), amount);
+        events::emit_project_funded(&env, project_id, donator, amount);
     }
 
     /// Grant the Oracle role to `oracle`.
@@ -236,7 +236,6 @@ impl PifpProtocol {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
         rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
-        set_oracle(&env, &oracle);
     }
 
     /// Verify proof of impact and release funds to the creator.
@@ -249,9 +248,7 @@ impl PifpProtocol {
     ///
     /// Reads the immutable config (for proof_hash) and mutable state (for status),
     /// then writes back only the small state entry.
-    pub fn verify_and_release(env: Env, project_id: u64, submitted_proof_hash: BytesN<32>) {
-        // Ensure caller is the registered oracle.
-        let oracle = get_oracle(&env);
+    pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, submitted_proof_hash: BytesN<32>) {
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);

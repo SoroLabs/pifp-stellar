@@ -27,9 +27,7 @@
 //! Backward transitions and transitions out of terminal states (`Completed`,
 //! `Expired`) are rejected by `verify_and_release`.
 
-use soroban_sdk::{contracttype, Address, BytesN};
-
-use soroban_sdk::{contracttype, Address, Env, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Vec};
 
 /// Current lifecycle state of a funding project.
 #[contracttype]
@@ -54,7 +52,7 @@ pub enum ProjectStatus {
 pub struct ProjectConfig {
     pub id: u64,
     pub creator: Address,
-    pub token: Address,
+    pub accepted_tokens: Vec<Address>,
     pub goal: i128,
     pub proof_hash: BytesN<32>,
     pub deadline: u64,
@@ -66,7 +64,6 @@ pub struct ProjectConfig {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectState {
-    pub balance: i128,
     pub status: ProjectStatus,
 }
 
