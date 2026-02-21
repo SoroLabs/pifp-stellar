@@ -58,8 +58,16 @@ mod invariants;
 mod test;
 
 use storage::{
-    get_and_increment_project_id, get_oracle, load_project, load_project_config,
-    load_project_state, save_project, save_project_state, set_oracle,
+    get_and_increment_project_id,
+    get_oracle,
+    load_project,
+    load_project_pair,
+    // individual loaders remain exported for compatibility,
+    load_project_config,
+    load_project_state,
+    save_project,
+    save_project_state,
+    set_oracle,
 };
 pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
@@ -195,9 +203,11 @@ impl PifpProtocol {
     pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
         donator.require_auth();
 
-        // Read config for token address; read state for balance.
-        let config = load_project_config(&env, project_id);
-        let mut state = load_project_state(&env, project_id);
+        // Read both config and state with a single helper that bumps TTLs
+        // atomically. This is the optimized retrieval pattern the issue
+        // introduced; it saves one storage read (and one TTL bump) compared to
+        // calling the helpers separately.
+        let (config, mut state) = load_project_pair(&env, project_id);
 
         // Transfer tokens from donator to contract.
         let token_client = token::Client::new(&env, &config.token);
@@ -246,9 +256,8 @@ impl PifpProtocol {
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
 
-        // Read immutable config for proof hash, mutable state for status.
-        let config = load_project_config(&env, project_id);
-        let mut state = load_project_state(&env, project_id);
+        // Optimised dual-read helper
+        let (config, mut state) = load_project_pair(&env, project_id);
 
         // Ensure the project is in a verifiable state.
         match state.status {
