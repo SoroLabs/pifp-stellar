@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # 1. Rust (Cargo) dependencies
+  - package-ecosystem: "cargo"
+    # Root directory for the Rust workspace
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Grouping updates prevents PR noise
+      rust-dependencies:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    # Requesting reviews from the maintainers automatically
+    reviewers:
+      - "emarc99"
+
+  # 2. GitHub Actions (to keep our deploy.yml and other actions up to date)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions-updates:
+        patterns:
+          - "*"
+
+  # 3. Node.js (npm) for any potential frontend or toolchain packages
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
