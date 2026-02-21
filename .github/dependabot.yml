@@ -27,9 +27,3 @@ updates:
       actions-updates:
         patterns:
           - "*"
-
-  # 3. Node.js (npm) for any potential frontend or toolchain packages
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
