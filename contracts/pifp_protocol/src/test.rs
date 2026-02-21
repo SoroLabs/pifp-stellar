@@ -456,6 +456,59 @@ fn test_has_role_false_for_wrong_role() {
     assert!(client.has_role(&pm, &Role::ProjectManager));
 }
 
+// ─── 9. Storage retrieval optimisations ─────────────────────
+
+#[test]
+fn test_project_exists_and_maybe_load_helpers() {
+    let (env, client, super_admin) = setup_with_init();
+    let token = Address::generate(&env);
+
+    // nothing registered yet
+    assert!(!crate::storage::project_exists(&env, 0));
+    assert_eq!(crate::storage::maybe_load_project(&env, 0), None);
+    assert_eq!(crate::storage::maybe_load_project_config(&env, 0), None);
+    assert_eq!(crate::storage::maybe_load_project_state(&env, 0), None);
+
+    // register one project and exercise the new helpers
+    let pm = Address::generate(&env);
+    client.grant_role(&super_admin, &pm, &Role::ProjectManager);
+    let project = client.register_project(
+        &pm,
+        &token,
+        &1_000i128,
+        &dummy_proof(&env),
+        &future_deadline(&env),
+    );
+
+    assert!(crate::storage::project_exists(&env, project.id));
+    // individual maybe_load functions should return some value matching fields
+    let cfg = crate::storage::maybe_load_project_config(&env, project.id)
+        .expect("config should exist");
+    assert_eq!(cfg.id, project.id);
+    let st = crate::storage::maybe_load_project_state(&env, project.id)
+        .expect("state should exist");
+    assert_eq!(st.balance, 0);
+
+    // maybe_load_project returns full struct
+    let loaded = crate::storage::maybe_load_project(&env, project.id)
+        .expect("project exists");
+    assert_eq!(loaded.creator, project.creator);
+
+    // load_project_pair should match load_project
+    let (cfg2, st2) = crate::storage::load_project_pair(&env, project.id);
+    let full = client.get_project(&project.id);
+    assert_eq!(full.creator, cfg2.creator);
+    assert_eq!(full.balance, st2.balance);
+}
+
+#[test]
+#[should_panic]
+fn test_load_project_pair_panics_for_missing() {
+    let (env, _client, _super_admin) = setup_with_init();
+    // id 42 not present -> should panic
+    crate::storage::load_project_pair(&env, 42);
+}
+
 #[test]
 fn test_grant_replaces_existing_role() {
     let (env, client, super_admin) = setup_with_init();

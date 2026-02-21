@@ -238,6 +238,20 @@ TTL: bumped by **7 days** whenever below 1 day remaining.
 | `ProjConfig(id)`  | `ProjectConfig` | Immutable project configuration |
 | `ProjState(id)`   | `ProjectState`  | Mutable project state           |
 | `RbacKey::Role(addr)` | `Role`      | RBAC role for an address        |
+
+PIFP exposes several **retrieval helpers** designed to minimise the number of
+storage reads and TTL bumps:
+
+* `project_exists(id)` – cheap existence check (no TTL bump).
+* `maybe_load_project_config` / `maybe_load_project_state` – return an
+  `Option` and only bump TTL when the entry is found.
+* `load_project_pair` – atomic two‑entry read with a single call; used by
+  high‑frequency operations like `deposit` and `verify_and_release`.
+* `maybe_load_project` – convenience wrapper returning a full `Project` or
+  `None` if absent.
+
+These helpers underpin the **optimized storage retrieval patterns** that reduce
+gas costs and simplify contract logic by centralising dual‑read behaviour.
 | `RbacKey::SuperAdmin` | `Address`   | The single SuperAdmin address   |
 
 TTL: bumped by **30 days** whenever below 7 days remaining.
