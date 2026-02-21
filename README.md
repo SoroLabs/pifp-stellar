@@ -39,3 +39,24 @@ To run the automated tests using the Soroban testutils feature:
 ```bash
 cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
 ```
+
+## Docker Development Environment
+
+For a reproducible and isolated development environment, you can use Docker. The provided `Dockerfile` and `docker-compose.yml` set up Rust configured for Soroban smart contracts.
+
+1.  **Start DEV environment**:
+    ```bash
+    docker-compose up -d dev
+    ```
+2.  **Open shell inside container**:
+    ```bash
+    docker-compose exec dev bash
+    ```
+3.  **Run sanity check**:
+    ```bash
+    ./scripts/devops_check.sh
+    ```
+4.  **Build or Test**:
+    ```bash
+    cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
+    ```

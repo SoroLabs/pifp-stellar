@@ -1,31 +1,3 @@
-// contracts/pifp_protocol/src/rbac.rs
-//
-// Role-Based Access Control (RBAC) for the PIFP Protocol
-//
-// ## Role Hierarchy
-//
-// ```
-//   SuperAdmin
-//       │
-//       ├── Admin          (manage roles, configure protocol)
-//       ├── Oracle         (verify proofs, trigger releases)
-//       ├── Auditor        (read-only: view all projects + audit logs)
-//       └── ProjectManager (register + manage own projects only)
-// ```
-//
-// ## Design
-//
-// Roles are stored in persistent storage keyed by `RbacKey::Role(address)`.
-// Every role-bearing address also appears in `RbacKey::RoleMembers(role)` so
-// that membership can be enumerated off-chain via events (the list itself is
-// not stored on-chain to avoid unbounded growth).
-//
-// A `SuperAdmin` is set once at contract initialisation and can never be
-// removed via normal `revoke_role` — it must use `transfer_super_admin`.
-//
-// All admin mutations emit events so that off-chain indexers can maintain a
-// complete audit trail without storing full membership lists on-chain.
-
 //! # RBAC — Role-Based Access Control
 //!
 //! Manages the five-role hierarchy used by PIFP:
@@ -161,8 +133,6 @@ pub fn init_super_admin(env: &Env, super_admin: &Address) {
 ///
 /// Emits a `role_set` event.
 pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
- 
-
     let caller_role = get_role(env, caller);
 
     match &role {
@@ -195,7 +165,6 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
 ///
 /// Emits a `role_del` event if a role existed.
 pub fn revoke_role(env: &Env, caller: &Address, target: &Address) {
-   
     require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]);
 
     // Protect the SuperAdmin address from revocation via this path
@@ -218,7 +187,6 @@ pub fn revoke_role(env: &Env, caller: &Address, target: &Address) {
 ///
 /// This is the only way to remove a SuperAdmin.
 pub fn transfer_super_admin(env: &Env, current: &Address, new: &Address) {
- 
     require_role(env, current, &Role::SuperAdmin);
 
     // Clear old SuperAdmin

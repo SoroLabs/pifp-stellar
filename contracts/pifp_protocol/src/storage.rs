@@ -27,9 +27,9 @@
 //! ledger write costs by ~87% per deposit while keeping the public API clean via
 //! the reconstructed [`Project`] return type.
 
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
-use crate::types::{Project, ProjectConfig, ProjectState};
+use crate::types::{Project, ProjectBalances, ProjectConfig, ProjectState, TokenBalance};
 
 // ── TTL Constants ────────────────────────────────────────────────────
 
@@ -56,12 +56,12 @@ const PERSISTENT_LIFETIME_THRESHOLD: u32 = 7 * DAY_IN_LEDGERS;
 pub enum DataKey {
     /// Global auto-increment counter for project IDs (Instance).
     ProjectCount,
-    /// Trusted oracle/verifier address (Instance).
-    OracleKey,
     /// Immutable project configuration keyed by ID (Persistent).
     ProjConfig(u64),
     /// Mutable project state keyed by ID (Persistent).
     ProjState(u64),
+    /// Token balance for a specific project and token (Persistent).
+    TokenBalance(u64, Address),
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -73,8 +73,12 @@ fn bump_instance(env: &Env) {
         .extend_ttl(INSTANCE_LIFETIME_THRESHOLD, INSTANCE_BUMP_AMOUNT);
 }
 
-/// Atomically reads, increments, and stores the project counter.
-/// Returns the ID to use for the *current* project (pre-increment value).
+// ─────────────────────────────────────────────────────────
+// Project counter
+// ─────────────────────────────────────────────────────────
+
+/// Atomically read and increment the project counter.
+/// Returns the ID that should be used for the next project.
 pub fn get_and_increment_project_id(env: &Env) -> u64 {
     bump_instance(env);
     let current: u64 = env
@@ -86,24 +90,6 @@ pub fn get_and_increment_project_id(env: &Env) -> u64 {
         .instance()
         .set(&DataKey::ProjectCount, &(current + 1));
     current
-}
-
-/// Store the trusted oracle address in instance storage.
-pub fn set_oracle(env: &Env, oracle: &Address) {
-    env.storage()
-        .instance()
-        .set(&DataKey::OracleKey, oracle);
-    bump_instance(env);
-}
-
-/// Retrieve the trusted oracle address.
-/// Panics if no oracle has been set.
-pub fn get_oracle(env: &Env) -> Address {
-    bump_instance(env);
-    env.storage()
-        .instance()
-        .get(&DataKey::OracleKey)
-        .expect("oracle not set")
 }
 
 // ── Persistent Storage Helpers ───────────────────────────────────────
@@ -123,14 +109,13 @@ pub fn save_project(env: &Env, project: &Project) {
     let config = ProjectConfig {
         id: project.id,
         creator: project.creator.clone(),
-        token: project.token.clone(),
+        accepted_tokens: project.accepted_tokens.clone(),
         goal: project.goal,
         proof_hash: project.proof_hash.clone(),
         deadline: project.deadline,
     };
 
     let state = ProjectState {
-        balance: project.balance,
         status: project.status.clone(),
     };
 
@@ -138,6 +123,11 @@ pub fn save_project(env: &Env, project: &Project) {
     env.storage().persistent().set(&state_key, &state);
     bump_persistent(env, &config_key);
     bump_persistent(env, &state_key);
+
+    // Initialise balances to 0 for all accepted tokens.
+    for token in project.accepted_tokens.iter() {
+        set_token_balance(env, project.id, &token, 0);
+    }
 }
 
 /// Load the full `Project` by combining config and state.
@@ -148,12 +138,12 @@ pub fn load_project(env: &Env, id: u64) -> Project {
     Project {
         id: config.id,
         creator: config.creator,
-        token: config.token,
+        accepted_tokens: config.accepted_tokens,
         goal: config.goal,
-        balance: state.balance,
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
+        donation_count: 0, // In a real system, this might be tracked in ProjectState
     }
 }
 
@@ -292,3 +282,52 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
     })
 }
 
+/// Retrieve the balance of `token` for `project_id`.
+pub fn get_token_balance(env: &Env, project_id: u64, token: &Address) -> i128 {
+    let key = DataKey::TokenBalance(project_id, token.clone());
+    let balance = env.storage().persistent().get(&key).unwrap_or(0);
+    bump_persistent(env, &key);
+    balance
+}
+
+/// Set the balance of `token` for `project_id`.
+pub fn set_token_balance(env: &Env, project_id: u64, token: &Address, balance: i128) {
+    let key = DataKey::TokenBalance(project_id, token.clone());
+    env.storage().persistent().set(&key, &balance);
+    bump_persistent(env, &key);
+}
+
+/// Add `amount` to the existing balance of `token` for `project_id`.
+/// Returns the new balance.
+pub fn add_to_token_balance(env: &Env, project_id: u64, token: &Address, amount: i128) -> i128 {
+    let current = get_token_balance(env, project_id, token);
+    let new_balance = current + amount;
+    set_token_balance(env, project_id, token, new_balance);
+    new_balance
+}
+
+/// Zero out the balance of `token` for `project_id` and return what it was.
+/// Called during `verify_and_release` after transferring funds to the creator.
+#[allow(dead_code)]
+pub fn drain_token_balance(env: &Env, project_id: u64, token: &Address) -> i128 {
+    let balance = get_token_balance(env, project_id, token);
+    if balance > 0 {
+        set_token_balance(env, project_id, token, 0);
+    }
+    balance
+}
+
+/// Build a `ProjectBalances` snapshot by reading each accepted token's balance.
+#[allow(dead_code)]
+pub fn get_all_balances(env: &Env, project: &Project) -> ProjectBalances {
+    let mut balances: Vec<TokenBalance> = Vec::new(env);
+    for token in project.accepted_tokens.iter() {
+        let balance = get_token_balance(env, project.id, &token);
+        balances.push_back(TokenBalance { token, balance });
+    }
+    ProjectBalances {
+        project_id: project.id,
+        balances,
+    }
+}
+ 
