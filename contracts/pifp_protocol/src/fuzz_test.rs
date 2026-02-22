@@ -448,10 +448,10 @@ proptest! {
         assert_valid_status_transition(&ProjectStatus::Funding, &final_project.status);
         assert_project_immutable_fields(&project, &final_project);
         assert_eq!(final_project.status, ProjectStatus::Completed);
-        
-        // Balance should be unchanged after verification.
+
+        // Balance should be zero after verification (funds transferred to creator).
         let post_verify_balance = client.get_balance(&project.id, &token_client.address);
-        assert_eq!(post_verify_balance, total_deposited);
+        assert_eq!(post_verify_balance, 0);
 
         // Phase 4: Double-verify should fail.
         let result = client.try_verify_and_release(&oracle, &project.id, &proof_hash);
