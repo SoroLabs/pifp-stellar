@@ -9,11 +9,11 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk = "25.1.1"
 
 [features]
 testutils = ["soroban-sdk/testutils"]
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.10", features = ["testutils"] }
+soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 proptest = "1.5"
