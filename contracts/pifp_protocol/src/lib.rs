@@ -45,18 +45,15 @@ mod test_events;
 
 use storage::{
     get_and_increment_project_id,
-    get_oracle,
     load_project,
     load_project_pair,
-    // individual loaders remain exported for compatibility,
-    load_project_config,
-    load_project_state,
     save_project,
     save_project_state,
-    set_oracle,
+    drain_token_balance,
 };
 pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
+pub use events::emit_funds_released;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -280,6 +277,26 @@ impl PifpProtocol {
 
         // Transition to Completed — only write the state entry.
         state.status = ProjectStatus::Completed;
+
+        // Transfer all deposited tokens to the creator.
+        // If any transfer fails, panic to revert the entire transaction.
+        let contract_address = env.current_contract_address();
+        for token in config.accepted_tokens.iter() {
+            // Drain the token balance (gets balance and zeros it).
+            let balance = drain_token_balance(&env, project_id, &token);
+
+            // Only transfer if there's a non-zero balance.
+            if balance > 0 {
+                // Create token client and transfer to creator.
+                let token_client = token::Client::new(&env, &token);
+                token_client.transfer(&contract_address, &config.creator, &balance);
+
+                // Emit funds_released event for this token.
+                events::emit_funds_released(&env, project_id, token, balance);
+            }
+        }
+
+        // Save the updated state (now marked as Completed).
         save_project_state(&env, project_id, &state);
 
         // Standardized event emission

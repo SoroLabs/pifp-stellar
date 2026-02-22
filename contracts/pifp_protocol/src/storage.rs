@@ -238,24 +238,6 @@ pub fn load_project_pair(env: &Env, id: u64) -> (ProjectConfig, ProjectState) {
     (config, state)
 }
 
-/// Load the full `Project` by combining config and state.
-///
-/// Internally this now just delegates to [`load_project_pair`], avoiding
-/// duplicate TTL bumps and read boilerplate.
-pub fn load_project(env: &Env, id: u64) -> Project {
-    let (config, state) = load_project_pair(env, id);
-    Project {
-        id: config.id,
-        creator: config.creator,
-        token: config.token,
-        goal: config.goal,
-        balance: state.balance,
-        proof_hash: config.proof_hash,
-        deadline: config.deadline,
-        status: state.status,
-    }
-}
-
 /// Attempt to load a full project, returning `None` if it does not exist.
 ///
 /// This is the most efficient way to query the contract when callers are
@@ -273,12 +255,12 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
     Some(Project {
         id: config.id,
         creator: config.creator,
-        token: config.token,
+        accepted_tokens: config.accepted_tokens,
         goal: config.goal,
-        balance: state.balance,
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
+        donation_count: 0,
     })
 }
 
