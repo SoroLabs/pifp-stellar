@@ -118,7 +118,13 @@ pub fn init_super_admin(env: &Env, super_admin: &Address) {
         .set(&RbacKey::SuperAdmin, super_admin);
     store_role(env, super_admin, &Role::SuperAdmin);
 
-    emit(env, symbol_short!("role_set"), super_admin, &Role::SuperAdmin, None::<Address>);
+    emit(
+        env,
+        symbol_short!("role_set"),
+        super_admin,
+        &Role::SuperAdmin,
+        None::<Address>,
+    );
 }
 
 // ─────────────────────────────────────────────────────────
@@ -154,7 +160,13 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
     }
 
     store_role(env, target, &role);
-    emit(env, symbol_short!("role_set"), target, &role, Some(caller.clone()));
+    emit(
+        env,
+        symbol_short!("role_set"),
+        target,
+        &role,
+        Some(caller.clone()),
+    );
 }
 
 /// Revoke any role from `target`.
@@ -194,11 +206,15 @@ pub fn transfer_super_admin(env: &Env, current: &Address, new: &Address) {
     emit_revoke(env, current, Some(current.clone()));
 
     // Set new SuperAdmin
-    env.storage()
-        .persistent()
-        .set(&RbacKey::SuperAdmin, new);
+    env.storage().persistent().set(&RbacKey::SuperAdmin, new);
     store_role(env, new, &Role::SuperAdmin);
-    emit(env, symbol_short!("role_set"), new, &Role::SuperAdmin, Some(current.clone()));
+    emit(
+        env,
+        symbol_short!("role_set"),
+        new,
+        &Role::SuperAdmin,
+        Some(current.clone()),
+    );
 }
 
 // ─────────────────────────────────────────────────────────
@@ -273,28 +289,23 @@ pub fn has_role(env: &Env, address: Address, role: Role) -> bool {
 /// Data:  `Option<caller_address>`
 fn emit(env: &Env, event: soroban_sdk::Symbol, target: &Address, role: &Role, by: Option<Address>) {
     let role_sym = role_to_symbol(env, role);
-    env.events().publish(
-        (event, target.clone(), role_sym),
-        by,
-    );
+    env.events().publish((event, target.clone(), role_sym), by);
 }
 
 /// Emit a role revocation event.
 fn emit_revoke(env: &Env, target: &Address, by: Option<Address>) {
-    env.events().publish(
-        (symbol_short!("role_del"), target.clone()),
-        by,
-    );
+    env.events()
+        .publish((symbol_short!("role_del"), target.clone()), by);
 }
 
 /// Convert a Role to a short Symbol for event topics.
 fn role_to_symbol(env: &Env, role: &Role) -> soroban_sdk::Symbol {
     match role {
-        Role::SuperAdmin    => symbol_short!("supadmin"),
-        Role::Admin         => symbol_short!("admin"),
-        Role::Oracle        => symbol_short!("oracle"),
-        Role::Auditor       => symbol_short!("auditor"),
-        Role::ProjectManager=> symbol_short!("proj_mgr"),
+        Role::SuperAdmin => symbol_short!("supadmin"),
+        Role::Admin => symbol_short!("admin"),
+        Role::Oracle => symbol_short!("oracle"),
+        Role::Auditor => symbol_short!("auditor"),
+        Role::ProjectManager => symbol_short!("proj_mgr"),
     }
 }
 

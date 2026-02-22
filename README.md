@@ -36,6 +36,24 @@ The contract logic is extensively covered by a comprehensive test suite. The tes
 We recently added **optimized storage retrieval patterns** to reduce gas cost and improve maintainability. New helpers like `storage::load_project_pair`, `maybe_load_project`, and `project_exists` allow high-frequency operations such as `deposit` and `verify_and_release` to read configuration and state in a single call while keeping TTL bumps minimal.
 To run the automated tests using the Soroban testutils feature:
 
+## Development
+### Prerequisites
+- [Rust](https://www.rust-lang.org/) (stable)
+- [Soroban CLI](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup)
+
+### Local Development
+To compile the smart contracts:
+```bash
+cargo build --target wasm32-unknown-unknown --release
+```
+
+or 
+
+```bash
+stellar contract build
+```
+
+To run unit tests:
 ```bash
 cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
 ```
@@ -60,3 +78,12 @@ For a reproducible and isolated development environment, you can use Docker. The
     ```bash
     cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
     ```
+
+### CI/CD Workflow
+This project uses **GitHub Actions** to automate validation. On every push and pull request to `main` and `develop`, the following checks are performed:
+1.  **Format Check**: Ensures code follows `rustfmt` standards.
+2.  **Linting**: Strict `clippy` checks to catch common errors and ensure best practices.
+3.  **Unit Tests**: Executes the full test suite to guarantee logic correctness.
+4.  **WASM Build**: Verifies that the contract can be successfully compiled for the Soroban runtime.
+
+Successfully built WASM artifacts are available in the action's execution summary.

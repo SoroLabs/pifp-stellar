@@ -65,6 +65,7 @@ pub struct ProjectConfig {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectState {
     pub status: ProjectStatus,
+    pub donation_count: u32,
 }
 
 /// Full on-chain representation of a funding project.
@@ -112,7 +113,7 @@ impl Project {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TokenBalance {
-    pub token:   Address,
+    pub token: Address,
     pub balance: i128,
 }
 
@@ -121,5 +122,5 @@ pub struct TokenBalance {
 #[derive(Clone, Debug)]
 pub struct ProjectBalances {
     pub project_id: u64,
-    pub balances:   Vec<TokenBalance>,
+    pub balances: Vec<TokenBalance>,
 }
