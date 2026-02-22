@@ -11,7 +11,7 @@
 //! | Registration | [`PifpProtocol::register_project`]          |
 //! | Funding      | [`PifpProtocol::deposit`]                   |
 //! | Verification | [`PifpProtocol::verify_and_release`]        |
-//! | Queries      | `get_project`, `role_of`, `has_role`        |
+//! | Queries      | `get_project`, `get_project_balances`, `role_of`, `has_role` |
 //!
 //! ## Architecture
 //!
@@ -44,9 +44,10 @@ mod test_events;
 
 pub use rbac::Role;
 use storage::{
-    get_and_increment_project_id, load_project, load_project_pair, save_project, save_project_state,
+    get_all_balances, get_and_increment_project_id, load_project, load_project_pair,
+    maybe_load_project, save_project, save_project_state,
 };
-pub use types::{Project, ProjectStatus};
+pub use types::{Project, ProjectBalances, ProjectStatus};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -180,6 +181,21 @@ impl PifpProtocol {
     /// Retrieve a project by its ID.
     pub fn get_project(env: Env, id: u64) -> Project {
         load_project(&env, id)
+    }
+
+    /// Return the current per-token balances for a project.
+    ///
+    /// Reconstructs the balance snapshot from persistent storage for every
+    /// token that was accepted at registration time.
+    ///
+    /// # Errors
+    /// Panics with `Error::ProjectNotFound` if `project_id` does not exist.
+    pub fn get_project_balances(env: Env, project_id: u64) -> ProjectBalances {
+        let project = match maybe_load_project(&env, project_id) {
+            Some(p) => p,
+            None => panic_with_error!(&env, Error::ProjectNotFound),
+        };
+        get_all_balances(&env, &project)
     }
 
     /// Deposit funds into a project.

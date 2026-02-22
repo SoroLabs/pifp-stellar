@@ -163,3 +163,63 @@ fn test_project_verified_event() {
         }
     );
 }
+
+/// Verify that `get_project_balances` correctly reflects per-token deposits.
+///
+/// Flow:
+/// 1. Register a project that accepts two tokens.
+/// 2. Mint tokens and deposit both into the project.
+/// 3. Call `get_project_balances` and assert each balance matches the deposit.
+#[test]
+fn test_get_project_balances() {
+    let (env, client, super_admin) = setup_with_init();
+
+    // Actors
+    let creator = Address::generate(&env);
+    let donator = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    // Create two distinct SAC tokens
+    let token_a = create_token(&env, &token_admin);
+    let token_b = create_token(&env, &token_admin);
+
+    // Deposit amounts
+    let amount_a = 2_500i128;
+    let amount_b = 7_000i128;
+
+    // Grant creator the ProjectManager role and register project
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token_a.address.clone(), token_b.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &10_000i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+        &(env.ledger().timestamp() + 86_400),
+    );
+
+    // Mint tokens to the donator and make two deposits
+    let sac_a = token::StellarAssetClient::new(&env, &token_a.address);
+    let sac_b = token::StellarAssetClient::new(&env, &token_b.address);
+    sac_a.mint(&donator, &amount_a);
+    sac_b.mint(&donator, &amount_b);
+
+    client.deposit(&project.id, &donator, &token_a.address, &amount_a);
+    client.deposit(&project.id, &donator, &token_b.address, &amount_b);
+
+    // Query balances via the new entry point
+    let balances = client.get_project_balances(&project.id);
+
+    assert_eq!(balances.project_id, project.id);
+    assert_eq!(balances.balances.len(), 2);
+
+    // Balances are ordered by accepted_tokens registration order
+    let bal_a = balances.balances.get(0).expect("token_a balance missing");
+    let bal_b = balances.balances.get(1).expect("token_b balance missing");
+
+    assert_eq!(bal_a.token, token_a.address);
+    assert_eq!(bal_a.balance, amount_a);
+
+    assert_eq!(bal_b.token, token_b.address);
+    assert_eq!(bal_b.balance, amount_b);
+}
