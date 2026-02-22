@@ -13,6 +13,36 @@ Traditional donations rely on trust. PIFP uses **Stellar smart contracts** to lo
 3.  **Proof**: Implementer submits proof (photos, data) to the Oracle.
 4.  **Verified & Released**: Smart contract verifies proof hash and releases funds.
 
+## Architecture
+
+Visualizing the **User-Contract-Keeper loop**:
+
+```mermaid
+graph TD
+    subgraph Frontend
+        User([User])
+        Dashboard[Dashboard]
+    end
+
+    subgraph "Soroban Network"
+        SoroTask["SoroTask Contract"]
+        Target["Target Contract"]
+    end
+
+    subgraph "Off-chain"
+        Keeper[Keeper / Automation Bot]
+    end
+
+    User -->|Interacts| Dashboard
+    Dashboard -->|Schedules / Registers| SoroTask
+    SoroTask -.->|Emits Event| Keeper
+    Keeper -->|Monitors & Triggers| SoroTask
+    SoroTask -->|Calls| Target
+    Target -->|Updates Status| SoroTask
+    SoroTask -.->|Final Status| Dashboard
+    Dashboard -->|UI Feedback| User
+```
+
 ## Tech Stack
 
 - **Stellar/Soroban**: Smart contract logic for conditional release.

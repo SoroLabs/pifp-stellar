@@ -79,4 +79,10 @@ pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i
         amount,
     };
     env.events().publish(topics, data);
+pub fn emit_protocol_paused(env: &Env, admin: Address) {
+    env.events().publish((symbol_short!("paused"), admin), ());
+}
+
+pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
+    env.events().publish((symbol_short!("unpaused"), admin), ());
 }

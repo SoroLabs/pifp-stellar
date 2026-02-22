@@ -1,0 +1,14 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 9e3629b3db6597b941a0bad6763d2a60a48b2f7a1226f3272eec2103e1cc5841 # shrinks to amount = 1
+cc ab0826475e2da14855ad28684364394b1f816179425cd39380fa6347a49a8010 # shrinks to amount = 1
+cc 2c174debab1cb301c3ed98edc31c7ef6cd524d5f208a32700923940fdc24618a # shrinks to offset = 1
+cc 51599ef9487db65f1aa42dfc3b478b843c416417dc105a0e4adff7cbb275d355 # shrinks to amounts = [1, 1]
+cc 3ae81d0fbe7693271806a912292bd0cb054d81e9163b4b8a6e82e5c7240b89b2 # shrinks to goal = 1
+cc 578c955813b250c0999725ac8ef5e26b74a98b825075f79d358a36616f27f34c # shrinks to goal = 100, deposit_amounts = [1], hash_bytes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 82, 207, 166, 175, 146, 129, 165, 219, 247, 128, 134, 254, 32, 7, 237, 134, 238], deadline_offset = 7194889
+cc 96fc0f80c5ecb3933144e9a4b45b5b8235250da7867fc8f7fd8e539e279dfa09 # shrinks to hash_bytes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+cc 710eac623d3491a5976879f8acc409508f7c57c8513d6f423144f2d2d1ea9169 # shrinks to hash_bytes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]

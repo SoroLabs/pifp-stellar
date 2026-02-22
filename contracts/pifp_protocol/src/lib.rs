@@ -33,12 +33,14 @@ pub mod rbac;
 mod storage;
 mod types;
 
-// #[cfg(test)]
-// mod fuzz_test;
 #[cfg(test)]
 mod invariants;
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
+#[cfg(test)]
+mod rbac_test;
+#[cfg(test)]
+mod fuzz_test;
 #[cfg(test)]
 mod test_events;
 
@@ -68,10 +70,20 @@ pub enum Error {
     InsufficientBalance = 4,
     InvalidMilestones = 5,
     NotAuthorized = 6,
-    GoalMismatch = 7,
+    InvalidGoal = 7,
     AlreadyInitialized = 8,
     RoleNotFound = 9,
     TooManyTokens = 10,
+    InvalidAmount = 11,
+    DuplicateToken = 12,
+    InvalidDeadline = 13,
+    ProjectExpired = 14,
+    ProjectNotActive = 15,
+    VerificationFailed = 16,
+    EmptyAcceptedTokens = 17,
+    Overflow = 18,
+    ProtocolPaused = 19,
+    GoalMismatch = 20,
 }
 
 #[contract]
@@ -80,7 +92,7 @@ pub struct PifpProtocol;
 #[contractimpl]
 impl PifpProtocol {
     // ─────────────────────────────────────────────────────────
-    // Initialisation (new)
+    // Initialisation
     // ─────────────────────────────────────────────────────────
 
     /// Initialise the contract and set the first SuperAdmin.
@@ -95,7 +107,7 @@ impl PifpProtocol {
     }
 
     // ─────────────────────────────────────────────────────────
-    // Role management (new)
+    // Role management
     // ─────────────────────────────────────────────────────────
 
     /// Grant `role` to `target`.
@@ -133,7 +145,36 @@ impl PifpProtocol {
     }
 
     // ─────────────────────────────────────────────────────────
-    // Existing entry points — updated to use RBAC
+    // Emergency Control
+    // ─────────────────────────────────────────────────────────
+
+    /// Pause the protocol, halting all registrations, deposits, and releases.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    pub fn pause(env: Env, caller: Address) {
+        caller.require_auth();
+        rbac::require_admin_or_above(&env, &caller);
+        storage::set_paused(&env, true);
+        events::emit_protocol_paused(&env, caller);
+    }
+
+    /// Unpause the protocol.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    pub fn unpause(env: Env, caller: Address) {
+        caller.require_auth();
+        rbac::require_admin_or_above(&env, &caller);
+        storage::set_paused(&env, false);
+        events::emit_protocol_unpaused(&env, caller);
+    }
+
+    /// Return true if the protocol is paused.
+    pub fn is_paused(env: Env) -> bool {
+        storage::is_paused(&env)
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Project lifecycle
     // ─────────────────────────────────────────────────────────
 
     /// Register a new funding project.
@@ -147,25 +188,40 @@ impl PifpProtocol {
         proof_hash: BytesN<32>,
         deadline: u64,
     ) -> Project {
+        Self::require_not_paused(&env);
         creator.require_auth();
         // RBAC gate: only authorised roles may create projects.
         rbac::require_can_register(&env, &creator);
 
         if accepted_tokens.is_empty() {
-            panic_with_error!(&env, Error::InvalidMilestones);
+            panic_with_error!(&env, Error::EmptyAcceptedTokens);
         }
         if accepted_tokens.len() > 10 {
             panic_with_error!(&env, Error::TooManyTokens);
         }
-        if goal <= 0 {
-            panic_with_error!(&env, Error::InvalidMilestones);
+
+        // Check for duplicate tokens
+        for i in 0..accepted_tokens.len() {
+            let t_i = accepted_tokens.get(i).unwrap();
+            for j in (i + 1)..accepted_tokens.len() {
+                if t_i == accepted_tokens.get(j).unwrap() {
+                    panic_with_error!(&env, Error::DuplicateToken);
+                }
+            }
         }
-        if deadline <= env.ledger().timestamp() {
-            panic_with_error!(&env, Error::InvalidMilestones);
+
+        if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 { // 10^30
+            panic_with_error!(&env, Error::InvalidGoal);
+        }
+
+        let now = env.ledger().timestamp();
+        // Max 5 years deadline (5 * 365 * 24 * 60 * 60)
+        let max_deadline = now + 157_680_000;
+        if deadline <= now || deadline > max_deadline {
+            panic_with_error!(&env, Error::InvalidDeadline);
         }
 
         let id = get_and_increment_project_id(&env);
-
         let project = Project {
             id,
             creator: creator.clone(),
@@ -179,7 +235,7 @@ impl PifpProtocol {
 
         save_project(&env, &project);
 
-        // Standardized event emission (using the first token as a reference for the created event)
+        // Standardized event emission
         if let Some(token) = accepted_tokens.get(0) {
             events::emit_project_created(&env, id, creator, token, goal);
         }
@@ -187,26 +243,46 @@ impl PifpProtocol {
         project
     }
 
-    /// Retrieve a project by its ID.
     pub fn get_project(env: Env, id: u64) -> Project {
         load_project(&env, id)
+    }
+
+    /// Return the balance of `token` for `project_id`.
+    pub fn get_balance(env: Env, project_id: u64, token: Address) -> i128 {
+        storage::get_token_balance(&env, project_id, &token)
+    }
+
+    /// Return a snapshot of all balances for `project_id`.
+    pub fn get_balances(env: Env, project_id: u64) -> types::ProjectBalances {
+        let project = load_project(&env, project_id);
+        storage::get_all_balances(&env, &project)
     }
 
     /// Deposit funds into a project.
     ///
     /// The `token` must be one of the project's accepted tokens.
     pub fn deposit(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
+        Self::require_not_paused(&env);
         donator.require_auth();
+
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
 
         // Read both config and state with a single helper that bumps TTLs
         // atomically. This is the optimized retrieval pattern; it also returns
         // the state needed for the subsequent checks.
         let (config, state) = load_project_pair(&env, project_id);
 
+        // Check expiration
+        if env.ledger().timestamp() >= config.deadline {
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+
         // Basic status check: must be Funding or Active.
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
-            _ => panic!("project not accepting deposits"),
+            _ => panic_with_error!(&env, Error::ProjectNotActive),
         }
 
         // Verify token is accepted.
@@ -218,7 +294,7 @@ impl PifpProtocol {
             }
         }
         if !found {
-            panic!("token not accepted by this project");
+            panic_with_error!(&env, Error::NotAuthorized);
         }
 
         // Transfer tokens from donator to contract.
@@ -236,11 +312,6 @@ impl PifpProtocol {
     ///
     /// Replaces the original `set_oracle(admin, oracle)`.
     /// - `caller` must hold `SuperAdmin` or `Admin`.
-    ///
-    /// If an address already holds the Oracle role, calling this with a new
-    /// address will grant Oracle to the new one; the old one retains its role
-    /// unless explicitly revoked. If you want a single oracle, revoke the old
-    /// one first, then call `set_oracle`.
     pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
@@ -263,6 +334,7 @@ impl PifpProtocol {
         project_id: u64,
         submitted_proof_hash: BytesN<32>,
     ) {
+        Self::require_not_paused(&env);
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
@@ -279,7 +351,7 @@ impl PifpProtocol {
 
         // Mocked ZK verification: compare submitted hash to stored hash.
         if submitted_proof_hash != config.proof_hash {
-            panic!("proof verification failed: hash mismatch");
+            panic_with_error!(&env, Error::VerificationFailed);
         }
 
         // Transition to Completed — only write the state entry.
@@ -308,5 +380,15 @@ impl PifpProtocol {
 
         // Standardized event emission
         events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Internal Helpers
+    // ─────────────────────────────────────────────────────────
+
+    fn require_not_paused(env: &Env) {
+        if storage::is_paused(env) {
+            panic_with_error!(env, Error::ProtocolPaused);
+        }
     }
 }
