@@ -45,15 +45,10 @@ mod test_events;
 
 use storage::{
     get_and_increment_project_id,
-    get_oracle,
     load_project,
     load_project_pair,
-    // individual loaders remain exported for compatibility,
-    load_project_config,
-    load_project_state,
     save_project,
     save_project_state,
-    set_oracle,
 };
 pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
@@ -151,7 +146,7 @@ impl PifpProtocol {
         // RBAC gate: only authorised roles may create projects.
         rbac::require_can_register(&env, &creator);
 
-        if accepted_tokens.len() == 0 {
+        if accepted_tokens.is_empty() {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
         if accepted_tokens.len() > 10 {
@@ -246,7 +241,6 @@ impl PifpProtocol {
         caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
         rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
-        set_oracle(&env, &oracle);
     }
 
     /// Verify proof of impact and release funds to the creator.

@@ -65,6 +65,7 @@ pub struct ProjectConfig {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectState {
     pub status: ProjectStatus,
+    pub donation_count: u32,
 }
 
 /// Full on-chain representation of a funding project.

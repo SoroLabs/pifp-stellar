@@ -117,6 +117,7 @@ pub fn save_project(env: &Env, project: &Project) {
 
     let state = ProjectState {
         status: project.status.clone(),
+        donation_count: project.donation_count,
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -130,27 +131,28 @@ pub fn save_project(env: &Env, project: &Project) {
     }
 }
 
-/// Load the full `Project` by combining config and state.
-/// Panics if the project does not exist.
-pub fn load_project(env: &Env, id: u64) -> Project {
-    let config = load_project_config(env, id);
-    let state = load_project_state(env, id);
-    Project {
-        id: config.id,
-        creator: config.creator,
-        accepted_tokens: config.accepted_tokens,
-        goal: config.goal,
-        proof_hash: config.proof_hash,
-        deadline: config.deadline,
-        status: state.status,
-        donation_count: 0, // In a real system, this might be tracked in ProjectState
-    }
-}
+// /// Load the full `Project` by combining config and state.
+// /// Panics if the project does not exist.
+// pub fn load_project(env: &Env, id: u64) -> Project {
+//     let config = load_project_config(env, id);
+//     let state = load_project_state(env, id);
+//     Project {
+//         id: config.id,
+//         creator: config.creator,
+//         accepted_tokens: config.accepted_tokens,
+//         goal: config.goal,
+//         proof_hash: config.proof_hash,
+//         deadline: config.deadline,
+//         status: state.status,
+//         donation_count: 0, // In a real system, this might be tracked in ProjectState
+//     }
+// }
 
 /// Load only the immutable project configuration.
 ///
 /// This helper panics with a generic string if the project does not exist. It
 /// is a thin wrapper around [`maybe_load_project_config`].
+#[allow(dead_code)]
 pub fn load_project_config(env: &Env, id: u64) -> ProjectConfig {
     maybe_load_project_config(env, id).expect("project not found")
 }
@@ -159,6 +161,7 @@ pub fn load_project_config(env: &Env, id: u64) -> ProjectConfig {
 ///
 /// Panics with a generic string if the project does not exist; delegates to
 /// [`maybe_load_project_state`].
+#[allow(dead_code)]
 pub fn load_project_state(env: &Env, id: u64) -> ProjectState {
     maybe_load_project_state(env, id).expect("project not found")
 }
@@ -177,6 +180,7 @@ pub fn save_project_state(env: &Env, id: u64, state: &ProjectState) {
 /// This performs a *single* storage `has` check and does **not** bump the TTL.
 /// It can be useful for quick existence guards without expensive panics or
 /// unwrapping.
+#[allow(dead_code)]
 pub fn project_exists(env: &Env, id: u64) -> bool {
     let config_key = DataKey::ProjConfig(id);
     env.storage().persistent().has(&config_key)
@@ -187,6 +191,7 @@ pub fn project_exists(env: &Env, id: u64) -> bool {
 /// The returned option will be `None` if the project is not found. When a value
 /// is returned the entry's TTL is bumped as usual; if the project does not
 /// exist **no TTL bump occurs**.
+#[allow(dead_code)]
 pub fn maybe_load_project_config(env: &Env, id: u64) -> Option<ProjectConfig> {
     let key = DataKey::ProjConfig(id);
     let opt: Option<ProjectConfig> = env.storage().persistent().get(&key);
@@ -199,6 +204,7 @@ pub fn maybe_load_project_config(env: &Env, id: u64) -> Option<ProjectConfig> {
 /// Attempt to load the mutable state for `id`.
 ///
 /// Works analogously to [`maybe_load_project_config`].
+#[allow(dead_code)]
 pub fn maybe_load_project_state(env: &Env, id: u64) -> Option<ProjectState> {
     let key = DataKey::ProjState(id);
     let opt: Option<ProjectState> = env.storage().persistent().get(&key);
@@ -247,12 +253,12 @@ pub fn load_project(env: &Env, id: u64) -> Project {
     Project {
         id: config.id,
         creator: config.creator,
-        token: config.token,
+        accepted_tokens: config.accepted_tokens,
         goal: config.goal,
-        balance: state.balance,
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
+        donation_count: state.donation_count,
     }
 }
 
@@ -261,6 +267,7 @@ pub fn load_project(env: &Env, id: u64) -> Project {
 /// This is the most efficient way to query the contract when callers are
 /// unsure whether the project exists; it avoids any panics and still bumps the
 /// TTL of both underlying entries when present.
+#[allow(dead_code)]
 pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
     let config_key = DataKey::ProjConfig(id);
     // We test existence on one key only; if a project is corrupt (config
@@ -273,12 +280,12 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
     Some(Project {
         id: config.id,
         creator: config.creator,
-        token: config.token,
+        accepted_tokens: config.accepted_tokens,
         goal: config.goal,
-        balance: state.balance,
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
+        donation_count: state.donation_count,
     })
 }
 
@@ -330,4 +337,3 @@ pub fn get_all_balances(env: &Env, project: &Project) -> ProjectBalances {
         balances,
     }
 }
- 

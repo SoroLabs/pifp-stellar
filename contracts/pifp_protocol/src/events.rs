@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, symbol_short, BytesN};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -25,7 +25,13 @@ pub struct ProjectVerified {
     pub proof_hash: BytesN<32>,
 }
 
-pub fn emit_project_created(env: &Env, project_id: u64, creator: Address, token: Address, goal: i128) {
+pub fn emit_project_created(
+    env: &Env,
+    project_id: u64,
+    creator: Address,
+    token: Address,
+    goal: i128,
+) {
     let topics = (symbol_short!("created"), project_id);
     let data = ProjectCreated {
         project_id,

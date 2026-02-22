@@ -1,12 +1,13 @@
 extern crate std;
 
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Events},
-    token, vec, Address, BytesN, Env, symbol_short, TryIntoVal, IntoVal,
+    token, vec, Address, BytesN, Env, IntoVal, TryIntoVal,
 };
 
-use crate::{PifpProtocol, PifpProtocolClient, Role};
 use crate::events::{ProjectCreated, ProjectFunded, ProjectVerified};
+use crate::{PifpProtocol, PifpProtocolClient, Role};
 
 fn setup() -> (Env, PifpProtocolClient<'static>) {
     let env = Env::default();
@@ -48,17 +49,24 @@ fn test_project_created_event() {
 
     // Topic: (symbol_short!("created"), project_id)
     assert_eq!(last_event.0, client.address);
-    let expected_topics = vec![&env, symbol_short!("created").into_val(&env), project.id.into_val(&env)];
+    let expected_topics = vec![
+        &env,
+        symbol_short!("created").into_val(&env),
+        project.id.into_val(&env),
+    ];
     assert_eq!(last_event.1, expected_topics);
 
     // Data: ProjectCreated struct
     let event_data: ProjectCreated = last_event.2.try_into_val(&env).unwrap();
-    assert_eq!(event_data, ProjectCreated {
-        project_id: project.id,
-        creator: creator.clone(),
-        token: token.address.clone(),
-        goal,
-    });
+    assert_eq!(
+        event_data,
+        ProjectCreated {
+            project_id: project.id,
+            creator: creator.clone(),
+            token: token.address.clone(),
+            goal,
+        }
+    );
 }
 
 #[test]
@@ -72,7 +80,13 @@ fn test_project_funded_event() {
 
     client.grant_role(&super_admin, &creator, &Role::ProjectManager);
     let tokens = soroban_sdk::vec![&env, token.address.clone()];
-    let project = client.register_project(&creator, &tokens, &10000, &BytesN::from_array(&env, &[0u8; 32]), &(env.ledger().timestamp() + 86400));
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &10000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+        &(env.ledger().timestamp() + 86400),
+    );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
     token_sac.mint(&donator, &amount);
@@ -84,16 +98,23 @@ fn test_project_funded_event() {
 
     // Topic: (symbol_short!("funded"), project_id)
     assert_eq!(last_event.0, client.address);
-    let expected_topics = vec![&env, symbol_short!("funded").into_val(&env), project.id.into_val(&env)];
+    let expected_topics = vec![
+        &env,
+        symbol_short!("funded").into_val(&env),
+        project.id.into_val(&env),
+    ];
     assert_eq!(last_event.1, expected_topics);
 
     // Data: ProjectFunded struct
     let event_data: ProjectFunded = last_event.2.try_into_val(&env).unwrap();
-    assert_eq!(event_data, ProjectFunded {
-        project_id: project.id,
-        donator: donator.clone(),
-        amount,
-    });
+    assert_eq!(
+        event_data,
+        ProjectFunded {
+            project_id: project.id,
+            donator: donator.clone(),
+            amount,
+        }
+    );
 }
 
 #[test]
@@ -109,7 +130,13 @@ fn test_project_verified_event() {
     client.set_oracle(&super_admin, &oracle);
 
     let tokens = soroban_sdk::vec![&env, token.address.clone()];
-    let project = client.register_project(&creator, &tokens, &1000, &proof_hash, &(env.ledger().timestamp() + 86400));
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &1000,
+        &proof_hash,
+        &(env.ledger().timestamp() + 86400),
+    );
 
     client.verify_and_release(&oracle, &project.id, &proof_hash);
 
@@ -118,14 +145,21 @@ fn test_project_verified_event() {
 
     // Topic: (symbol_short!("verified"), project_id)
     assert_eq!(last_event.0, client.address);
-    let expected_topics = vec![&env, symbol_short!("verified").into_val(&env), project.id.into_val(&env)];
+    let expected_topics = vec![
+        &env,
+        symbol_short!("verified").into_val(&env),
+        project.id.into_val(&env),
+    ];
     assert_eq!(last_event.1, expected_topics);
 
     // Data: ProjectVerified struct
     let event_data: ProjectVerified = last_event.2.try_into_val(&env).unwrap();
-    assert_eq!(event_data, ProjectVerified {
-        project_id: project.id,
-        oracle: oracle.clone(),
-        proof_hash: proof_hash.clone(),
-    });
+    assert_eq!(
+        event_data,
+        ProjectVerified {
+            project_id: project.id,
+            oracle: oracle.clone(),
+            proof_hash: proof_hash.clone(),
+        }
+    );
 }
