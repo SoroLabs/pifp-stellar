@@ -223,3 +223,55 @@ fn test_get_project_balances() {
     assert_eq!(bal_b.token, token_b.address);
     assert_eq!(bal_b.balance, amount_b);
 }
+
+/// Integration test: verify_and_release transfers funds to creator
+#[test]
+fn test_funds_released_to_creator() {
+    let (env, client, super_admin) = setup_with_init();
+    let creator = Address::generate(&env);
+    let oracle = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let donator = Address::generate(&env);
+    let deposit_amount = 1000i128;
+    let proof_hash = BytesN::from_array(&env, &[0xabu8; 32]);
+
+    // Create a mock token
+    let token = create_token(&env, &token_admin);
+
+    // Grant roles
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    client.set_oracle(&super_admin, &oracle);
+
+    // Register project
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &5000,
+        &proof_hash,
+        &(env.ledger().timestamp() + 86400),
+    );
+
+    // Mint tokens to donator and deposit
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &deposit_amount);
+    client.deposit(&project.id, &donator, &token.address, &deposit_amount);
+
+    // Verify and release - this should transfer funds to creator
+    client.verify_and_release(&oracle, &project.id, &proof_hash);
+
+    // Check creator received the funds
+    let creator_token_client = token::Client::new(&env, &token.address);
+    let creator_balance = creator_token_client.balance(&creator);
+    assert_eq!(
+        creator_balance, deposit_amount,
+        "Creator should receive the deposited funds"
+    );
+
+    // Check contract no longer has the funds
+    let contract_balance = creator_token_client.balance(&client.address);
+    assert_eq!(
+        contract_balance, 0,
+        "Contract should have zero balance after release"
+    );
+}
