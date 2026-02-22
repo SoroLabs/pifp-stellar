@@ -41,6 +41,8 @@ mod invariants;
 // mod test;
 #[cfg(test)]
 mod test_events;
+#[cfg(test)]
+mod test_expire;
 
 pub use rbac::Role;
 use storage::{
@@ -278,5 +280,31 @@ impl PifpProtocol {
 
         // Standardized event emission
         events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
+    }
+
+    /// Mark a project as expired if its deadline has passed.
+    ///
+    /// Permissionless: anyone can trigger expiration once the deadline is met.
+    /// - Panics if project is not in Funding status.
+    /// - Panics if deadline has not passed.
+    pub fn expire_project(env: Env, project_id: u64) {
+        let (config, mut state) = load_project_pair(&env, project_id);
+
+        // State transition check: only Funding projects can expire.
+        if state.status != ProjectStatus::Funding {
+            panic!("invalid transition: only funding projects can expire");
+        }
+
+        // Deadline check.
+        if env.ledger().timestamp() < config.deadline {
+            panic!("project has not expired yet");
+        }
+
+        // Update status and save.
+        state.status = ProjectStatus::Expired;
+        save_project_state(&env, project_id, &state);
+
+        // Standardized event emission.
+        events::emit_project_expired(&env, project_id, config.deadline);
     }
 }
