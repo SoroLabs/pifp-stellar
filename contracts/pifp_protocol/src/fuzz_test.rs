@@ -448,7 +448,7 @@ proptest! {
         assert_project_immutable_fields(&project, &final_project);
         assert_eq!(final_project.status, ProjectStatus::Completed);
 
-        // Balance should be 0 after verification (funds drained).
+        // Balance should be zero after verification (funds transferred to creator).
         let post_verify_balance = client.get_balance(&project.id, &token_client.address);
         assert_eq!(post_verify_balance, 0);
 
