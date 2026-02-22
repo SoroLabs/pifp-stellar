@@ -65,6 +65,7 @@ pub struct ProjectConfig {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectState {
     pub status: ProjectStatus,
+    /// Count of unique (donator, token) pairs that have deposited.
     pub donation_count: u32,
 }
 
