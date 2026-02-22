@@ -32,6 +32,8 @@ Zero corruption. 100% Transparency. Validated outcomes for charity and developme
 ## Testing
 
 The contract logic is extensively covered by a comprehensive test suite. The test coverage validates the core lifecycle of project creation, external deposits, and oracle proof-verification logic for security boundaries.
+
+We recently added **optimized storage retrieval patterns** to reduce gas cost and improve maintainability. New helpers like `storage::load_project_pair`, `maybe_load_project`, and `project_exists` allow high-frequency operations such as `deposit` and `verify_and_release` to read configuration and state in a single call while keeping TTL bumps minimal.
 To run the automated tests using the Soroban testutils feature:
 
 ## Development
@@ -55,6 +57,27 @@ To run unit tests:
 ```bash
 cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
 ```
+
+## Docker Development Environment
+
+For a reproducible and isolated development environment, you can use Docker. The provided `Dockerfile` and `docker-compose.yml` set up Rust configured for Soroban smart contracts.
+
+1.  **Start DEV environment**:
+    ```bash
+    docker-compose up -d dev
+    ```
+2.  **Open shell inside container**:
+    ```bash
+    docker-compose exec dev bash
+    ```
+3.  **Run sanity check**:
+    ```bash
+    ./scripts/devops_check.sh
+    ```
+4.  **Build or Test**:
+    ```bash
+    cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
+    ```
 
 ### CI/CD Workflow
 This project uses **GitHub Actions** to automate validation. On every push and pull request to `main` and `develop`, the following checks are performed:

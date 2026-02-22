@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry # Cache cargo registry for faster builds
+      - target-cache:/workspace/target        # Cache target directory for faster builds
+    environment:
+      - CARGO_HOME=/usr/local/cargo
+    # Required for testing or running local nodes if added later
+    network_mode: bridge
+
+volumes:
+  cargo-cache:
+  target-cache:

@@ -2,10 +2,10 @@ extern crate std;
 
 use soroban_sdk::{
     testutils::{Address as _, Events},
-    token, vec, Address, BytesN, Env, Symbol, symbol_short, TryIntoVal, IntoVal,
+    token, vec, Address, BytesN, Env, symbol_short, TryIntoVal, IntoVal,
 };
 
-use crate::{PifpProtocol, PifpProtocolClient, Role, ProjectStatus};
+use crate::{PifpProtocol, PifpProtocolClient, Role};
 use crate::events::{ProjectCreated, ProjectFunded, ProjectVerified};
 
 fn setup() -> (Env, PifpProtocolClient<'static>) {
@@ -40,7 +40,8 @@ fn test_project_created_event() {
 
     client.grant_role(&super_admin, &creator, &Role::ProjectManager);
 
-    let project = client.register_project(&creator, &token.address, &goal, &proof_hash, &deadline);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(&creator, &tokens, &goal, &proof_hash, &deadline);
 
     let all_events = env.events().all();
     let last_event = all_events.last().expect("No events found");
@@ -70,12 +71,13 @@ fn test_project_funded_event() {
     let amount = 1000i128;
 
     client.grant_role(&super_admin, &creator, &Role::ProjectManager);
-    let project = client.register_project(&creator, &token.address, &10000, &BytesN::from_array(&env, &[0u8; 32]), &(env.ledger().timestamp() + 86400));
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(&creator, &tokens, &10000, &BytesN::from_array(&env, &[0u8; 32]), &(env.ledger().timestamp() + 86400));
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
     token_sac.mint(&donator, &amount);
 
-    client.deposit(&project.id, &donator, &amount);
+    client.deposit(&project.id, &donator, &token.address, &amount);
 
     let all_events = env.events().all();
     let last_event = all_events.last().expect("No events found");
@@ -106,9 +108,10 @@ fn test_project_verified_event() {
     client.grant_role(&super_admin, &creator, &Role::ProjectManager);
     client.set_oracle(&super_admin, &oracle);
 
-    let project = client.register_project(&creator, &token.address, &1000, &proof_hash, &(env.ledger().timestamp() + 86400));
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(&creator, &tokens, &1000, &proof_hash, &(env.ledger().timestamp() + 86400));
 
-    client.verify_and_release(&project.id, &proof_hash);
+    client.verify_and_release(&oracle, &project.id, &proof_hash);
 
     let all_events = env.events().all();
     let last_event = all_events.last().expect("No events found");
