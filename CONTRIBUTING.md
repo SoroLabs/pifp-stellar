@@ -10,6 +10,7 @@ Please check our [Issues](https://github.com/SoroLabs/pifp-stellar/issues) tab.
 We explicitly tag issues with complexity levels to set expectations.
 
 ### Complexity & Points
+
 - **Trivial (100 points)**: Simple UI updates, minor bug fixes, documentation typos.
 - **Medium (150 points)**: Standard features, adding tests, refining existing logic.
 - **High (200 points)**: Architecture changes, new smart contracts, complex integrations.
@@ -35,5 +36,23 @@ This helps us coordinate and ensures progress isn't stalled.
 
 - **Rust/Soroban**: Run `cargo clippy` and `cargo fmt` before submitting.
 - **Testing**: Ensure new features include unit tests.
+
+### Local Quality Gates
+
+To ensure code quality and reduce CI noise, we provide local pre-commit hooks. These hooks run automatically before you commit, checking for:
+
+- Trailing whitespace and end-of-file consistency.
+- Correct YAML/TOML syntax.
+- Rust formatting (`cargo fmt`) and lints (`cargo clippy`).
+
+#### Installation
+
+Run the following command to set up the gates:
+
+```bash
+./scripts/install-hooks.sh
+```
+
+_Note: If you have `pre-commit` installed (`pip install pre-commit`), it will be used. Otherwise, a standard git hook will be configured as a fallback._
 
 Let's build a trustless future for funding together! 🚀
