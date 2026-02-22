@@ -25,14 +25,13 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, panic_with_error, token, Address, BytesN,
-    Env, Vec,
+    contract, contracterror, contractimpl, panic_with_error, token, Address, BytesN, Env, Vec,
 };
 
+pub mod events;
+pub mod rbac;
 mod storage;
 mod types;
-pub mod rbac;
-pub mod events;
 
 // #[cfg(test)]
 // mod fuzz_test;
@@ -43,30 +42,26 @@ mod invariants;
 #[cfg(test)]
 mod test_events;
 
+pub use rbac::Role;
 use storage::{
-    get_and_increment_project_id,
-    load_project,
-    load_project_pair,
-    save_project,
-    save_project_state,
+    get_and_increment_project_id, load_project, load_project_pair, save_project, save_project_state,
 };
 pub use types::{Project, ProjectStatus};
-pub use rbac::Role;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    ProjectNotFound       = 1,
-    MilestoneNotFound     = 2,
+    ProjectNotFound = 1,
+    MilestoneNotFound = 2,
     MilestoneAlreadyReleased = 3,
-    InsufficientBalance   = 4,
-    InvalidMilestones     = 5,
-    NotAuthorized         = 6,
-    GoalMismatch          = 7,
-    AlreadyInitialized    = 8,
-    RoleNotFound          = 9,
-    TooManyTokens         = 10,
+    InsufficientBalance = 4,
+    InvalidMilestones = 5,
+    NotAuthorized = 6,
+    GoalMismatch = 7,
+    AlreadyInitialized = 8,
+    RoleNotFound = 9,
+    TooManyTokens = 10,
 }
 
 #[contract]
@@ -216,7 +211,6 @@ impl PifpProtocol {
             panic!("token not accepted by this project");
         }
 
-
         // Transfer tokens from donator to contract.
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&donator, &env.current_contract_address(), &amount);
@@ -253,7 +247,12 @@ impl PifpProtocol {
     ///
     /// Reads the immutable config (for proof_hash) and mutable state (for status),
     /// then writes back only the small state entry.
-    pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, submitted_proof_hash: BytesN<32>) {
+    pub fn verify_and_release(
+        env: Env,
+        oracle: Address,
+        project_id: u64,
+        submitted_proof_hash: BytesN<32>,
+    ) {
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
@@ -265,7 +264,7 @@ impl PifpProtocol {
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired   => panic_with_error!(&env, Error::ProjectNotFound),
+            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectNotFound),
         }
 
         // Mocked ZK verification: compare submitted hash to stored hash.

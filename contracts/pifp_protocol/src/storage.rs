@@ -96,9 +96,11 @@ pub fn get_and_increment_project_id(env: &Env) -> u64 {
 
 /// Extend the TTL for a persistent storage key.
 fn bump_persistent(env: &Env, key: &DataKey) {
-    env.storage()
-        .persistent()
-        .extend_ttl(key, PERSISTENT_LIFETIME_THRESHOLD, PERSISTENT_BUMP_AMOUNT);
+    env.storage().persistent().extend_ttl(
+        key,
+        PERSISTENT_LIFETIME_THRESHOLD,
+        PERSISTENT_BUMP_AMOUNT,
+    );
 }
 
 /// Save both the immutable config and initial mutable state for a new project.
