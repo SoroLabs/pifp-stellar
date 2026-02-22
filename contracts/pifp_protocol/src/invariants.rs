@@ -117,10 +117,34 @@ pub fn assert_project_immutable_fields(original: &Project, current: &Project) {
     );
 }
 
+/// INV-9: donation_count must never decrease.
+/// It can only stay the same (repeat donor) or increase (new unique donor-token pair).
+pub fn assert_donation_count_monotonic(count_before: u32, count_after: u32) {
+    assert!(
+        count_after >= count_before,
+        "INV-9 violated: donation_count decreased from {} to {}",
+        count_before,
+        count_after
+    );
+}
+
+/// INV-10: donation_count must be non-negative (this is enforced by u32 type,
+/// but we include it for documentation completeness).
+pub fn assert_donation_count_non_negative(project: &Project) {
+    // donation_count is u32, so it's always >= 0 by type definition
+    // This assertion is a no-op but documents the invariant
+    assert!(
+        true,
+        "INV-10: donation_count is {} (always non-negative by type)",
+        project.donation_count
+    );
+}
+
 /// Run all stateless project invariants.
 pub fn assert_all_project_invariants(project: &Project) {
     assert_balance_non_negative(project);
     assert_goal_positive(project);
     assert_deadline_positive(project);
     assert_completed_has_valid_state(project);
+    assert_donation_count_non_negative(project);
 }
