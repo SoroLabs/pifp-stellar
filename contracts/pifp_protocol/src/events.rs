@@ -33,7 +33,6 @@ pub struct FundsReleased {
     pub amount: i128,
 }
 
-pub fn emit_project_created(env: &Env, project_id: u64, creator: Address, token: Address, goal: i128) {
 pub fn emit_project_created(
     env: &Env,
     project_id: u64,
@@ -79,6 +78,8 @@ pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i
         amount,
     };
     env.events().publish(topics, data);
+}
+
 pub fn emit_protocol_paused(env: &Env, admin: Address) {
     env.events().publish((symbol_short!("paused"), admin), ());
 }

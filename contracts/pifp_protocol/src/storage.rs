@@ -303,7 +303,6 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         proof_hash: config.proof_hash,
         deadline: config.deadline,
         status: state.status,
-        donation_count: 0,
         donation_count: state.donation_count,
     })
 }
@@ -349,7 +348,10 @@ pub fn get_all_balances(env: &Env, project: &Project) -> ProjectBalances {
     let mut balances: Vec<TokenBalance> = Vec::new(env);
     for token in project.accepted_tokens.iter() {
         let balance = get_token_balance(env, project.id, &token);
-        balances.push_back(TokenBalance { token: token.clone(), balance });
+        balances.push_back(TokenBalance {
+            token: token.clone(),
+            balance,
+        });
     }
     ProjectBalances {
         project_id: project.id,

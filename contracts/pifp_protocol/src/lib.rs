@@ -11,7 +11,7 @@
 //! | Registration | [`PifpProtocol::register_project`]          |
 //! | Funding      | [`PifpProtocol::deposit`]                   |
 //! | Verification | [`PifpProtocol::verify_and_release`]        |
-//! | Queries      | `get_project`, `role_of`, `has_role`        |
+//! | Queries      | `get_project`, `get_project_balances`, `role_of`, `has_role` |
 //!
 //! ## Architecture
 //!
@@ -34,31 +34,23 @@ mod storage;
 mod types;
 
 #[cfg(test)]
-mod invariants;
+mod fuzz_test;
 #[cfg(test)]
-mod test;
+mod invariants;
 #[cfg(test)]
 mod rbac_test;
 #[cfg(test)]
-mod fuzz_test;
+mod test;
 #[cfg(test)]
 mod test_events;
 
+pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    get_and_increment_project_id,
-    load_project,
-    load_project_pair,
-    save_project,
-    save_project_state,
-    drain_token_balance,
+    drain_token_balance, get_all_balances, get_and_increment_project_id, load_project,
+    load_project_pair, maybe_load_project, save_project, save_project_state,
 };
-pub use types::{Project, ProjectStatus};
-pub use rbac::Role;
-pub use events::emit_funds_released;
-    get_and_increment_project_id, load_project, load_project_pair, save_project, save_project_state,
-};
-pub use types::{Project, ProjectStatus};
+pub use types::{Project, ProjectBalances, ProjectStatus};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -210,7 +202,8 @@ impl PifpProtocol {
             }
         }
 
-        if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 { // 10^30
+        if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 {
+            // 10^30
             panic_with_error!(&env, Error::InvalidGoal);
         }
 
@@ -252,10 +245,19 @@ impl PifpProtocol {
         storage::get_token_balance(&env, project_id, &token)
     }
 
-    /// Return a snapshot of all balances for `project_id`.
-    pub fn get_balances(env: Env, project_id: u64) -> types::ProjectBalances {
-        let project = load_project(&env, project_id);
-        storage::get_all_balances(&env, &project)
+    /// Return the current per-token balances for a project.
+    ///
+    /// Reconstructs the balance snapshot from persistent storage for every
+    /// token that was accepted at registration time.
+    ///
+    /// # Errors
+    /// Panics with `Error::ProjectNotFound` if `project_id` does not exist.
+    pub fn get_project_balances(env: Env, project_id: u64) -> ProjectBalances {
+        let project = match maybe_load_project(&env, project_id) {
+            Some(p) => p,
+            None => panic_with_error!(&env, Error::ProjectNotFound),
+        };
+        get_all_balances(&env, &project)
     }
 
     /// Deposit funds into a project.

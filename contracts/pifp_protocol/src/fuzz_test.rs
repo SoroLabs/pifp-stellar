@@ -1,4 +1,3 @@
-
 extern crate std;
 use std::vec::Vec;
 
@@ -148,7 +147,7 @@ proptest! {
 
         let balance_after = client.get_balance(&project.id, &token_client.address);
         assert_deposit_invariant(balance_before, balance_after, amount);
-        
+
         let updated = client.get_project(&project.id);
         assert_all_project_invariants(&updated);
     }
@@ -189,7 +188,7 @@ proptest! {
             let after_balance = client.get_balance(&project.id, &token_client.address);
 
             assert_deposit_invariant(before, after_balance, *amount);
-            
+
             let after = client.get_project(&project.id);
             assert_all_project_invariants(&after);
 
@@ -428,7 +427,7 @@ proptest! {
             let after_balance = client.get_balance(&project.id, &token_client.address);
 
             assert_deposit_invariant(before_balance, after_balance, *amount);
-            
+
             let after = client.get_project(&project.id);
             assert_project_immutable_fields(&project, &after);
             assert_all_project_invariants(&after);
@@ -448,10 +447,10 @@ proptest! {
         assert_valid_status_transition(&ProjectStatus::Funding, &final_project.status);
         assert_project_immutable_fields(&project, &final_project);
         assert_eq!(final_project.status, ProjectStatus::Completed);
-        
-        // Balance should be unchanged after verification.
+
+        // Balance should be 0 after verification (funds drained).
         let post_verify_balance = client.get_balance(&project.id, &token_client.address);
-        assert_eq!(post_verify_balance, total_deposited);
+        assert_eq!(post_verify_balance, 0);
 
         // Phase 4: Double-verify should fail.
         let result = client.try_verify_and_release(&oracle, &project.id, &proof_hash);
