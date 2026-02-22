@@ -43,6 +43,8 @@ mod rbac_test;
 mod fuzz_test;
 #[cfg(test)]
 mod test_events;
+#[cfg(test)]
+mod test_donation_count;
 
 pub use rbac::Role;
 use storage::{
@@ -52,11 +54,6 @@ use storage::{
     save_project,
     save_project_state,
     drain_token_balance,
-};
-pub use types::{Project, ProjectStatus};
-pub use rbac::Role;
-pub use events::emit_funds_released;
-    get_and_increment_project_id, load_project, load_project_pair, save_project, save_project_state,
 };
 pub use types::{Project, ProjectStatus};
 
@@ -272,7 +269,7 @@ impl PifpProtocol {
         // Read both config and state with a single helper that bumps TTLs
         // atomically. This is the optimized retrieval pattern; it also returns
         // the state needed for the subsequent checks.
-        let (config, state) = load_project_pair(&env, project_id);
+        let (config, mut state) = load_project_pair(&env, project_id);
 
         // Check expiration
         if env.ledger().timestamp() >= config.deadline {
@@ -295,6 +292,16 @@ impl PifpProtocol {
         }
         if !found {
             panic_with_error!(&env, Error::NotAuthorized);
+        }
+
+        // Check if this is a new unique (donator, token) pair.
+        let is_new_donor = !storage::has_donator_seen(&env, project_id, &donator, &token);
+        if is_new_donor {
+            // Increment donation count and mark as seen.
+            state.donation_count += 1;
+            storage::mark_donator_seen(&env, project_id, &donator, &token);
+            // Save the updated state.
+            save_project_state(&env, project_id, &state);
         }
 
         // Transfer tokens from donator to contract.
