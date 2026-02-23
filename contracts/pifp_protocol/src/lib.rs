@@ -10,6 +10,7 @@
 //! | Role admin   | `grant_role`, `revoke_role`, `transfer_super_admin`, `set_oracle` |
 //! | Registration | [`PifpProtocol::register_project`]          |
 //! | Funding      | [`PifpProtocol::deposit`]                   |
+//! | Donor safety | [`PifpProtocol::refund`]                    |
 //! | Verification | [`PifpProtocol::verify_and_release`]        |
 //! | Queries      | `get_project`, `get_project_balances`, `role_of`, `has_role` |
 //!
@@ -45,6 +46,8 @@ mod test;
 mod test_donation_count;
 #[cfg(test)]
 mod test_events;
+#[cfg(test)]
+mod test_refund;
 
 pub use events::emit_funds_released;
 pub use rbac::Role;
@@ -78,6 +81,7 @@ pub enum Error {
     Overflow = 18,
     ProtocolPaused = 19,
     GoalMismatch = 20,
+    ProjectNotExpired = 21,
 }
 
 #[contract]
@@ -280,12 +284,17 @@ impl PifpProtocol {
 
         // Check expiration
         if env.ledger().timestamp() >= config.deadline {
+            if matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active) {
+                state.status = ProjectStatus::Expired;
+                save_project_state(&env, project_id, &state);
+            }
             panic_with_error!(&env, Error::ProjectExpired);
         }
 
         // Basic status check: must be Funding or Active.
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
+            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
             _ => panic_with_error!(&env, Error::ProjectNotActive),
         }
 
@@ -318,8 +327,44 @@ impl PifpProtocol {
         // Update the per-token balance.
         storage::add_to_token_balance(&env, project_id, &token, amount);
 
+        // Track per-donator refundable amount for this token.
+        storage::add_to_donator_balance(&env, project_id, &token, &donator, amount);
+
         // Standardized event emission
         events::emit_project_funded(&env, project_id, donator, amount);
+    }
+
+    /// Refund a donator from an expired project that was not verified.
+    pub fn refund(env: Env, donator: Address, project_id: u64, token: Address) {
+        donator.require_auth();
+
+        let (config, mut state) = load_project_pair(&env, project_id);
+
+        if env.ledger().timestamp() >= config.deadline
+            && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
+        {
+            state.status = ProjectStatus::Expired;
+            save_project_state(&env, project_id, &state);
+        }
+
+        if state.status != ProjectStatus::Expired {
+            panic_with_error!(&env, Error::ProjectNotExpired);
+        }
+
+        let refund_amount = storage::get_donator_balance(&env, project_id, &token, &donator);
+        if refund_amount <= 0 {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+
+        // Zero-out first to prevent double-refund/reentrancy patterns.
+        storage::set_donator_balance(&env, project_id, &token, &donator, 0);
+        storage::add_to_token_balance(&env, project_id, &token, -refund_amount);
+
+        let contract_address = env.current_contract_address();
+        let token_client = token::Client::new(&env, &token);
+        token_client.transfer(&contract_address, &donator, &refund_amount);
+
+        events::emit_refunded(&env, project_id, donator, refund_amount);
     }
 
     /// Grant the Oracle role to `oracle`.
@@ -356,11 +401,19 @@ impl PifpProtocol {
         // Optimised dual-read helper
         let (config, mut state) = load_project_pair(&env, project_id);
 
+        if env.ledger().timestamp() >= config.deadline
+            && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
+        {
+            state.status = ProjectStatus::Expired;
+            save_project_state(&env, project_id, &state);
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+
         // Ensure the project is in a verifiable state.
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectNotFound),
+            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
         }
 
         // Mocked ZK verification: compare submitted hash to stored hash.

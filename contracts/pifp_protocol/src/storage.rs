@@ -17,6 +17,7 @@
 //! |--------------------|-----------------|----------------------------------|
 //! | `ProjConfig(id)`   | `ProjectConfig` | Immutable project configuration  |
 //! | `ProjState(id)`    | `ProjectState`  | Mutable project state            |
+//! | `DonatorBalance(id, token, donator)` | `i128` | Per-donator refundable amount |
 //!
 //! Persistent TTL is bumped by **30 days** whenever it falls below 7 days remaining.
 //!
@@ -66,6 +67,8 @@ pub enum DataKey {
     IsPaused,
     /// Tracks whether a (project_id, donator, token) combination has donated before (Persistent).
     DonatorSeen(u64, Address, Address),
+    /// Per-donator refundable balance keyed by (project_id, token, donator) (Persistent).
+    DonatorBalance(u64, Address, Address),
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -361,4 +364,43 @@ pub fn mark_donator_seen(env: &Env, project_id: u64, donator: &Address, token: &
     let key = DataKey::DonatorSeen(project_id, donator.clone(), token.clone());
     env.storage().persistent().set(&key, &true);
     bump_persistent(env, &key);
+}
+
+/// Retrieve a donator's contributed balance for (project_id, token).
+pub fn get_donator_balance(env: &Env, project_id: u64, token: &Address, donator: &Address) -> i128 {
+    let key = DataKey::DonatorBalance(project_id, token.clone(), donator.clone());
+    let balance_opt: Option<i128> = env.storage().persistent().get(&key);
+    if balance_opt.is_some() {
+        bump_persistent(env, &key);
+    }
+    balance_opt.unwrap_or(0)
+}
+
+/// Set a donator's contributed balance for (project_id, token).
+pub fn set_donator_balance(
+    env: &Env,
+    project_id: u64,
+    token: &Address,
+    donator: &Address,
+    balance: i128,
+) {
+    let key = DataKey::DonatorBalance(project_id, token.clone(), donator.clone());
+    env.storage().persistent().set(&key, &balance);
+    bump_persistent(env, &key);
+}
+
+/// Add `amount` to a donator's contributed balance for (project_id, token).
+pub fn add_to_donator_balance(
+    env: &Env,
+    project_id: u64,
+    token: &Address,
+    donator: &Address,
+    amount: i128,
+) -> i128 {
+    let current = get_donator_balance(env, project_id, token, donator);
+    let new_balance = current
+        .checked_add(amount)
+        .expect("donator balance overflow");
+    set_donator_balance(env, project_id, token, donator, new_balance);
+    new_balance
 }

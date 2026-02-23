@@ -2,7 +2,7 @@ extern crate std;
 
 use soroban_sdk::{
     symbol_short,
-    testutils::{Address as _, Events},
+    testutils::{Address as _, Events, Ledger, LedgerInfo},
     token, vec, Address, BytesN, Env, IntoVal, TryIntoVal,
 };
 
@@ -27,6 +27,19 @@ fn setup_with_init() -> (Env, PifpProtocolClient<'static>, Address) {
 fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     token::Client::new(env, &addr.address())
+}
+
+fn set_ledger(env: &Env, timestamp: u64, sequence_number: u32) {
+    env.ledger().set(LedgerInfo {
+        timestamp,
+        protocol_version: 22,
+        sequence_number,
+        network_id: [0u8; 32],
+        base_reserve: 10,
+        min_temp_entry_ttl: 10,
+        min_persistent_entry_ttl: 10,
+        max_entry_ttl: 1000,
+    });
 }
 
 #[test]
@@ -274,4 +287,48 @@ fn test_funds_released_to_creator() {
         contract_balance, 0,
         "Contract should have zero balance after release"
     );
+}
+
+#[test]
+fn test_refunded_event() {
+    let (env, client, super_admin) = setup_with_init();
+    let creator = Address::generate(&env);
+    let donator = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let token = create_token(&env, &token_admin);
+
+    set_ledger(&env, 100_000, 10);
+
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let deadline = env.ledger().timestamp() + 100;
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &1000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+        &deadline,
+    );
+
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &400i128);
+    client.deposit(&project.id, &donator, &token.address, &400i128);
+
+    set_ledger(&env, deadline + 1, 11);
+    client.refund(&donator, &project.id, &token.address);
+
+    let all_events = env.events().all();
+    let last_event = all_events.last().expect("No events found");
+
+    assert_eq!(last_event.0, client.address);
+    let expected_topics = vec![
+        &env,
+        symbol_short!("refunded").into_val(&env),
+        project.id.into_val(&env),
+    ];
+    assert_eq!(last_event.1, expected_topics);
+
+    let event_data: (Address, i128) = last_event.2.try_into_val(&env).unwrap();
+    assert_eq!(event_data.0, donator);
+    assert_eq!(event_data.1, 400i128);
 }

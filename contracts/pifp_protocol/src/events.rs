@@ -80,6 +80,12 @@ pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i
     env.events().publish(topics, data);
 }
 
+pub fn emit_refunded(env: &Env, project_id: u64, donator: Address, amount: i128) {
+    let topics = (symbol_short!("refunded"), project_id);
+    let data = (donator, amount);
+    env.events().publish(topics, data);
+}
+
 pub fn emit_protocol_paused(env: &Env, admin: Address) {
     env.events().publish((symbol_short!("paused"), admin), ());
 }
