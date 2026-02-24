@@ -21,12 +21,21 @@ else
     exit 1
 fi
 
-# Check WebAssembly target
-echo -n "Checking WebAssembly target... "
-if rustup target list | grep -q "wasm32-unknown-unknown (installed)"; then
+# Check WebAssembly targets
+echo -n "Checking WebAssembly targets... "
+MISSING=""
+if ! rustup target list | grep -q "wasm32-unknown-unknown (installed)"; then
+    MISSING="wasm32-unknown-unknown"
+fi
+if ! rustup target list | grep -q "wasm32v1-none (installed)"; then
+    [ -n "$MISSING" ] && MISSING="$MISSING and "
+    MISSING="${MISSING}wasm32v1-none"
+fi
+
+if [ -z "$MISSING" ]; then
     echo "installed"
 else
-    echo "FAILED: wasm32-unknown-unknown target not found"
+    echo -e "FAILED: $MISSING target(s) not found. Run: \n  rustup target add wasm32-unknown-unknown wasm32v1-none"
     exit 1
 fi
 

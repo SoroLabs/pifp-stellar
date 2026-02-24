@@ -57,12 +57,19 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      - name: Add wasm32v1-none target
+        run: rustup target add wasm32v1-none
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+      - name: Install Stellar CLI
+        run: |
+          wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv stellar /usr/local/bin/
       - name: Build WASM
-        run: cargo build --manifest-path contracts/pifp_protocol/Cargo.toml --target wasm32-unknown-unknown --release
+        run: stellar contract build --manifest-path contracts/pifp_protocol/Cargo.toml
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pifp-protocol-wasm
-          path: target/wasm32-unknown-unknown/release/pifp_protocol.wasm
+          path: target/wasm32v1-none/release/pifp_protocol.wasm

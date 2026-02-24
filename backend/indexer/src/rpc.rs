@@ -245,6 +245,21 @@ fn decode_data(value: &Value, kind: &EventKind) -> (Option<String>, Option<Strin
             let amount = extract_field(value, &["amount"]);
             (None, amount)
         }
+        EventKind::DonatorRefunded => {
+            let actor = extract_field(value, &["donator", "address"]).or_else(|| {
+                value
+                    .as_array()
+                    .and_then(|arr| arr.first())
+                    .and_then(value_to_string)
+            });
+            let amount = extract_field(value, &["amount"]).or_else(|| {
+                value
+                    .as_array()
+                    .and_then(|arr| arr.get(1))
+                    .and_then(value_to_string)
+            });
+            (actor, amount)
+        }
         EventKind::RoleSet | EventKind::RoleDel => {
             // For role events the "data" is typically the caller address
             let actor = value
@@ -278,6 +293,18 @@ fn extract_field(value: &Value, keys: &[&str]) -> Option<String> {
         }
     }
     None
+}
+
+fn value_to_string(value: &Value) -> Option<String> {
+    match value {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Object(obj) => obj
+            .get("value")
+            .and_then(value_to_string)
+            .or_else(|| obj.get("address").and_then(value_to_string)),
+        _ => value.as_str().map(String::from),
+    }
 }
 
 fn find_nested(value: &Value, key: &str) -> Option<String> {
@@ -345,6 +372,10 @@ mod tests {
             EventKind::ProjectVerified
         );
         assert_eq!(EventKind::from_topic("released"), EventKind::FundsReleased);
+        assert_eq!(
+            EventKind::from_topic("refunded"),
+            EventKind::DonatorRefunded
+        );
         assert_eq!(EventKind::from_topic("role_set"), EventKind::RoleSet);
         assert_eq!(EventKind::from_topic("role_del"), EventKind::RoleDel);
         assert_eq!(EventKind::from_topic("paused"), EventKind::ProtocolPaused);
@@ -361,6 +392,7 @@ mod tests {
         assert_eq!(EventKind::ProjectFunded.as_str(), "project_funded");
         assert_eq!(EventKind::ProjectVerified.as_str(), "project_verified");
         assert_eq!(EventKind::FundsReleased.as_str(), "funds_released");
+        assert_eq!(EventKind::DonatorRefunded.as_str(), "donator_refunded");
         assert_eq!(EventKind::RoleSet.as_str(), "role_set");
         assert_eq!(EventKind::RoleDel.as_str(), "role_del");
     }
@@ -425,6 +457,32 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "role_set");
         assert_eq!(events[0].actor.as_deref(), Some("GCALLER"));
+    }
+
+    #[test]
+    fn decode_refunded_event_tuple_data() {
+        let raw = RawEvent {
+            topic: vec![
+                r#"{"type":"symbol","value":"refunded"}"#.to_string(),
+                r#"{"type":"u64","value":"42"}"#.to_string(),
+            ],
+            value: serde_json::json!(["GDONATOR", "750"]),
+            contract_id: Some("CONTRACT1".to_string()),
+            tx_hash: Some("TX3".to_string()),
+            id: None,
+            ledger: Some(1002),
+            ledger_closed_at: Some("2024-01-01T00:00:02Z".to_string()),
+            in_successful_contract_call: Some(true),
+            paging_token: None,
+        };
+
+        let events = decode_events(&[raw], "CONTRACT1");
+        assert_eq!(events.len(), 1);
+        let ev = &events[0];
+        assert_eq!(ev.event_type, "donator_refunded");
+        assert_eq!(ev.project_id.as_deref(), Some("42"));
+        assert_eq!(ev.actor.as_deref(), Some("GDONATOR"));
+        assert_eq!(ev.amount.as_deref(), Some("750"));
     }
 
     #[test]

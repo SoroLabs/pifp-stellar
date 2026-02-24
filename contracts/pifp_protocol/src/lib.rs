@@ -47,6 +47,10 @@ mod test_donation_count;
 #[cfg(test)]
 mod test_events;
 #[cfg(test)]
+mod test_expire;
+#[cfg(test)]
+mod test_utils;
+#[cfg(test)]
 mod test_refund;
 
 pub use events::emit_funds_released;
@@ -82,6 +86,7 @@ pub enum Error {
     ProtocolPaused = 19,
     GoalMismatch = 20,
     ProjectNotExpired = 21,
+    InvalidTransition = 22,
 }
 
 #[contract]
@@ -325,6 +330,18 @@ impl PifpProtocol {
         token_client.transfer(&donator, &env.current_contract_address(), &amount);
 
         // Update the per-token balance.
+        let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);
+
+        // If this is the primary token and goal is reached, transition from Funding to Active.
+        if state.status == ProjectStatus::Funding {
+            if let Some(first_token) = config.accepted_tokens.get(0) {
+                if token == first_token && new_balance >= config.goal {
+                    state.status = ProjectStatus::Active;
+                    save_project_state(&env, project_id, &state);
+                    events::emit_project_active(&env, project_id);
+                }
+            }
+        }
         storage::add_to_token_balance(&env, project_id, &token, amount);
 
         // Track per-donator refundable amount for this token.
@@ -447,6 +464,34 @@ impl PifpProtocol {
 
         // Standardized event emission
         events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
+    }
+
+    /// Mark a project as expired if its deadline has passed.
+    ///
+    /// Permissionless: anyone can trigger expiration once the deadline is met.
+    /// - Panics if project is not in Funding status.
+    /// - Panics if deadline has not passed.
+    pub fn expire_project(env: Env, project_id: u64) {
+        let (config, mut state) = load_project_pair(&env, project_id);
+
+        // State transition check: only Funding or Active projects can expire.
+        // Completed projects cannot be expired.
+        match state.status {
+            ProjectStatus::Funding | ProjectStatus::Active => {}
+            _ => panic_with_error!(&env, Error::InvalidTransition),
+        }
+
+        // Deadline check.
+        if env.ledger().timestamp() < config.deadline {
+            panic_with_error!(&env, Error::ProjectNotExpired);
+        }
+
+        // Update status and save.
+        state.status = ProjectStatus::Expired;
+        save_project_state(&env, project_id, &state);
+
+        // Standardized event emission.
+        events::emit_project_expired(&env, project_id, config.deadline);
     }
 
     // ─────────────────────────────────────────────────────────

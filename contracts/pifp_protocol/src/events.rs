@@ -19,10 +19,23 @@ pub struct ProjectFunded {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectActive {
+    pub project_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectVerified {
     pub project_id: u64,
     pub oracle: Address,
     pub proof_hash: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectExpired {
+    pub project_id: u64,
+    pub deadline: u64,
 }
 
 #[contracttype]
@@ -60,12 +73,27 @@ pub fn emit_project_funded(env: &Env, project_id: u64, donator: Address, amount:
     env.events().publish(topics, data);
 }
 
+pub fn emit_project_active(env: &Env, project_id: u64) {
+    let topics = (symbol_short!("active"), project_id);
+    let data = ProjectActive { project_id };
+    env.events().publish(topics, data);
+}
+
 pub fn emit_project_verified(env: &Env, project_id: u64, oracle: Address, proof_hash: BytesN<32>) {
     let topics = (symbol_short!("verified"), project_id);
     let data = ProjectVerified {
         project_id,
         oracle,
         proof_hash,
+    };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_project_expired(env: &Env, project_id: u64, deadline: u64) {
+    let topics = (symbol_short!("expired"), project_id);
+    let data = ProjectExpired {
+        project_id,
+        deadline,
     };
     env.events().publish(topics, data);
 }

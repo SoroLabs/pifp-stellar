@@ -43,6 +43,7 @@ PIFP replaces trust-based donations with **cryptographic accountability**. Funds
 ```
 
 **Key properties:**
+
 - Non-custodial — funds live in the contract, never in a third-party wallet.
 - Permissioned writes — only addresses with the correct RBAC role may mutate state.
 - Immutable project config — goal, token, deadline, and proof hash are set once and never changed.
@@ -112,7 +113,7 @@ Defines `ProjectConfig` (immutable, written once) and `ProjectState` (mutable, u
       │
       ├──verify_and_release──► [Completed]  (proof matches, funds releasable)
       │
-      └──deadline passed ──► [Expired]     (managed off-chain or via future expiry fn)
+      └──deadline passed ──► [Expired]     (triggered via `expire_project` entry point)
 
   [Active] ──verify_and_release──► [Completed]
   [Completed] ──(any)──► PANIC (MilestoneAlreadyReleased)
@@ -163,6 +164,7 @@ SuperAdmin
 | `set_oracle`           | SuperAdmin, Admin                            |
 | `verify_and_release`   | Oracle only (read from storage)              |
 | `deposit`              | Any address (no RBAC gate)                   |
+| `expire_project`      | Any address (no RBAC gate)                   |
 | `get_project`          | Any address (read-only)                      |
 | `role_of` / `has_role` | Any address (read-only)                      |
 
@@ -242,12 +244,12 @@ TTL: bumped by **7 days** whenever below 1 day remaining.
 PIFP exposes several **retrieval helpers** designed to minimise the number of
 storage reads and TTL bumps:
 
-* `project_exists(id)` – cheap existence check (no TTL bump).
-* `maybe_load_project_config` / `maybe_load_project_state` – return an
+- `project_exists(id)` – cheap existence check (no TTL bump).
+- `maybe_load_project_config` / `maybe_load_project_state` – return an
   `Option` and only bump TTL when the entry is found.
-* `load_project_pair` – atomic two‑entry read with a single call; used by
+- `load_project_pair` – atomic two‑entry read with a single call; used by
   high‑frequency operations like `deposit` and `verify_and_release`.
-* `maybe_load_project` – convenience wrapper returning a full `Project` or
+- `maybe_load_project` – convenience wrapper returning a full `Project` or
   `None` if absent.
 
 These helpers underpin the **optimized storage retrieval patterns** that reduce
@@ -333,6 +335,7 @@ Deposits are high-frequency. Writing the full `Project` struct (~150 bytes) on e
 **Impact:** Funds released to project creator without genuine impact.
 
 **Mitigations:**
+
 - Oracle role can be revoked by SuperAdmin/Admin immediately upon compromise detection.
 - `verify_and_release` requires the submitted hash to match the `proof_hash` set at registration — attacker cannot alter the stored hash.
 - Future mitigation: ZK-STARK proof verification (placeholder hook exists in `verify_and_release`).
@@ -344,6 +347,7 @@ Deposits are high-frequency. Writing the full `Project` struct (~150 bytes) on e
 **Impact:** Full protocol control lost or hijacked.
 
 **Mitigations:**
+
 - `transfer_super_admin` allows key rotation.
 - Recommend using a multi-sig wallet or hardware security module as the SuperAdmin address.
 - Future mitigation: time-locked SuperAdmin operations.
@@ -355,6 +359,7 @@ Deposits are high-frequency. Writing the full `Project` struct (~150 bytes) on e
 **Impact:** Attacker could collect donations and immediately trigger release.
 
 **Mitigations:**
+
 - ProjectManager role must be explicitly granted by Admin/SuperAdmin — not self-assignable.
 - Donors should verify project legitimacy off-chain before depositing.
 - `deadline` enforces a time constraint; a suspiciously short deadline is a red flag.
@@ -366,6 +371,7 @@ Deposits are high-frequency. Writing the full `Project` struct (~150 bytes) on e
 **Impact:** Fake proof accepted as valid.
 
 **Mitigations:**
+
 - Proof hash is a 32-byte value — assumed to be a SHA-256 or similar cryptographic hash produced off-chain.
 - The Oracle is responsible for verifying the pre-image before submitting.
 - Future mitigation: replace hash comparison with on-chain ZK verification.
@@ -377,6 +383,7 @@ Deposits are high-frequency. Writing the full `Project` struct (~150 bytes) on e
 **Impact:** Stale project data, potential ID collision.
 
 **Mitigations:**
+
 - `ProjectCount` is instance storage and never expires with the contract.
 - IDs are monotonically increasing — even after expiry a new project gets a fresh ID.
 - Project configs and states are bumped on every read/write.
@@ -395,7 +402,7 @@ The following invariants **must hold at all times**:
 | INV-4 | A `Completed` project's status is terminal — no further state changes |
 | INV-5 | After a deposit of `amount`, `balance_after == balance_before + amount` |
 | INV-6 | Project IDs are sequential starting from 0 |
-| INV-7 | Status transitions are strictly forward: `Funding → Active | Completed | Expired`; `Active → Completed | Expired`; terminal states have no outbound transitions |
+| INV-7 | Status transitions are strictly forward: `Funding → Active | Completed | Expired`;`Active → Completed | Expired`; terminal states have no outbound transitions |
 | INV-8 | An address holds at most one RBAC role at a time |
 | INV-9 | The SuperAdmin address is always set after `init` and can only change via `transfer_super_admin` |
 | INV-10 | `ProjectConfig` fields (`creator`, `token`, `goal`, `proof_hash`, `deadline`) are immutable after registration |
@@ -408,7 +415,6 @@ The following invariants **must hold at all times**:
 |------|-------------|
 | **Mocked ZK Verification** | `verify_and_release` currently compares hashes directly. The structure is prepared for ZK-STARK proof verification but the verifier is not yet implemented. |
 | **Single Oracle** | One oracle address is stored in instance storage. A compromise requires admin intervention to rotate. Future: multi-oracle quorum or ZK verifier removes oracle trust entirely. |
-| **No Project Expiry Enforcement** | The `Expired` status exists in the FSM but there is no on-chain mechanism to transition a project to `Expired` when the deadline passes. This must be triggered off-chain or via a future `expire_project` entry point. |
 | **No Fund Withdrawal on Expiry** | Donors cannot reclaim funds after a deadline passes without completion. A `refund` mechanism is planned. |
 | **No Pause Mechanism** | There is no emergency pause entry point. The SuperAdmin can revoke the Oracle role to halt new releases, but existing verified projects cannot be halted. |
 | **Auditor Role** | The `Auditor` role has no on-chain enforcement gate — it is a semantic label for off-chain tooling only. |

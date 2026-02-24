@@ -17,6 +17,8 @@ pub enum EventKind {
     ProjectVerified,
     /// Verified funds were released to the creator (`released` topic).
     FundsReleased,
+    /// Donator funds were refunded from an expired project (`refunded` topic).
+    DonatorRefunded,
     /// A role was granted or replaced (`role_set` topic).
     RoleSet,
     /// A role was revoked (`role_del` topic).
@@ -37,6 +39,7 @@ impl EventKind {
             "funded" => Self::ProjectFunded,
             "verified" => Self::ProjectVerified,
             "released" => Self::FundsReleased,
+            "refunded" => Self::DonatorRefunded,
             "role_set" => Self::RoleSet,
             "role_del" => Self::RoleDel,
             "paused" => Self::ProtocolPaused,
@@ -52,6 +55,7 @@ impl EventKind {
             Self::ProjectFunded => "project_funded",
             Self::ProjectVerified => "project_verified",
             Self::FundsReleased => "funds_released",
+            Self::DonatorRefunded => "donator_refunded",
             Self::RoleSet => "role_set",
             Self::RoleDel => "role_del",
             Self::ProtocolPaused => "protocol_paused",
