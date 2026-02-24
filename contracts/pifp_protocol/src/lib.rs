@@ -49,9 +49,9 @@ mod test_events;
 #[cfg(test)]
 mod test_expire;
 #[cfg(test)]
-mod test_utils;
-#[cfg(test)]
 mod test_refund;
+#[cfg(test)]
+mod test_utils;
 
 pub use events::emit_funds_released;
 pub use rbac::Role;
@@ -342,7 +342,6 @@ impl PifpProtocol {
                 }
             }
         }
-        storage::add_to_token_balance(&env, project_id, &token, amount);
 
         // Track per-donator refundable amount for this token.
         storage::add_to_donator_balance(&env, project_id, &token, &donator, amount);
