@@ -105,6 +105,26 @@ cargo run -- --project-id 1 --proof-cid QmXxx... --dry-run
 
 See [backend/oracle/README.md](backend/oracle/README.md) for full documentation.
 
+#### Keeper Bot
+
+The Keeper is an automation service that monitors contract events and triggers scheduled tasks:
+
+```bash
+cd keeper
+cp .env.example .env
+# Edit .env with your configuration
+npm install
+npm start
+```
+
+For Docker deployment:
+```bash
+cd keeper
+docker compose up -d keeper
+```
+
+See [keeper/README.md](keeper/README.md) for full documentation.
+
 #### Event Indexer
 
 The indexer monitors contract events and provides a REST API:

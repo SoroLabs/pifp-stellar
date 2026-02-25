@@ -18,3 +18,9 @@ test_snapshots/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Keeper
+keeper/node_modules/
+keeper/.env
+keeper/.env.*
+keeper/data/tasks.json
