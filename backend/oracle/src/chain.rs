@@ -96,7 +96,7 @@ async fn simulate_transaction(config: &Config, params: &serde_json::Value) -> Re
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(config.timeout_secs))
         .build()
-        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {e}")))?;
 
     let request_body = json!({
         "jsonrpc": "2.0",
@@ -110,12 +110,12 @@ async fn simulate_transaction(config: &Config, params: &serde_json::Value) -> Re
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| OracleError::Network(format!("Simulation request failed: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Simulation request failed: {e}")))?;
 
     let response_json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| OracleError::Network(format!("Failed to parse simulation response: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to parse simulation response: {e}")))?;
 
     debug!(
         "Simulation response: {}",
@@ -125,8 +125,7 @@ async fn simulate_transaction(config: &Config, params: &serde_json::Value) -> Re
     // Check for RPC errors
     if let Some(error) = response_json.get("error") {
         return Err(OracleError::Transaction(format!(
-            "Simulation failed: {}",
-            error
+            "Simulation failed: {error}"
         )));
     }
 
@@ -161,7 +160,7 @@ async fn submit_transaction(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(config.timeout_secs))
         .build()
-        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {e}")))?;
 
     let request_body = json!({
         "jsonrpc": "2.0",
@@ -175,12 +174,12 @@ async fn submit_transaction(
         .json(&request_body)
         .send()
         .await
-        .map_err(|e| OracleError::Network(format!("Transaction submission failed: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Transaction submission failed: {e}")))?;
 
     let response_json: serde_json::Value = response
         .json()
         .await
-        .map_err(|e| OracleError::Network(format!("Failed to parse submission response: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to parse submission response: {e}")))?;
 
     debug!(
         "Submission response: {}",
@@ -190,8 +189,7 @@ async fn submit_transaction(
     // Check for errors
     if let Some(error) = response_json.get("error") {
         return Err(OracleError::Transaction(format!(
-            "Transaction submission failed: {}",
-            error
+            "Transaction submission failed: {error}"
         )));
     }
 
@@ -225,7 +223,7 @@ fn parse_contract_error(error: &serde_json::Value) -> String {
             _ => "Unknown contract error",
         };
 
-        return format!("{} (code: {})", message, code_str);
+        return format!("{message} (code: {code_str})");
     }
 
     error.to_string()

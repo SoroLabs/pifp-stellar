@@ -58,14 +58,14 @@ async fn main() -> Result<()> {
     // Step 1: Fetch proof from IPFS and compute hash
     info!("Fetching proof from IPFS: {}", cli.proof_cid);
     let proof_hash = verifier::fetch_and_hash_proof(&cli.proof_cid, &config).await?;
-    info!("Computed proof hash: {}", hex::encode(&proof_hash));
+    info!("Computed proof hash: {}", hex::encode(proof_hash));
 
     if cli.dry_run {
         warn!("DRY RUN MODE - Transaction will not be submitted");
         info!(
             "Would submit verify_and_release for project {} with hash {}",
             cli.project_id,
-            hex::encode(&proof_hash)
+            hex::encode(proof_hash)
         );
         return Ok(());
     }

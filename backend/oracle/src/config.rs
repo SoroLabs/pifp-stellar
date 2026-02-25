@@ -10,6 +10,7 @@ pub struct Config {
     pub rpc_url: String,
 
     /// Horizon API endpoint for transaction submission
+    #[allow(dead_code)]
     pub horizon_url: String,
 
     /// PIFP contract address (Strkey format: C...)
@@ -22,6 +23,7 @@ pub struct Config {
     pub ipfs_gateway: String,
 
     /// Network passphrase (e.g., "Test SDF Network ; September 2015")
+    #[allow(dead_code)]
     pub network_passphrase: String,
 
     /// Request timeout in seconds
@@ -66,6 +68,7 @@ impl Config {
     }
 
     /// Validate that all required configuration is present and well-formed.
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<()> {
         // Validate contract ID format (should start with 'C')
         if !self.contract_id.starts_with('C') {
@@ -108,7 +111,7 @@ impl Config {
 
 fn env_var(key: &str) -> Result<String> {
     std::env::var(key)
-        .map_err(|_| OracleError::Config(format!("Missing required environment variable: {}", key)))
+        .map_err(|_| OracleError::Config(format!("Missing required environment variable: {key}")))
 }
 
 #[cfg(test)]

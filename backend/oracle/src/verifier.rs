@@ -32,14 +32,14 @@ pub async fn fetch_and_hash_proof(cid: &str, config: &Config) -> Result<[u8; 32]
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(config.timeout_secs))
         .build()
-        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {e}")))?;
 
     // Fetch proof artifact
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| OracleError::Network(format!("IPFS fetch failed: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("IPFS fetch failed: {e}")))?;
 
     // Check response status
     if !response.status().is_success() {
@@ -59,8 +59,7 @@ pub async fn fetch_and_hash_proof(cid: &str, config: &Config) -> Result<[u8; 32]
         const MAX_SIZE: u64 = 100 * 1024 * 1024;
         if len > MAX_SIZE {
             return Err(OracleError::Verification(format!(
-                "Proof artifact too large: {} bytes (max: {} bytes)",
-                len, MAX_SIZE
+                "Proof artifact too large: {len} bytes (max: {MAX_SIZE} bytes)"
             )));
         }
     }
@@ -69,7 +68,7 @@ pub async fn fetch_and_hash_proof(cid: &str, config: &Config) -> Result<[u8; 32]
     let bytes = response
         .bytes()
         .await
-        .map_err(|e| OracleError::Network(format!("Failed to read response body: {}", e)))?;
+        .map_err(|e| OracleError::Network(format!("Failed to read response body: {e}")))?;
 
     if bytes.is_empty() {
         return Err(OracleError::Verification(
