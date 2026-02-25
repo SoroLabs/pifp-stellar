@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "contracts/pifp_protocol",
   "backend/indexer",
+  "backend/oracle",
 ]
 
 [profile.release]

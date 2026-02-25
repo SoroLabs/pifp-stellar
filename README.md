@@ -47,6 +47,7 @@ graph TD
 
 - **Stellar/Soroban**: Smart contract logic for conditional release.
 - **Rust**: Backend oracle for proof hashing and verification.
+- **Rust**: Event indexer for off-chain monitoring and API.
 - **React**: Frontend for project creation and funding.
 
 ## Security
@@ -72,6 +73,9 @@ To run the automated tests using the Soroban testutils feature:
 - [Soroban CLI](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup)
 
 ### Local Development
+
+#### Smart Contracts
+
 To compile the smart contracts:
 ```bash
 cargo build --target wasm32-unknown-unknown --release
@@ -86,6 +90,29 @@ stellar contract build
 To run unit tests:
 ```bash
 cargo test --manifest-path contracts/pifp_protocol/Cargo.toml
+```
+
+#### Oracle Service
+
+The Oracle service fetches proof artifacts from IPFS and submits verification transactions:
+
+```bash
+cd backend/oracle
+cp .env.example .env
+# Edit .env with your configuration
+cargo run -- --project-id 1 --proof-cid QmXxx... --dry-run
+```
+
+See [backend/oracle/README.md](backend/oracle/README.md) for full documentation.
+
+#### Event Indexer
+
+The indexer monitors contract events and provides a REST API:
+
+```bash
+cd backend/indexer
+# Configure via environment variables
+cargo run
 ```
 
 ## Docker Development Environment
