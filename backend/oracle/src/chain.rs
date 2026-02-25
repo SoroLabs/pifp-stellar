@@ -28,12 +28,15 @@ pub async fn submit_verification(
     project_id: u64,
     proof_hash: [u8; 32],
 ) -> Result<String> {
-    info!("Building verify_and_release transaction for project {}", project_id);
+    info!(
+        "Building verify_and_release transaction for project {}",
+        project_id
+    );
 
     // Decode oracle secret key
     let oracle_keypair = decode_secret_key(&config.oracle_secret_key)?;
     let oracle_address = keypair_to_address(&oracle_keypair);
-    
+
     debug!("Oracle address: {}", oracle_address);
 
     // Build transaction parameters
@@ -114,7 +117,10 @@ async fn simulate_transaction(config: &Config, params: &serde_json::Value) -> Re
         .await
         .map_err(|e| OracleError::Network(format!("Failed to parse simulation response: {}", e)))?;
 
-    debug!("Simulation response: {}", serde_json::to_string_pretty(&response_json).unwrap());
+    debug!(
+        "Simulation response: {}",
+        serde_json::to_string_pretty(&response_json).unwrap()
+    );
 
     // Check for RPC errors
     if let Some(error) = response_json.get("error") {
@@ -176,7 +182,10 @@ async fn submit_transaction(
         .await
         .map_err(|e| OracleError::Network(format!("Failed to parse submission response: {}", e)))?;
 
-    debug!("Submission response: {}", serde_json::to_string_pretty(&response_json).unwrap());
+    debug!(
+        "Submission response: {}",
+        serde_json::to_string_pretty(&response_json).unwrap()
+    );
 
     // Check for errors
     if let Some(error) = response_json.get("error") {
@@ -200,7 +209,9 @@ async fn submit_transaction(
 fn parse_contract_error(error: &serde_json::Value) -> String {
     // Try to extract error code and message
     if let Some(code) = error.get("code") {
-        let code_str = code.as_u64().map(|c| c.to_string())
+        let code_str = code
+            .as_u64()
+            .map(|c| c.to_string())
             .or_else(|| code.as_str().map(|s| s.to_string()))
             .unwrap_or_else(|| "unknown".to_string());
 
@@ -225,7 +236,7 @@ fn decode_secret_key(secret_key: &str) -> Result<String> {
     // Validate format
     if !secret_key.starts_with('S') {
         return Err(OracleError::Config(
-            "Invalid secret key format (must start with 'S')".to_string()
+            "Invalid secret key format (must start with 'S')".to_string(),
         ));
     }
 
@@ -239,7 +250,7 @@ fn keypair_to_address(keypair: &str) -> String {
     // In production, derive the public key from the secret key
     // For now, return a placeholder
     // This would use stellar-strkey to decode the secret key and derive the public key
-    
+
     warn!("Using mock address derivation - implement proper key derivation in production");
     format!("G{}", &keypair[1..]) // Mock: just replace S with G
 }
@@ -255,12 +266,8 @@ mod tests {
         let project_id = 42;
         let proof_hash = [0u8; 32];
 
-        let params = build_transaction_params(
-            contract_id,
-            oracle_address,
-            project_id,
-            &proof_hash,
-        ).unwrap();
+        let params =
+            build_transaction_params(contract_id, oracle_address, project_id, &proof_hash).unwrap();
 
         assert_eq!(params["contractId"], contract_id);
         assert_eq!(params["function"], "verify_and_release");

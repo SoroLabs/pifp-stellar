@@ -45,20 +45,19 @@ impl Config {
         Ok(Config {
             rpc_url: env_var("RPC_URL")
                 .unwrap_or_else(|_| "https://soroban-testnet.stellar.org".to_string()),
-            
+
             horizon_url: env_var("HORIZON_URL")
                 .unwrap_or_else(|_| "https://horizon-testnet.stellar.org".to_string()),
-            
+
             contract_id: env_var("CONTRACT_ID")?,
-            
+
             oracle_secret_key: env_var("ORACLE_SECRET_KEY")?,
-            
-            ipfs_gateway: env_var("IPFS_GATEWAY")
-                .unwrap_or_else(|_| "https://ipfs.io".to_string()),
-            
+
+            ipfs_gateway: env_var("IPFS_GATEWAY").unwrap_or_else(|_| "https://ipfs.io".to_string()),
+
             network_passphrase: env_var("NETWORK_PASSPHRASE")
                 .unwrap_or_else(|_| "Test SDF Network ; September 2015".to_string()),
-            
+
             timeout_secs: env_var("TIMEOUT_SECS")
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
@@ -71,28 +70,36 @@ impl Config {
         // Validate contract ID format (should start with 'C')
         if !self.contract_id.starts_with('C') {
             return Err(OracleError::Config(
-                "CONTRACT_ID must be a valid Stellar contract address (starts with 'C')".to_string()
+                "CONTRACT_ID must be a valid Stellar contract address (starts with 'C')"
+                    .to_string(),
             ));
         }
 
         // Validate secret key format (should start with 'S')
         if !self.oracle_secret_key.starts_with('S') {
             return Err(OracleError::Config(
-                "ORACLE_SECRET_KEY must be a valid Stellar secret key (starts with 'S')".to_string()
+                "ORACLE_SECRET_KEY must be a valid Stellar secret key (starts with 'S')"
+                    .to_string(),
             ));
         }
 
         // Validate URLs
         if !self.rpc_url.starts_with("http") {
-            return Err(OracleError::Config("RPC_URL must be a valid HTTP(S) URL".to_string()));
+            return Err(OracleError::Config(
+                "RPC_URL must be a valid HTTP(S) URL".to_string(),
+            ));
         }
 
         if !self.horizon_url.starts_with("http") {
-            return Err(OracleError::Config("HORIZON_URL must be a valid HTTP(S) URL".to_string()));
+            return Err(OracleError::Config(
+                "HORIZON_URL must be a valid HTTP(S) URL".to_string(),
+            ));
         }
 
         if !self.ipfs_gateway.starts_with("http") {
-            return Err(OracleError::Config("IPFS_GATEWAY must be a valid HTTP(S) URL".to_string()));
+            return Err(OracleError::Config(
+                "IPFS_GATEWAY must be a valid HTTP(S) URL".to_string(),
+            ));
         }
 
         Ok(())
@@ -100,9 +107,8 @@ impl Config {
 }
 
 fn env_var(key: &str) -> Result<String> {
-    std::env::var(key).map_err(|_| {
-        OracleError::Config(format!("Missing required environment variable: {}", key))
-    })
+    std::env::var(key)
+        .map_err(|_| OracleError::Config(format!("Missing required environment variable: {}", key)))
 }
 
 #[cfg(test)]
@@ -125,7 +131,8 @@ mod tests {
         config.oracle_secret_key = "INVALID".to_string();
         assert!(config.validate().is_err());
 
-        config.oracle_secret_key = "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string();
+        config.oracle_secret_key =
+            "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string();
         assert!(config.validate().is_ok());
     }
 

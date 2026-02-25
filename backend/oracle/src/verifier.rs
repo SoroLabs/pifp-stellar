@@ -54,7 +54,7 @@ pub async fn fetch_and_hash_proof(cid: &str, config: &Config) -> Result<[u8; 32]
     let content_length = response.content_length();
     if let Some(len) = content_length {
         debug!("Proof artifact size: {} bytes", len);
-        
+
         // Sanity check: reject files larger than 100MB
         const MAX_SIZE: u64 = 100 * 1024 * 1024;
         if len > MAX_SIZE {
@@ -73,7 +73,7 @@ pub async fn fetch_and_hash_proof(cid: &str, config: &Config) -> Result<[u8; 32]
 
     if bytes.is_empty() {
         return Err(OracleError::Verification(
-            "Proof artifact is empty".to_string()
+            "Proof artifact is empty".to_string(),
         ));
     }
 
@@ -107,12 +107,12 @@ mod tests {
     fn test_compute_sha256_empty() {
         let data = b"";
         let hash = compute_sha256(data);
-        
+
         // SHA-256 of empty string
-        let expected = hex::decode(
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        ).unwrap();
-        
+        let expected =
+            hex::decode("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+                .unwrap();
+
         assert_eq!(hash.as_slice(), expected.as_slice());
     }
 
@@ -120,12 +120,12 @@ mod tests {
     fn test_compute_sha256_hello_world() {
         let data = b"hello world";
         let hash = compute_sha256(data);
-        
+
         // SHA-256 of "hello world"
-        let expected = hex::decode(
-            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
-        ).unwrap();
-        
+        let expected =
+            hex::decode("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")
+                .unwrap();
+
         assert_eq!(hash.as_slice(), expected.as_slice());
     }
 
@@ -134,7 +134,7 @@ mod tests {
         let data = b"test data";
         let hash1 = compute_sha256(data);
         let hash2 = compute_sha256(data);
-        
+
         assert_eq!(hash1, hash2);
     }
 
@@ -152,10 +152,10 @@ mod tests {
 
         // Use a CID that definitely doesn't exist
         let result = fetch_and_hash_proof("QmInvalidCIDThatDoesNotExist123456789", &config).await;
-        
+
         assert!(result.is_err());
         match result {
-            Err(OracleError::ProofNotFound(_)) | Err(OracleError::Network(_)) => {},
+            Err(OracleError::ProofNotFound(_)) | Err(OracleError::Network(_)) => {}
             _ => panic!("Expected ProofNotFound or Network error"),
         }
     }

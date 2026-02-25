@@ -62,8 +62,9 @@ async fn main() -> Result<()> {
 
     if cli.dry_run {
         warn!("DRY RUN MODE - Transaction will not be submitted");
-        info!("Would submit verify_and_release for project {} with hash {}", 
-            cli.project_id, 
+        info!(
+            "Would submit verify_and_release for project {} with hash {}",
+            cli.project_id,
             hex::encode(&proof_hash)
         );
         return Ok(());
@@ -71,11 +72,7 @@ async fn main() -> Result<()> {
 
     // Step 2: Submit verify_and_release transaction
     info!("Submitting verify_and_release transaction to contract");
-    let tx_hash = chain::submit_verification(
-        &config,
-        cli.project_id,
-        proof_hash,
-    ).await?;
+    let tx_hash = chain::submit_verification(&config, cli.project_id, proof_hash).await?;
 
     info!("✓ Verification transaction submitted successfully!");
     info!("Transaction hash: {}", tx_hash);
