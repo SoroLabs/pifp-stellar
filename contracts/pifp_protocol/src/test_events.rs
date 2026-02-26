@@ -3,7 +3,31 @@ extern crate std;
 use soroban_sdk::{symbol_short, testutils::Events, vec, IntoVal, TryIntoVal};
 
 use crate::events::{ProjectCreated, ProjectFunded, ProjectVerified};
+ error_handling
+use crate::{PifpProtocol, PifpProtocolClient, Role};
+
+fn setup() -> (Env, PifpProtocolClient<'static>) {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, PifpProtocol);
+    let client = PifpProtocolClient::new(&env, &contract_id);
+    (env, client)
+}
+
+fn setup_with_init() -> (Env, PifpProtocolClient<'static>, Address) {
+    let (env, client) = setup();
+    let super_admin = Address::generate(&env);
+    client.init(&super_admin);
+    (env, client, super_admin)
+}
+
+fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
+    let addr = env.register_stellar_asset_contract_v2(admin.clone());
+    token::Client::new(env, &addr.address())
+}
+
 use crate::test_utils::TestContext;
+ main
 
 #[test]
 fn test_project_created_event() {

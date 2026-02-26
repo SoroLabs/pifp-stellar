@@ -46,7 +46,7 @@ use crate::Error;
 /// A single address may hold at most one role at a time.
 /// Upgrading or revoking replaces / removes the stored value.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Role {
     /// Full protocol control: can grant/revoke any role, change oracle, pause.
     SuperAdmin,
@@ -147,9 +147,11 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
             require_role(env, caller, &Role::SuperAdmin);
         }
         // Admin or SuperAdmin can grant everything else
-        _ => {
-            require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]);
-        }
+            _ => {
+                if let Err(_) = require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]) {
+                    panic_with_error_rbac(env, Error::NotAuthorized);
+                }
+            }
     }
 
     // Prevent demotion of the SuperAdmin via grant_role
@@ -177,7 +179,9 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
 ///
 /// Emits a `role_del` event if a role existed.
 pub fn revoke_role(env: &Env, caller: &Address, target: &Address) {
-    require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]);
+    if let Err(_) = require_any_of(env, caller, &[Role::SuperAdmin, Role::Admin]) {
+        panic_with_error_rbac(env, Error::NotAuthorized);
+    }
 
     // Protect the SuperAdmin address from revocation via this path
     let super_admin = get_super_admin(env);
@@ -231,21 +235,28 @@ pub fn require_role(env: &Env, address: &Address, required_role: &Role) {
 }
 
 /// Assert that `address` holds one of the roles in `allowed`.
-/// Panics with `Error::NotAuthorized` if none match.
-pub fn require_any_of(env: &Env, address: &Address, allowed: &[Role]) {
-    if let Some(ref r) = get_role(env, address) {
-        if allowed.contains(r) {
-            return;
+/// error handling implemented with `Result` for all validation steps, ensuring no state changes or event emissions on failure.
+pub fn require_any_of(
+    env: &Env,
+    address: &Address,
+    roles: &[Role],
+) -> Result<(), Error> {
+    for role in roles {
+        if has_role(env, address.clone(), *role) {
+            return Ok(());
         }
     }
-    panic_with_error_rbac(env, Error::NotAuthorized);
+
+    Err(Error::NotAuthorized)
 }
 
 /// Assert that `address` is the SuperAdmin OR an Admin.
 /// Convenience wrapper used on configuration-level operations.
 #[inline]
 pub fn require_admin_or_above(env: &Env, address: &Address) {
-    require_any_of(env, address, &[Role::SuperAdmin, Role::Admin]);
+    if let Err(_) = require_any_of(env, address, &[Role::SuperAdmin, Role::Admin]) {
+        panic_with_error_rbac(env, Error::NotAuthorized);
+    }
 }
 
 /// Assert that `address` holds the Oracle role.
@@ -257,13 +268,17 @@ pub fn require_oracle(env: &Env, address: &Address) {
 
 /// Assert that `address` may register and manage projects.
 /// ProjectManager, Admin, and SuperAdmin may all register projects.
+/// error handling implemented with `Result` for all validation steps, ensuring no state changes or event emissions on failure.
 #[inline]
-pub fn require_can_register(env: &Env, address: &Address) {
+pub fn require_can_register(
+    env: &Env,
+    address: &Address,
+) -> Result<(), Error> {
     require_any_of(
         env,
         address,
         &[Role::SuperAdmin, Role::Admin, Role::ProjectManager],
-    );
+    )
 }
 
 // ─────────────────────────────────────────────────────────

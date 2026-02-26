@@ -26,7 +26,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, panic_with_error, token, Address, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, token, Address, BytesN, Env, Vec,
 };
 
 pub mod events;
@@ -59,7 +59,12 @@ use storage::{
     drain_token_balance, get_all_balances, get_and_increment_project_id, load_project,
     load_project_pair, maybe_load_project, save_project, save_project_state,
 };
+ error_handling
+pub use types::{Project, ProjectStatus};
+pub use events::emit_funds_released;
+
 pub use types::{Project, ProjectBalances, ProjectStatus};
+ main
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -85,8 +90,16 @@ pub enum Error {
     Overflow = 18,
     ProtocolPaused = 19,
     GoalMismatch = 20,
+ error_handling
+
+    // Added for robustness
+    TokenNotAccepted = 21,
+    InvalidStateTransition = 22,
+    DeadlineOverflow = 23,
+
     ProjectNotExpired = 21,
     InvalidTransition = 22,
+ main
 }
 
 #[contract]
@@ -183,69 +196,100 @@ impl PifpProtocol {
     /// Register a new funding project.
     ///
     /// `creator` must hold the `ProjectManager`, `Admin`, or `SuperAdmin` role.
+    /// Error handling implemented with `Result` for all validation steps, ensuring no state changes or event emissions on failure.
+    /// 
     pub fn register_project(
-        env: Env,
-        creator: Address,
-        accepted_tokens: Vec<Address>,
-        goal: i128,
-        proof_hash: BytesN<32>,
-        deadline: u64,
-    ) -> Project {
-        Self::require_not_paused(&env);
-        creator.require_auth();
-        // RBAC gate: only authorised roles may create projects.
-        rbac::require_can_register(&env, &creator);
+    env: Env,
+    creator: Address,
+    accepted_tokens: Vec<Address>,
+    goal: i128,
+    proof_hash: BytesN<32>,
+    deadline: u64,
+) -> Result<Project, Error> {
+    // 1️⃣ Pause guard
+    Self::require_not_paused(&env)?;
 
-        if accepted_tokens.is_empty() {
-            panic_with_error!(&env, Error::EmptyAcceptedTokens);
-        }
-        if accepted_tokens.len() > 10 {
-            panic_with_error!(&env, Error::TooManyTokens);
-        }
+    // 2️⃣ Authentication
+    creator.require_auth();
 
-        // Check for duplicate tokens
-        for i in 0..accepted_tokens.len() {
-            let t_i = accepted_tokens.get(i).unwrap();
-            for j in (i + 1)..accepted_tokens.len() {
-                if t_i == accepted_tokens.get(j).unwrap() {
-                    panic_with_error!(&env, Error::DuplicateToken);
-                }
+    // 3️⃣ RBAC guard
+    rbac::require_can_register(&env, &creator)?;
+
+    // 4️⃣ Validate accepted tokens
+    if accepted_tokens.is_empty() {
+        return Err(Error::EmptyAcceptedTokens);
+    }
+
+    if accepted_tokens.len() > 10 {
+        return Err(Error::TooManyTokens);
+    }
+
+    // 5️⃣ Check duplicates (no unwrap)
+    for i in 0..accepted_tokens.len() {
+        let t_i = accepted_tokens
+            .get(i)
+            .ok_or(Error::Overflow)?; // defensive
+
+        for j in (i + 1)..accepted_tokens.len() {
+            let t_j = accepted_tokens
+                .get(j)
+                .ok_or(Error::Overflow)?;
+
+            if t_i == t_j {
+                return Err(Error::DuplicateToken);
             }
         }
+    }
+
+ error_handling
+    // 6️⃣ Validate goal
+    const MAX_GOAL: i128 = 1_000_000_000_000_000_000_000_000_000_000;
 
         if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 {
             // 10^30
             panic_with_error!(&env, Error::InvalidGoal);
         }
+ main
 
-        let now = env.ledger().timestamp();
-        // Max 5 years deadline (5 * 365 * 24 * 60 * 60)
-        let max_deadline = now + 157_680_000;
-        if deadline <= now || deadline > max_deadline {
-            panic_with_error!(&env, Error::InvalidDeadline);
-        }
-
-        let id = get_and_increment_project_id(&env);
-        let project = Project {
-            id,
-            creator: creator.clone(),
-            accepted_tokens: accepted_tokens.clone(),
-            goal,
-            proof_hash,
-            deadline,
-            status: ProjectStatus::Funding,
-            donation_count: 0,
-        };
-
-        save_project(&env, &project);
-
-        // Standardized event emission
-        if let Some(token) = accepted_tokens.get(0) {
-            events::emit_project_created(&env, id, creator, token, goal);
-        }
-
-        project
+    if goal <= 0 || goal > MAX_GOAL {
+        return Err(Error::InvalidGoal);
     }
+
+    // 7️⃣ Validate deadline (safe arithmetic)
+    let now = env.ledger().timestamp();
+
+    let max_deadline = now
+        .checked_add(157_680_000) // 5 years
+        .ok_or(Error::Overflow)?;
+
+    if deadline <= now || deadline > max_deadline {
+        return Err(Error::InvalidDeadline);
+    }
+
+    // 8️⃣ Get new project ID (must return Result)
+    let id = get_and_increment_project_id(&env);
+
+    let project = Project {
+        id,
+        creator: creator.clone(),
+        accepted_tokens: accepted_tokens.clone(),
+        goal,
+        proof_hash,
+        deadline,
+        status: ProjectStatus::Funding,
+        donation_count: 0,
+    };
+
+    // 9️⃣ Persist project (must return Result)
+    save_project(&env, &project);
+
+    // 🔟 Emit event AFTER successful storage
+    if let Some(token) = accepted_tokens.get(0) {
+        events::emit_project_created(&env, id, creator, token, goal);
+    }
+
+    Ok(project)
+}
 
     pub fn get_project(env: Env, id: u64) -> Project {
         load_project(&env, id)
@@ -274,13 +318,45 @@ impl PifpProtocol {
     /// Deposit funds into a project.
     ///
     /// The `token` must be one of the project's accepted tokens.
-    pub fn deposit(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
-        Self::require_not_paused(&env);
-        donator.require_auth();
+    /// implemented error handling with `Result` for all validation steps, ensuring no state changes or event emissions on failure.
+pub fn deposit(
+    env: Env,
+    project_id: u64,
+    donator: Address,
+    token: Address,
+    amount: i128,
+) -> Result<(), Error> {
+    // 1️⃣ Pause guard
+    Self::require_not_paused(&env)?;
+    donator.require_auth();
 
-        if amount <= 0 {
-            panic_with_error!(&env, Error::InvalidAmount);
-        }
+    // 2️⃣ Validate amount
+    if amount <= 0 {
+        return Err(Error::InvalidAmount);
+    }
+
+    // 3️⃣ Read both config and state with a single helper that bumps TTLs atomically.
+    // This is the optimized retrieval pattern; it also returns the state needed for the subsequent checks.
+    let (config, state) = load_project_pair(&env, project_id); // Assuming load_project_pair can return a Result
+
+ error_handling
+    // 4️⃣ Check expiration
+    if env.ledger().timestamp() >= config.deadline {
+        return Err(Error::ProjectExpired);
+    }
+
+    // 5️⃣ Basic status check: must be Funding or Active.
+    match state.status {
+        ProjectStatus::Funding | ProjectStatus::Active => {}
+        _ => return Err(Error::ProjectNotActive),
+    }
+
+    // 6️⃣ Verify token is accepted.
+    let mut found = false;
+    for t in config.accepted_tokens.iter() {
+        if t == token {
+            found = true;
+            break;
 
         // Read both config and state with a single helper that bumps TTLs
         // atomically. This is the optimized retrieval pattern; it also returns
@@ -301,19 +377,27 @@ impl PifpProtocol {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
             _ => panic_with_error!(&env, Error::ProjectNotActive),
+ main
         }
+    }
+    if !found {
+        return Err(Error::TokenNotAccepted);
+    }
 
-        // Verify token is accepted.
-        let mut found = false;
-        for t in config.accepted_tokens.iter() {
-            if t == token {
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            panic_with_error!(&env, Error::NotAuthorized);
-        }
+    // 7️⃣ Transfer tokens from donator to contract.
+    let token_client = token::Client::new(&env, &token);
+    // Transfer tokens from donator to this contract. Use `transfer` provided by the
+    // token client. We ignore the result here since token client methods will
+    // trap on failure in tests.
+    let contract_address = env.current_contract_address();
+    let _ = token_client.transfer(&donator, &contract_address, &amount);
+
+ error_handling
+    // 8️⃣ Update the per-token balance.
+    let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount); // Returns new balance
+
+    // Emit a debug event with the new balance to aid fuzz debugging.
+    env.events().publish((soroban_sdk::symbol_short!("dbg_dep"), project_id, token.clone(), new_balance), donator.clone());
 
         // Check if this is a new unique (donator, token) pair.
         let is_new_donor = !storage::has_donator_seen(&env, project_id, &donator, &token);
@@ -345,10 +429,13 @@ impl PifpProtocol {
 
         // Track per-donator refundable amount for this token.
         storage::add_to_donator_balance(&env, project_id, &token, &donator, amount);
+ main
 
-        // Standardized event emission
-        events::emit_project_funded(&env, project_id, donator, amount);
-    }
+    // 9️⃣ Standardized event emission
+    events::emit_project_funded(&env, project_id, donator, amount);
+
+    Ok(())
+}
 
     /// Refund a donator from an expired project that was not verified.
     pub fn refund(env: Env, donator: Address, project_id: u64, token: Address) {
@@ -403,6 +490,25 @@ impl PifpProtocol {
     ///
     /// Reads the immutable config (for proof_hash) and mutable state (for status),
     /// then writes back only the small state entry.
+ error_handling
+pub fn verify_and_release(
+    env: Env,
+    oracle: Address,
+    project_id: u64,
+    submitted_proof_hash: BytesN<32>,
+) -> Result<(), Error> {
+    Self::require_not_paused(&env)?;
+
+    oracle.require_auth();
+    rbac::require_oracle(&env, &oracle);
+
+    let (config, mut state) = load_project_pair(&env, project_id);
+
+    match state.status {
+        ProjectStatus::Funding | ProjectStatus::Active => {}
+        ProjectStatus::Completed => {
+            return Err(Error::MilestoneAlreadyReleased);
+
     pub fn verify_and_release(
         env: Env,
         oracle: Address,
@@ -430,40 +536,37 @@ impl PifpProtocol {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
             ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
+ main
         }
-
-        // Mocked ZK verification: compare submitted hash to stored hash.
-        if submitted_proof_hash != config.proof_hash {
-            panic_with_error!(&env, Error::VerificationFailed);
+        ProjectStatus::Expired => {
+            return Err(Error::ProjectExpired);
         }
-
-        // Transition to Completed — only write the state entry.
-        state.status = ProjectStatus::Completed;
-
-        // Transfer all deposited tokens to the creator.
-        // If any transfer fails, panic to revert the entire transaction.
-        let contract_address = env.current_contract_address();
-        for token in config.accepted_tokens.iter() {
-            // Drain the token balance (gets balance and zeros it).
-            let balance = drain_token_balance(&env, project_id, &token);
-
-            // Only transfer if there's a non-zero balance.
-            if balance > 0 {
-                // Create token client and transfer to creator.
-                let token_client = token::Client::new(&env, &token);
-                token_client.transfer(&contract_address, &config.creator, &balance);
-
-                // Emit funds_released event for this token.
-                events::emit_funds_released(&env, project_id, token, balance);
-            }
-        }
-
-        // Save the updated state (now marked as Completed).
-        save_project_state(&env, project_id, &state);
-
-        // Standardized event emission
-        events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
     }
+
+    if submitted_proof_hash != config.proof_hash {
+        return Err(Error::VerificationFailed);
+    }
+
+    state.status = ProjectStatus::Completed;
+
+    let contract_address = env.current_contract_address();
+
+    for token in config.accepted_tokens.iter() {
+        let balance = drain_token_balance(&env, project_id, &token);
+
+        if balance > 0 {
+            let token_client = token::Client::new(&env, &token);
+            token_client.transfer(&contract_address, &config.creator, &balance);
+            events::emit_funds_released(&env, project_id, token, balance);
+        }
+    }
+
+    save_project_state(&env, project_id, &state);
+    events::emit_project_verified(&env, project_id, oracle, submitted_proof_hash);
+
+    Ok(())
+}
+
 
     /// Mark a project as expired if its deadline has passed.
     ///
@@ -497,9 +600,10 @@ impl PifpProtocol {
     // Internal Helpers
     // ─────────────────────────────────────────────────────────
 
-    fn require_not_paused(env: &Env) {
-        if storage::is_paused(env) {
-            panic_with_error!(env, Error::ProtocolPaused);
-        }
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+    if storage::is_paused(env) {
+        return Err(Error::ProtocolPaused);
     }
+    Ok(())
+}
 }

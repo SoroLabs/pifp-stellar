@@ -14,7 +14,7 @@ use crate::{PifpProtocol, PifpProtocolClient};
 fn setup_env() -> (Env, PifpProtocolClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(PifpProtocol, ());
+    let contract_id = env.register_contract(None, PifpProtocol);
     let client = PifpProtocolClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.init(&admin);
