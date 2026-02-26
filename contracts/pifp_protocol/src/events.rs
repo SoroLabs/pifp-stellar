@@ -121,3 +121,21 @@ pub fn emit_protocol_paused(env: &Env, admin: Address) {
 pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     env.events().publish((symbol_short!("unpaused"), admin), ());
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GasMeasurementEvent {
+    pub operation: String,
+    pub gas_used: u64,
+    pub timestamp: u64,
+}
+
+pub fn emit_gas_measurement(env: &Env, operation: &str, gas_used: u64, timestamp: u64) {
+    let topics = (symbol_short!("gas_measure"),);
+    let data = GasMeasurementEvent {
+        operation: operation.to_string(),
+        gas_used,
+        timestamp,
+    };
+    env.events().publish(topics, data);
+}
