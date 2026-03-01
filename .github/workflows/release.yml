@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Build Contract
         run: |
           cargo build --release --target wasm32-unknown-unknown --manifest-path contracts/pifp_protocol/Cargo.toml
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             target/wasm32-unknown-unknown/release/pifp_protocol.wasm
