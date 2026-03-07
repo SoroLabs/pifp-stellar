@@ -5,8 +5,8 @@ edition = "2021"
 
 [dependencies]
 # Stellar/Soroban
-soroban-sdk = "22"
-stellar-strkey = "0.0.9"
+soroban-sdk = "25"
+stellar-strkey = "0.0.16"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -19,7 +19,7 @@ clap = { version = "4", features = ["derive"] }
 
 # Error handling
 anyhow = "1"
-thiserror = "1"
+thiserror = "2"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
