@@ -206,10 +206,8 @@ impl PifpProtocol {
         // Check for duplicate tokens
         for i in 0..accepted_tokens.len() {
             let t_i = accepted_tokens.get(i).unwrap();
-            for j in (i + 1)..accepted_tokens.len() {
-                if t_i == accepted_tokens.get(j).unwrap() {
-                    panic_with_error!(&env, Error::DuplicateToken);
-                }
+            if accepted_tokens.last_index_of(&t_i) != Some(i) {
+                panic_with_error!(&env, Error::DuplicateToken);
             }
         }
 
@@ -304,23 +302,18 @@ impl PifpProtocol {
         }
 
         // Verify token is accepted.
-        let mut found = false;
-        for t in config.accepted_tokens.iter() {
-            if t == token {
-                found = true;
-                break;
-            }
-        }
-        if !found {
+        if !config.accepted_tokens.contains(&token) {
             panic_with_error!(&env, Error::NotAuthorized);
         }
 
         // Check if this is a new unique (donator, token) pair.
-        let is_new_donor = !storage::has_donator_seen(&env, project_id, &donator, &token);
+        // A donator balance of 0 implicitly proves they have not donated yet, saving a storage key entirely.
+        let current_donor_balance = storage::get_donator_balance(&env, project_id, &token, &donator);
+        let is_new_donor = current_donor_balance == 0;
+        
         if is_new_donor {
-            // Increment donation count and mark as seen.
+            // Increment donation count
             state.donation_count += 1;
-            storage::mark_donator_seen(&env, project_id, &donator, &token);
             // Save the updated state.
             save_project_state(&env, project_id, &state);
         }
@@ -344,7 +337,8 @@ impl PifpProtocol {
         }
 
         // Track per-donator refundable amount for this token.
-        storage::add_to_donator_balance(&env, project_id, &token, &donator, amount);
+        let new_donor_balance = current_donor_balance.checked_add(amount).expect("donator balance overflow");
+        storage::set_donator_balance(&env, project_id, &token, &donator, new_donor_balance);
 
         // Standardized event emission
         events::emit_project_funded(&env, project_id, donator, amount);

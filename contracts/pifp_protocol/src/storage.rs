@@ -65,8 +65,6 @@ pub enum DataKey {
     TokenBalance(u64, Address),
     /// Protocol pause state (Instance).
     IsPaused,
-    /// Tracks whether a (project_id, donator, token) combination has donated before (Persistent).
-    DonatorSeen(u64, Address, Address),
     /// Per-donator refundable balance keyed by (project_id, token, donator) (Persistent).
     DonatorBalance(u64, Address, Address),
 }
@@ -147,11 +145,6 @@ pub fn save_project(env: &Env, project: &Project) {
     env.storage().persistent().set(&state_key, &state);
     bump_persistent(env, &config_key);
     bump_persistent(env, &state_key);
-
-    // Initialise balances to 0 for all accepted tokens.
-    for token in project.accepted_tokens.iter() {
-        set_token_balance(env, project.id, &token, 0);
-    }
 }
 
 /// Load only the immutable project configuration.
@@ -275,14 +268,19 @@ pub fn load_project(env: &Env, id: u64) -> Project {
 /// TTL of both underlying entries when present.
 #[allow(dead_code)]
 pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
-    let config_key = DataKey::ProjConfig(id);
-    // We test existence on one key only; if a project is corrupt (config
-    // without state) the subsequent `get` will still panic, which is acceptable
-    // since such a situation should never occur in normal operation.
-    if !env.storage().persistent().has(&config_key) {
-        return None;
-    }
-    let (config, state) = load_project_pair(env, id);
+    let config = match maybe_load_project_config(env, id) {
+        Some(c) => c,
+        None => return None,
+    };
+    
+    // If config exists, state must exist. This maintains the invariant while avoiding 
+    // a redundant .has() check before .get().
+    let state: ProjectState = env
+        .storage()
+        .persistent()
+        .get(&DataKey::ProjState(id))
+        .expect("project state missing");
+    bump_persistent(env, &DataKey::ProjState(id));
     Some(Project {
         id: config.id,
         creator: config.creator,
@@ -348,23 +346,6 @@ pub fn get_all_balances(env: &Env, project: &Project) -> ProjectBalances {
 }
 
 // ── Donator Tracking Helpers ─────────────────────────────────────────
-
-/// Check if a (project_id, donator, token) combination has donated before.
-pub fn has_donator_seen(env: &Env, project_id: u64, donator: &Address, token: &Address) -> bool {
-    let key = DataKey::DonatorSeen(project_id, donator.clone(), token.clone());
-    let seen = env.storage().persistent().has(&key);
-    if seen {
-        bump_persistent(env, &key);
-    }
-    seen
-}
-
-/// Mark a (project_id, donator, token) combination as having donated.
-pub fn mark_donator_seen(env: &Env, project_id: u64, donator: &Address, token: &Address) {
-    let key = DataKey::DonatorSeen(project_id, donator.clone(), token.clone());
-    env.storage().persistent().set(&key, &true);
-    bump_persistent(env, &key);
-}
 
 /// Retrieve a donator's contributed balance for (project_id, token).
 pub fn get_donator_balance(env: &Env, project_id: u64, token: &Address, donator: &Address) -> i128 {
