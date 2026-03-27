@@ -22,10 +22,11 @@
 //!     └──────────────────►┘
 //!     └──► Expired
 //! Active ──► Expired
+//! Active ──► Cancelled
 //! ```
 //!
 //! Backward transitions and transitions out of terminal states (`Completed`,
-//! `Expired`) are rejected by `verify_and_release`.
+//! `Expired`, `Cancelled`) are rejected by lifecycle entrypoints.
 
 use soroban_sdk::{contracttype, Address, BytesN, Vec};
 
@@ -41,6 +42,9 @@ pub enum ProjectStatus {
     Completed,
     /// Deadline passed without reaching goal or verification.
     Expired,
+    /// Project was manually cancelled after becoming active.
+    /// Remaining donor balances stay refundable.
+    Cancelled,
 }
 
 /// Immutable project configuration, written once at registration.

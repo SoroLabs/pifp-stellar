@@ -266,6 +266,13 @@ pub fn require_can_register(env: &Env, address: &Address) {
     );
 }
 
+/// Assert that `address` may cancel projects.
+/// Only SuperAdmin and ProjectManager are permitted.
+#[inline]
+pub fn require_can_cancel_project(env: &Env, address: &Address) {
+    require_any_of(env, address, &[Role::SuperAdmin, Role::ProjectManager]);
+}
+
 // ─────────────────────────────────────────────────────────
 // Queries
 // ─────────────────────────────────────────────────────────

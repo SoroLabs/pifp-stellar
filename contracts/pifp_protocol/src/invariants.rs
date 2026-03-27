@@ -68,9 +68,10 @@ pub fn assert_sequential_ids(projects: &[Project]) {
 
 /// INV-7: Status transition validity. Only forward transitions are allowed:
 ///   Funding -> Active | Completed | Expired
-///   Active  -> Completed | Expired
+///   Active  -> Completed | Expired | Cancelled
 ///   Completed -> (none)
 ///   Expired   -> (none)
+///   Cancelled -> (none)
 pub fn assert_valid_status_transition(from: &ProjectStatus, to: &ProjectStatus) {
     let valid = matches!(
         (from, to),
@@ -79,6 +80,7 @@ pub fn assert_valid_status_transition(from: &ProjectStatus, to: &ProjectStatus) 
             | (ProjectStatus::Funding, ProjectStatus::Expired)
             | (ProjectStatus::Active, ProjectStatus::Completed)
             | (ProjectStatus::Active, ProjectStatus::Expired)
+            | (ProjectStatus::Active, ProjectStatus::Cancelled)
     );
 
     assert!(
