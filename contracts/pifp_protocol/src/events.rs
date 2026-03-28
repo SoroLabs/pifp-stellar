@@ -40,6 +40,14 @@ pub struct ProjectExpired {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeadlineExtended {
+    pub project_id: u64,
+    pub old_deadline: u64,
+    pub new_deadline: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FundsReleased {
     pub project_id: u64,
     pub token: Address,
@@ -120,4 +128,19 @@ pub fn emit_protocol_paused(env: &Env, admin: Address) {
 
 pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     env.events().publish((symbol_short!("unpaused"), admin), ());
+}
+
+pub fn emit_deadline_extended(
+    env: &Env,
+    project_id: u64,
+    old_deadline: u64,
+    new_deadline: u64,
+) {
+    let topics = (symbol_short!("ext_dead"), project_id);
+    let data = DeadlineExtended {
+        project_id,
+        old_deadline,
+        new_deadline,
+    };
+    env.events().publish(topics, data);
 }

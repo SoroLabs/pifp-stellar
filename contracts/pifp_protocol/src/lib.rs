@@ -55,6 +55,8 @@ mod test_refund;
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]
+mod test_deadline;
+#[cfg(test)]
 mod test_errors;
 
 pub use errors::Error;
@@ -62,7 +64,7 @@ pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
     drain_token_balance, get_all_balances, get_and_increment_project_id, load_project,
-    load_project_pair, maybe_load_project, save_project, save_project_state,
+    load_project_pair, maybe_load_project, save_project, save_project_config, save_project_state,
 };
 pub use types::{Project, ProjectBalances, ProjectStatus};
 
@@ -222,6 +224,51 @@ impl PifpProtocol {
         }
 
         project
+    }
+
+    /// Extend a project's deadline.
+    ///
+    /// - `caller` must hold `ProjectManager`, `Admin`, or `SuperAdmin`.
+    /// - Project must be in `Funding` or `Active` state.
+    /// - New deadline must be later than the current one.
+    /// - Total extension cannot exceed 1 year from the current ledger time.
+    pub fn extend_deadline(env: Env, caller: Address, project_id: u64, new_deadline: u64) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        rbac::require_can_register(&env, &caller);
+
+        let (mut config, state) = load_project_pair(&env, project_id);
+
+        // State check: must be Funding or Active.
+        match state.status {
+            ProjectStatus::Funding | ProjectStatus::Active => {}
+            _ => panic_with_error!(&env, Error::ProjectNotActive),
+        }
+
+        let now = env.ledger().timestamp();
+        
+        // Ensure the project hasn't already expired by current time.
+        if now >= config.deadline {
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+
+        // New deadline must be in the future relative to current deadline.
+        if new_deadline <= config.deadline {
+            panic_with_error!(&env, Error::InvalidDeadline);
+        }
+
+        // Extension limit block: max 1 year (365 days) from now.
+        let one_year_from_now = now + 31_536_000;
+        if new_deadline > one_year_from_now {
+            panic_with_error!(&env, Error::DeadlineTooLong);
+        }
+
+        let old_deadline = config.deadline;
+        config.deadline = new_deadline;
+
+        save_project_config(&env, project_id, &config);
+
+        events::emit_deadline_extended(&env, project_id, old_deadline, new_deadline);
     }
 
     pub fn get_project(env: Env, id: u64) -> Project {

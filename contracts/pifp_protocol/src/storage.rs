@@ -148,6 +148,15 @@ pub fn save_project(env: &Env, project: &Project) {
     bump_persistent(env, &state_key);
 }
 
+/// Save only the immutable project configuration.
+///
+/// While usually immutable, this is now used to support deadline extensions.
+pub fn save_project_config(env: &Env, id: u64, config: &ProjectConfig) {
+    let key = DataKey::ProjConfig(id);
+    env.storage().persistent().set(&key, config);
+    bump_persistent(env, &key);
+}
+
 /// Load only the immutable project configuration.
 ///
 /// This helper panics with a generic string if the project does not exist. It

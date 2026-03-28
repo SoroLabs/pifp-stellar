@@ -111,4 +111,7 @@ pub enum Error {
 
     /// The deposit token is not in the project's `accepted_tokens` list.
     TokenNotAccepted = 23,
+
+    /// The new deadline exceeds the 1-year extension limit.
+    DeadlineTooLong = 24,
 }
