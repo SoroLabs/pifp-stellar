@@ -1,0 +1,7 @@
+From<(soroban_sdk::xdr::ScErrorType, soroban_sdk::xdr::ScErrorCode)>
+From<soroban_env_common::symbol::SymbolError>
+From<soroban_env_host::builtin_contracts::contract_error::ContractError>
+From<soroban_sdk::ConversionError>
+From<soroban_wasmi::error::Error>
+From<soroban_wasmi::func::error::FuncError>
+From<wasmparser::binary_reader::BinaryReaderError>
