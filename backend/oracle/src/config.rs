@@ -28,6 +28,12 @@ pub struct Config {
 
     /// Request timeout in seconds
     pub timeout_secs: u64,
+
+    /// Optional Sentry DSN for error tracking
+    pub sentry_dsn: Option<String>,
+
+    /// Port for the health/metrics HTTP server
+    pub metrics_port: u16,
 }
 
 impl Config {
@@ -64,6 +70,13 @@ impl Config {
                 .unwrap_or_else(|_| "30".to_string())
                 .parse()
                 .map_err(|_| OracleError::Config("Invalid TIMEOUT_SECS".to_string()))?,
+
+            sentry_dsn: env_var("SENTRY_DSN").ok(),
+
+            metrics_port: env_var("METRICS_PORT")
+                .unwrap_or_else(|_| "9090".to_string())
+                .parse()
+                .map_err(|_| OracleError::Config("Invalid METRICS_PORT".to_string()))?,
         })
     }
 
@@ -148,6 +161,8 @@ mod tests {
             ipfs_gateway: "https://ipfs.io".to_string(),
             network_passphrase: "Test SDF Network ; September 2015".to_string(),
             timeout_secs: 30,
+            sentry_dsn: None,
+            metrics_port: 9090,
         }
     }
 }
