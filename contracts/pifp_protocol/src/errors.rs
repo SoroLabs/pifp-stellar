@@ -114,4 +114,6 @@ pub enum Error {
 
     /// The new deadline exceeds the 1-year extension limit.
     DeadlineTooLong = 24,
+    /// Fee basis points exceed the maximum allowed (10%).
+    InvalidFeeBasisPoints = 25,
 }

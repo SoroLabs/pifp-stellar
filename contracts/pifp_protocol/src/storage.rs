@@ -31,7 +31,9 @@
 use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
 use crate::errors::Error;
-use crate::types::{Project, ProjectBalances, ProjectConfig, ProjectState, TokenBalance};
+use crate::types::{
+    Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig, TokenBalance,
+};
 
 // ── TTL Constants ────────────────────────────────────────────────────
 
@@ -68,6 +70,8 @@ pub enum DataKey {
     IsPaused,
     /// Per-donator refundable balance keyed by (project_id, token, donator) (Persistent).
     DonatorBalance(u64, Address, Address),
+    /// Global protocol configuration (Instance).
+    ProtocolConfig,
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -110,6 +114,17 @@ pub fn is_paused(env: &Env) -> bool {
 pub fn set_paused(env: &Env, paused: bool) {
     bump_instance(env);
     env.storage().instance().set(&DataKey::IsPaused, &paused);
+}
+
+/// Retrieve the global protocol configuration.
+pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
+    env.storage().instance().get(&DataKey::ProtocolConfig)
+}
+
+/// Save the global protocol configuration.
+pub fn set_protocol_config(env: &Env, config: &ProtocolConfig) {
+    bump_instance(env);
+    env.storage().instance().set(&DataKey::ProtocolConfig, config);
 }
 
 // ── Persistent Storage Helpers ───────────────────────────────────────

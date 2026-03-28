@@ -48,6 +48,24 @@ pub struct DeadlineExtended {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolConfigUpdated {
+    pub old_fee_recipient: Option<Address>,
+    pub old_fee_bps: u32,
+    pub new_fee_recipient: Address,
+    pub new_fee_bps: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FeeDeducted {
+    pub project_id: u64,
+    pub token: Address,
+    pub amount: i128,
+    pub recipient: Address,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FundsReleased {
     pub project_id: u64,
     pub token: Address,
@@ -141,6 +159,32 @@ pub fn emit_deadline_extended(
         project_id,
         old_deadline,
         new_deadline,
+    };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_protocol_config_updated(
+    env: &Env,
+    old_config: Option<ProtocolConfig>,
+    new_config: ProtocolConfig,
+) {
+    let topics = (symbol_short!("cfg_upd"),);
+    let data = ProtocolConfigUpdated {
+        old_fee_recipient: old_config.as_ref().map(|c| c.fee_recipient.clone()),
+        old_fee_bps: old_config.map(|c| c.fee_bps).unwrap_or(0),
+        new_fee_recipient: new_config.fee_recipient,
+        new_fee_bps: new_config.fee_bps,
+    };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_fee_deducted(env: &Env, project_id: u64, token: Address, amount: i128, recipient: Address) {
+    let topics = (symbol_short!("fee_ded"), project_id, token.clone());
+    let data = FeeDeducted {
+        project_id,
+        token,
+        amount,
+        recipient,
     };
     env.events().publish(topics, data);
 }

@@ -58,15 +58,18 @@ mod test_utils;
 mod test_deadline;
 #[cfg(test)]
 mod test_errors;
+#[cfg(test)]
+mod test_protocol_config;
 
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    drain_token_balance, get_all_balances, get_and_increment_project_id, load_project,
-    load_project_pair, maybe_load_project, save_project, save_project_config, save_project_state,
+    drain_token_balance, get_all_balances, get_and_increment_project_id, get_protocol_config,
+    load_project, load_project_pair, maybe_load_project, save_project, save_project_config,
+    save_project_state, set_protocol_config,
 };
-pub use types::{Project, ProjectBalances, ProjectStatus};
+pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
 
 
 
@@ -420,6 +423,29 @@ impl PifpProtocol {
         rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
     }
 
+    /// Update the global protocol configuration.
+    ///
+    /// - `caller` must be the `SuperAdmin`.
+    /// - `fee_bps` must be less than or equal to 1000 (10%).
+    pub fn update_protocol_config(env: Env, caller: Address, fee_recipient: Address, fee_bps: u32) {
+        caller.require_auth();
+        rbac::require_super_admin(&env, &caller);
+
+        if fee_bps > 1000 {
+            panic_with_error!(&env, Error::InvalidFeeBasisPoints);
+        }
+
+        let old_config = get_protocol_config(&env);
+        let new_config = ProtocolConfig {
+            fee_recipient,
+            fee_bps,
+        };
+
+        set_protocol_config(&env, &new_config);
+
+        events::emit_protocol_config_updated(&env, old_config, new_config);
+    }
+
     /// Verify proof of impact and release funds to the creator.
     ///
     /// The registered oracle submits a proof hash. If it matches the project's
@@ -470,18 +496,50 @@ impl PifpProtocol {
         // Transfer all deposited tokens to the creator.
         // If any transfer fails, panic to revert the entire transaction.
         let contract_address = env.current_contract_address();
+        let protocol_config = get_protocol_config(&env);
+
         for token in config.accepted_tokens.iter() {
             // Drain the token balance (gets balance and zeros it).
-            let balance = drain_token_balance(&env, project_id, &token);
+            let mut balance = drain_token_balance(&env, project_id, &token);
 
             // Only transfer if there's a non-zero balance.
             if balance > 0 {
-                // Create token client and transfer to creator.
                 let token_client = token::Client::new(&env, &token);
-                token_client.transfer(&contract_address, &config.creator, &balance);
 
-                // Emit funds_released event for this token.
-                events::emit_funds_released(&env, project_id, token, balance);
+                // Deduct platform fee if configured.
+                if let Some(config) = &protocol_config {
+                    if config.fee_bps > 0 {
+                        // fee = balance * bps / 10000
+                        let fee_amount = balance
+                            .checked_mul(config.fee_bps as i128)
+                            .unwrap_or(0)
+                            .checked_div(10000)
+                            .unwrap_or(0);
+
+                        if fee_amount > 0 {
+                            token_client.transfer(
+                                &contract_address,
+                                &config.fee_recipient,
+                                &fee_amount,
+                            );
+                            balance = balance.checked_sub(fee_amount).unwrap_or(balance);
+                            events::emit_fee_deducted(
+                                &env,
+                                project_id,
+                                token.clone(),
+                                fee_amount,
+                                config.fee_recipient.clone(),
+                            );
+                        }
+                    }
+                }
+
+                // Transfer remaining to creator.
+                if balance > 0 {
+                    token_client.transfer(&contract_address, &config.creator, &balance);
+                    // Emit funds_released event for this token.
+                    events::emit_funds_released(&env, project_id, token, balance);
+                }
             }
         }
 

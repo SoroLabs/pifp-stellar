@@ -125,3 +125,12 @@ pub struct ProjectBalances {
     pub project_id: u64,
     pub balances: Vec<TokenBalance>,
 }
+/// Global protocol configuration managed by the SuperAdmin.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolConfig {
+    /// Recipient of the platform fee.
+    pub fee_recipient: Address,
+    /// Platform fee in basis points (1 BPS = 0.01%).
+    pub fee_bps: u32,
+}
