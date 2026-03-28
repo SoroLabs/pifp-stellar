@@ -1,0 +1,123 @@
+    Blocking waiting for file lock on build directory
+    Checking pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+error: this file contains an unclosed delimiter
+   --> contracts/pifp_protocol/src/lib.rs:486:3
+    |
+74  | impl PifpProtocol {
+    |                   - unclosed delimiter
+...
+290 |         if !found {
+    |                   - this delimiter might not be properly closed...
+...
+332 |     }
+    |     - ...as it matches this but it has different indentation
+...
+486 | }
+    |  ^
+
+error: could not compile `pifp_protocol` (lib) due to 1 previous error
+Compiling data-encoding v2.10.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.6
+    Checking num-integer v0.1.46
+    Checking digest v0.10.7
+   Compiling ethnum v1.5.2
+   Compiling escape-bytes v0.1.1
+    Checking getrandom v0.2.17
+    Checking num-bigint v0.4.6
+    Checking rand_core v0.6.4
+    Checking ff v0.13.1
+   Compiling sha2 v0.10.9
+   Compiling rustc_version v0.4.1
+    Checking der v0.7.10
+    Checking either v1.15.0
+    Checking once_cell v1.21.3
+    Checking base16ct v0.2.0
+    Checking itertools v0.10.5
+    Checking group v0.13.0
+    Checking crypto-bigint v0.5.5
+    Checking signature v2.2.0
+    Checking sec1 v0.7.3
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.149
+    Checking hmac v0.12.1
+   Compiling hashbrown v0.16.1
+   Compiling equivalent v1.0.2
+   Compiling thiserror v1.0.69
+    Checking rfc6979 v0.4.0
+    Checking libm v0.2.16
+   Compiling curve25519-dalek v4.1.3
+   Compiling hex v0.4.3
+   Compiling crate-git-revision v0.0.6
+   Compiling darling_macro v0.21.3
+   Compiling indexmap v2.13.0
+   Compiling stellar-strkey v0.0.13
+   Compiling stellar-xdr v25.0.0
+    Checking elliptic-curve v0.13.8
+    Checking indexmap-nostd v0.4.0
+   Compiling darling v0.21.3
+   Compiling serde_with_macros v3.16.1
+    Checking downcast-rs v1.2.1
+    Checking wasmi_core v0.13.0
+    Checking wasmparser-nostd v0.100.2
+    Checking ppv-lite86 v0.2.21
+    Checking ahash v0.8.12
+   Compiling wasmparser v0.116.1
+    Checking hashbrown v0.13.2
+    Checking ecdsa v0.16.9
+    Checking rand_chacha v0.3.1
+    Checking rand v0.8.5
+   Compiling soroban-env-common v25.0.1
+   Compiling darling_core v0.20.11
+    Checking smallvec v1.15.1
+    Checking base64 v0.22.1
+    Checking ark-std v0.4.0
+    Checking spin v0.9.8
+    Checking byteorder v1.5.0
+    Checking ark-serialize v0.4.2
+   Compiling serde_with v3.16.1
+    Checking wasmi_arena v0.4.1
+    Checking ark-ff v0.4.2
+    Checking hash32 v0.3.1
+    Checking soroban-wasmi v0.31.1-soroban.20.0.1
+   Compiling darling_macro v0.20.11
+    Checking primeorder v0.13.6
+   Compiling stellar-strkey v0.0.16
+    Checking ed25519 v2.2.3
+   Compiling soroban-env-host v25.0.1
+    Checking static_assertions v1.1.0
+    Checking keccak v0.1.6
+    Checking stable_deref_trait v1.2.1
+    Checking heapless v0.8.0
+    Checking sha3 v0.10.8
+    Checking ed25519-dalek v2.2.0
+    Checking p256 v0.13.2
+   Compiling darling v0.20.11
+    Checking k256 v0.13.4
+   Compiling soroban-sdk v25.3.0
+    Checking hex-literal v0.4.1
+    Checking ark-poly v0.4.2
+    Checking ark-ec v0.4.2
+    Checking ark-bls12-381 v0.4.0
+    Checking ark-bn254 v0.4.0
+   Compiling soroban-spec v25.3.0
+   Compiling soroban-spec-rust v25.3.0
+   Compiling soroban-env-macros v25.0.1
+   Compiling soroban-sdk-macros v25.3.0
+    Checking pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+error: this file contains an unclosed delimiter
+   --> contracts/pifp_protocol/src/lib.rs:486:3
+    |
+74  | impl PifpProtocol {
+    |                   - unclosed delimiter
+...
+290 |         if !found {
+    |                   - this delimiter might not be properly closed...
+...
+332 |     }
+    |     - ...as it matches this but it has different indentation
+...
+486 | }
+    |  ^
+
+error: could not compile `pifp_protocol` (lib) due to 1 previous error

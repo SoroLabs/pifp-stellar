@@ -1,0 +1,676 @@
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:63:18
+   |
+63 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:73:18
+   |
+73 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:79:18
+   |
+79 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:89:18
+   |
+89 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:98:18
+   |
+98 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:108:18
+    |
+108 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:114:18
+    |
+114 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:118:18
+    |
+118 |     env.events().publish((symbol_short!("paused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:122:18
+    |
+122 |     env.events().publish((symbol_short!("unpaused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:292:18
+    |
+292 |     env.events().publish((event, target.clone(), role_sym), by);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:298:10
+    |
+298 |         .publish((symbol_short!("role_del"), target.clone()), by);
+    |          ^^^^^^^
+
+warning: function `add_to_donator_balance` is never used
+   --> contracts/pifp_protocol/src/storage.rs:388:8
+    |
+388 | pub fn add_to_donator_balance(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `pifp_protocol` (lib) generated 12 warnings
+   Compiling pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+warning: `pifp_protocol` (lib test) generated 12 warnings (12 duplicates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.97s
+     Running unittests src/lib.rs (target/debug/deps/pifp_protocol-7943ac6513467b8e)
+
+running 63 tests
+test fuzz_test::fuzz_register_random_proof_hash ... ok
+test fuzz_test::fuzz_register_valid_goal ... ok
+test fuzz_test::fuzz_immutability_after_verify ... ok
+test fuzz_test::fuzz_register_valid_deadline ... ok
+test rbac_test::test_admin_can_grant_project_manager ... FAILED
+test rbac_test::test_admin_cannot_grant_super_admin - should panic ... ok
+test rbac_test::test_init_sets_super_admin ... FAILED
+test rbac_test::test_oracle_can_verify ... FAILED
+test rbac_test::test_project_manager_can_register ... FAILED
+test rbac_test::test_super_admin_can_grant_admin ... FAILED
+test rbac_test::test_super_admin_can_grant_oracle ... FAILED
+test rbac_test::test_super_admin_can_revoke_admin ... FAILED
+test rbac_test::test_transfer_super_admin ... FAILED
+test test::test_admin_can_pause_and_unpause ... FAILED
+test test::test_deposit_after_deadline_fails - should panic ... FAILED
+test test::test_deposit_fails_when_paused - should panic ... FAILED
+test test::test_deposit_zero_amount_fails - should panic ... FAILED
+test test::test_init_sets_super_admin ... FAILED
+test test::test_init_twice_panics - should panic ... ok
+test test::test_non_admin_cannot_pause - should panic ... FAILED
+test test::test_project_exists_and_maybe_load_helpers ... FAILED
+test test::test_queries_work_when_paused ... FAILED
+test test::test_register_duplicate_tokens_fails - should panic ... FAILED
+test test::test_register_past_deadline_fails - should panic ... FAILED
+test test::test_register_project_success ... FAILED
+test test::test_register_zero_goal_fails - should panic ... FAILED
+test test::test_registration_fails_when_paused - should panic ... FAILED
+test test_donation_count::test_donation_count_complex_scenario ... FAILED
+test test_donation_count::test_donation_count_increments_for_different_donors ... FAILED
+test test_donation_count::test_donation_count_increments_for_new_donor ... FAILED
+test test_donation_count::test_donation_count_increments_for_same_donor_different_tokens ... FAILED
+test test_donation_count::test_donation_count_initialized_to_zero ... FAILED
+test test_donation_count::test_donation_count_stays_same_for_repeated_donor ... FAILED
+test test_errors::test_deposit_on_nonexistent_project - should panic ... FAILED
+test test_errors::test_deposit_unaccepted_token_fails - should panic ... FAILED
+test test_errors::test_expire_completed_project_fails_with_invalid_transition - should panic ... FAILED
+test test_errors::test_expire_project_before_deadline_fails - should panic ... FAILED
+test test_errors::test_get_project_balances_not_found - should panic ... FAILED
+test test_errors::test_get_project_not_found - should panic ... FAILED
+test test_errors::test_register_deadline_too_far_in_future_fails - should panic ... FAILED
+test test_errors::test_register_empty_tokens_fails - should panic ... FAILED
+test test_errors::test_register_goal_exceeds_upper_bound_fails - should panic ... FAILED
+test test_errors::test_register_negative_goal_fails - should panic ... FAILED
+test test_errors::test_register_too_many_tokens_fails - should panic ... FAILED
+test test_errors::test_verify_already_completed_project - should panic ... FAILED
+test test_errors::test_verify_when_paused_fails - should panic ... FAILED
+test test_errors::test_verify_wrong_proof_hash_fails - should panic ... FAILED
+test test_expire::test_expire_active_project_success ... FAILED
+test test_expire::test_expire_before_deadline_panics - should panic ... ok
+test test_expire::test_expire_completed_project_panics - should panic ... ok
+test test_expire::test_expire_project_success ... FAILED
+test test_expire::test_expire_wrong_status_panics - should panic ... ok
+test test_refund::test_refund_double_refund_fails - should panic ... FAILED
+test test_refund::test_refund_fails_when_not_expired - should panic ... FAILED
+test test_refund::test_refund_success_after_expiry ... FAILED
+test test_refund::test_refund_wrong_donator_fails - should panic ... FAILED
+test fuzz_test::fuzz_full_lifecycle ... ok
+test fuzz_test::fuzz_deposit_single ... ok
+test fuzz_test::fuzz_immutability_after_deposit ... ok
+test fuzz_test::fuzz_verify_wrong_hash_always_fails ... ok
+test fuzz_test::fuzz_verify_correct_hash_always_succeeds ... ok
+test fuzz_test::fuzz_sequential_ids ... ok
+test fuzz_test::fuzz_deposit_multiple ... ok
+
+failures:
+
+---- rbac_test::test_admin_can_grant_project_manager stdout ----
+
+thread 'rbac_test::test_admin_can_grant_project_manager' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- rbac_test::test_init_sets_super_admin stdout ----
+
+thread 'rbac_test::test_init_sets_super_admin' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_oracle_can_verify stdout ----
+
+thread 'rbac_test::test_oracle_can_verify' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_project_manager_can_register stdout ----
+
+thread 'rbac_test::test_project_manager_can_register' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_super_admin_can_grant_admin stdout ----
+
+thread 'rbac_test::test_super_admin_can_grant_admin' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_super_admin_can_grant_oracle stdout ----
+
+thread 'rbac_test::test_super_admin_can_grant_oracle' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_super_admin_can_revoke_admin stdout ----
+
+thread 'rbac_test::test_super_admin_can_revoke_admin' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- rbac_test::test_transfer_super_admin stdout ----
+
+thread 'rbac_test::test_transfer_super_admin' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_admin_can_pause_and_unpause stdout ----
+
+thread 'test::test_admin_can_pause_and_unpause' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_deposit_after_deadline_fails stdout ----
+
+thread 'test::test_deposit_after_deadline_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #14)"`
+---- test::test_deposit_fails_when_paused stdout ----
+
+thread 'test::test_deposit_fails_when_paused' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #19)"`
+---- test::test_deposit_zero_amount_fails stdout ----
+
+thread 'test::test_deposit_zero_amount_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #11)"`
+---- test::test_init_sets_super_admin stdout ----
+
+thread 'test::test_init_sets_super_admin' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_non_admin_cannot_pause stdout ----
+
+thread 'test::test_non_admin_cannot_pause' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #6)"`
+---- test::test_project_exists_and_maybe_load_helpers stdout ----
+
+thread 'test::test_project_exists_and_maybe_load_helpers' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_queries_work_when_paused stdout ----
+
+thread 'test::test_queries_work_when_paused' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_register_duplicate_tokens_fails stdout ----
+
+thread 'test::test_register_duplicate_tokens_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #12)"`
+---- test::test_register_past_deadline_fails stdout ----
+
+thread 'test::test_register_past_deadline_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #13)"`
+---- test::test_register_project_success stdout ----
+
+thread 'test::test_register_project_success' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test::test_register_zero_goal_fails stdout ----
+
+thread 'test::test_register_zero_goal_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #7)"`
+---- test::test_registration_fails_when_paused stdout ----
+
+thread 'test::test_registration_fails_when_paused' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #19)"`
+---- test_donation_count::test_donation_count_complex_scenario stdout ----
+
+thread 'test_donation_count::test_donation_count_complex_scenario' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_donation_count::test_donation_count_increments_for_different_donors stdout ----
+
+thread 'test_donation_count::test_donation_count_increments_for_different_donors' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_donation_count::test_donation_count_increments_for_new_donor stdout ----
+
+thread 'test_donation_count::test_donation_count_increments_for_new_donor' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_donation_count::test_donation_count_increments_for_same_donor_different_tokens stdout ----
+
+thread 'test_donation_count::test_donation_count_increments_for_same_donor_different_tokens' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_donation_count::test_donation_count_initialized_to_zero stdout ----
+
+thread 'test_donation_count::test_donation_count_initialized_to_zero' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_donation_count::test_donation_count_stays_same_for_repeated_donor stdout ----
+
+thread 'test_donation_count::test_donation_count_stays_same_for_repeated_donor' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_errors::test_deposit_on_nonexistent_project stdout ----
+
+thread 'test_errors::test_deposit_on_nonexistent_project' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #1)"`
+---- test_errors::test_deposit_unaccepted_token_fails stdout ----
+
+thread 'test_errors::test_deposit_unaccepted_token_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #23)"`
+---- test_errors::test_expire_completed_project_fails_with_invalid_transition stdout ----
+
+thread 'test_errors::test_expire_completed_project_fails_with_invalid_transition' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #22)"`
+---- test_errors::test_expire_project_before_deadline_fails stdout ----
+
+thread 'test_errors::test_expire_project_before_deadline_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #21)"`
+---- test_errors::test_get_project_balances_not_found stdout ----
+
+thread 'test_errors::test_get_project_balances_not_found' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #1)"`
+---- test_errors::test_get_project_not_found stdout ----
+
+thread 'test_errors::test_get_project_not_found' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #1)"`
+---- test_errors::test_register_deadline_too_far_in_future_fails stdout ----
+
+thread 'test_errors::test_register_deadline_too_far_in_future_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #13)"`
+---- test_errors::test_register_empty_tokens_fails stdout ----
+
+thread 'test_errors::test_register_empty_tokens_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #17)"`
+---- test_errors::test_register_goal_exceeds_upper_bound_fails stdout ----
+
+thread 'test_errors::test_register_goal_exceeds_upper_bound_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #7)"`
+---- test_errors::test_register_negative_goal_fails stdout ----
+
+thread 'test_errors::test_register_negative_goal_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #7)"`
+---- test_errors::test_register_too_many_tokens_fails stdout ----
+
+thread 'test_errors::test_register_too_many_tokens_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #10)"`
+---- test_errors::test_verify_already_completed_project stdout ----
+
+thread 'test_errors::test_verify_already_completed_project' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #3)"`
+---- test_errors::test_verify_when_paused_fails stdout ----
+
+thread 'test_errors::test_verify_when_paused_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #19)"`
+---- test_errors::test_verify_wrong_proof_hash_fails stdout ----
+
+thread 'test_errors::test_verify_wrong_proof_hash_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 21]\n"`,
+ expected substring: `"HostError: Error(Contract, #16)"`
+---- test_expire::test_expire_active_project_success stdout ----
+
+thread 'test_expire::test_expire_active_project_success' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_expire::test_expire_project_success stdout ----
+
+thread 'test_expire::test_expire_project_success' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 21]
+
+
+---- test_refund::test_refund_double_refund_fails stdout ----
+
+thread 'test_refund::test_refund_double_refund_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 23]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 23]\n"`,
+ expected substring: `"HostError: Error(Contract, #4)"`
+---- test_refund::test_refund_fails_when_not_expired stdout ----
+
+thread 'test_refund::test_refund_fails_when_not_expired' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 23]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 23]\n"`,
+ expected substring: `"HostError: Error(Contract, #21)"`
+---- test_refund::test_refund_success_after_expiry stdout ----
+
+thread 'test_refund::test_refund_success_after_expiry' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 23]
+
+
+---- test_refund::test_refund_wrong_donator_fails stdout ----
+
+thread 'test_refund::test_refund_wrong_donator_fails' panicked at /home/edohwares/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/soroban-sdk-25.3.0/src/ledger.rs:117:40:
+called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)
+
+Event log (newest first):
+   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:["ledger protocol version too old for host", 23]
+
+note: panic did not contain expected string
+      panic message: `"called `Result::unwrap()` on an `Err` value: HostError: Error(Context, InternalError)\n\nEvent log (newest first):\n   0: [Diagnostic Event] topics:[error, Error(Context, InternalError)], data:[\"ledger protocol version too old for host\", 23]\n"`,
+ expected substring: `"HostError: Error(Contract, #4)"`
+
+failures:
+    rbac_test::test_admin_can_grant_project_manager
+    rbac_test::test_init_sets_super_admin
+    rbac_test::test_oracle_can_verify
+    rbac_test::test_project_manager_can_register
+    rbac_test::test_super_admin_can_grant_admin
+    rbac_test::test_super_admin_can_grant_oracle
+    rbac_test::test_super_admin_can_revoke_admin
+    rbac_test::test_transfer_super_admin
+    test::test_admin_can_pause_and_unpause
+    test::test_deposit_after_deadline_fails
+    test::test_deposit_fails_when_paused
+    test::test_deposit_zero_amount_fails
+    test::test_init_sets_super_admin
+    test::test_non_admin_cannot_pause
+    test::test_project_exists_and_maybe_load_helpers
+    test::test_queries_work_when_paused
+    test::test_register_duplicate_tokens_fails
+    test::test_register_past_deadline_fails
+    test::test_register_project_success
+    test::test_register_zero_goal_fails
+    test::test_registration_fails_when_paused
+    test_donation_count::test_donation_count_complex_scenario
+    test_donation_count::test_donation_count_increments_for_different_donors
+    test_donation_count::test_donation_count_increments_for_new_donor
+    test_donation_count::test_donation_count_increments_for_same_donor_different_tokens
+    test_donation_count::test_donation_count_initialized_to_zero
+    test_donation_count::test_donation_count_stays_same_for_repeated_donor
+    test_errors::test_deposit_on_nonexistent_project
+    test_errors::test_deposit_unaccepted_token_fails
+    test_errors::test_expire_completed_project_fails_with_invalid_transition
+    test_errors::test_expire_project_before_deadline_fails
+    test_errors::test_get_project_balances_not_found
+    test_errors::test_get_project_not_found
+    test_errors::test_register_deadline_too_far_in_future_fails
+    test_errors::test_register_empty_tokens_fails
+    test_errors::test_register_goal_exceeds_upper_bound_fails
+    test_errors::test_register_negative_goal_fails
+    test_errors::test_register_too_many_tokens_fails
+    test_errors::test_verify_already_completed_project
+    test_errors::test_verify_when_paused_fails
+    test_errors::test_verify_wrong_proof_hash_fails
+    test_expire::test_expire_active_project_success
+    test_expire::test_expire_project_success
+    test_refund::test_refund_double_refund_fails
+    test_refund::test_refund_fails_when_not_expired
+    test_refund::test_refund_success_after_expiry
+    test_refund::test_refund_wrong_donator_fails
+
+test result: FAILED. 16 passed; 47 failed; 0 ignored; 0 measured; 0 filtered out; finished in 29.44s
+
+error: test failed, to rerun pass `--lib`

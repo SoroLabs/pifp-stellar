@@ -1,0 +1,18 @@
+Default host: x86_64-unknown-linux-gnu
+rustup home:  /home/edohwares/.rustup
+
+installed toolchains
+--------------------
+stable-x86_64-unknown-linux-gnu (active, default)
+nightly-x86_64-unknown-linux-gnu
+1.85.0-x86_64-unknown-linux-gnu
+1.86.0-x86_64-unknown-linux-gnu
+solana
+
+active toolchain
+----------------
+name: stable-x86_64-unknown-linux-gnu
+active because: it's the default toolchain
+installed targets:
+  wasm32-unknown-unknown
+  x86_64-unknown-linux-gnu

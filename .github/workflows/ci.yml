@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  MANIFEST_PATH: contracts/pifp_protocol/Cargo.toml
+
+jobs:
+  test:
+    name: Test and Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+
+      - name: Cache Cargo Registry & Build Artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check Formatting
+        run: cargo fmt --manifest-path ${{ env.MANIFEST_PATH }} -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path ${{ env.MANIFEST_PATH }} -- -D warnings
+
+      - name: Run Tests
+        run: cargo test --manifest-path ${{ env.MANIFEST_PATH }}
+
+  build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Add wasm32v1-none target
+        run: rustup target add wasm32v1-none
+
+      - name: Cache Cargo Registry & Build Artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Stellar CLI
+        run: |
+          wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
+          sudo mv stellar /usr/local/bin/
+          stellar --version
+
+      - name: Build Smart Contract
+        run: stellar contract build --manifest-path ${{ env.MANIFEST_PATH }}

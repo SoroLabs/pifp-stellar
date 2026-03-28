@@ -1,0 +1,132 @@
+   Compiling pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+warning: unused import: `LedgerInfo`
+ --> contracts/pifp_protocol/src/test_refund.rs:4:39
+  |
+4 |     testutils::{Address as _, Ledger, LedgerInfo},
+  |                                       ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `LedgerInfo`
+ --> contracts/pifp_protocol/src/test_utils.rs:4:39
+  |
+4 |     testutils::{Address as _, Ledger, LedgerInfo},
+  |                                       ^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:63:18
+   |
+63 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:73:18
+   |
+73 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:79:18
+   |
+79 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:89:18
+   |
+89 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:98:18
+   |
+98 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:108:18
+    |
+108 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:114:18
+    |
+114 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:118:18
+    |
+118 |     env.events().publish((symbol_short!("paused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:122:18
+    |
+122 |     env.events().publish((symbol_short!("unpaused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:292:18
+    |
+292 |     env.events().publish((event, target.clone(), role_sym), by);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:298:10
+    |
+298 |         .publish((symbol_short!("role_del"), target.clone()), by);
+    |          ^^^^^^^
+
+error[E0277]: `ContractEvents` is not an iterator
+  --> contracts/pifp_protocol/src/test_events.rs:15:14
+   |
+15 |     for e in all_events {
+   |              ^^^^^^^^^^ `ContractEvents` is not an iterator
+   |
+   = help: the trait `Iterator` is not implemented for `ContractEvents`
+   = note: required for `ContractEvents` to implement `IntoIterator`
+
+error[E0277]: `ContractEvents` is not an iterator
+  --> contracts/pifp_protocol/src/test_events.rs:56:14
+   |
+56 |     for e in all_events {
+   |              ^^^^^^^^^^ `ContractEvents` is not an iterator
+   |
+   = help: the trait `Iterator` is not implemented for `ContractEvents`
+   = note: required for `ContractEvents` to implement `IntoIterator`
+
+warning: function `add_to_donator_balance` is never used
+   --> contracts/pifp_protocol/src/storage.rs:388:8
+    |
+388 | pub fn add_to_donator_balance(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+error[E0277]: `ContractEvents` is not an iterator
+  --> contracts/pifp_protocol/src/test_events.rs:93:14
+   |
+93 |     for e in all_events {
+   |              ^^^^^^^^^^ `ContractEvents` is not an iterator
+   |
+   = help: the trait `Iterator` is not implemented for `ContractEvents`
+   = note: required for `ContractEvents` to implement `IntoIterator`
+
+error[E0277]: `ContractEvents` is not an iterator
+   --> contracts/pifp_protocol/src/test_events.rs:202:14
+    |
+202 |     for e in all_events {
+    |              ^^^^^^^^^^ `ContractEvents` is not an iterator
+    |
+    = help: the trait `Iterator` is not implemented for `ContractEvents`
+    = note: required for `ContractEvents` to implement `IntoIterator`
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `pifp_protocol` (lib test) generated 13 warnings (11 duplicates)
+error: could not compile `pifp_protocol` (lib test) due to 4 previous errors; 13 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `pifp_protocol` (lib) generated 12 warnings

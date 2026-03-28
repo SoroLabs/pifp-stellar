@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pifp-oracle
+    environment:
+      # Load from .env file
+      - RPC_URL=${RPC_URL:-https://soroban-testnet.stellar.org}
+      - HORIZON_URL=${HORIZON_URL:-https://horizon-testnet.stellar.org}
+      - CONTRACT_ID=${CONTRACT_ID}
+      - ORACLE_SECRET_KEY=${ORACLE_SECRET_KEY}
+      - IPFS_GATEWAY=${IPFS_GATEWAY:-https://ipfs.io}
+      - NETWORK_PASSPHRASE=${NETWORK_PASSPHRASE:-Test SDF Network ; September 2015}
+      - TIMEOUT_SECS=${TIMEOUT_SECS:-30}
+      - RUST_LOG=${RUST_LOG:-info}
+    # Override command with your project ID and proof CID
+    command: 
+      - "--project-id"
+      - "${PROJECT_ID:-1}"
+      - "--proof-cid"
+      - "${PROOF_CID:-QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG}"
+      - "${DRY_RUN:---dry-run}"
+    restart: "no"
+    networks:
+      - pifp-network
+
+networks:
+  pifp-network:
+    driver: bridge

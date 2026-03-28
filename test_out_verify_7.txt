@@ -1,0 +1,187 @@
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:63:18
+   |
+63 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:73:18
+   |
+73 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:79:18
+   |
+79 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:89:18
+   |
+89 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:98:18
+   |
+98 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:108:18
+    |
+108 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:114:18
+    |
+114 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:118:18
+    |
+118 |     env.events().publish((symbol_short!("paused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:122:18
+    |
+122 |     env.events().publish((symbol_short!("unpaused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:292:18
+    |
+292 |     env.events().publish((event, target.clone(), role_sym), by);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:298:10
+    |
+298 |         .publish((symbol_short!("role_del"), target.clone()), by);
+    |          ^^^^^^^
+
+warning: function `add_to_donator_balance` is never used
+   --> contracts/pifp_protocol/src/storage.rs:388:8
+    |
+388 | pub fn add_to_donator_balance(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `pifp_protocol` (lib) generated 12 warnings
+   Compiling pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+warning: unused imports: `IntoVal`, `TryIntoVal`, `symbol_short`, and `testutils::Events`
+ --> contracts/pifp_protocol/src/test_events.rs:3:19
+  |
+3 | use soroban_sdk::{symbol_short, testutils::Events, vec, IntoVal, TryIntoVal};
+  |                   ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^       ^^^^^^^  ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused imports: `ProjectCreated`, `ProjectFunded`, and `ProjectVerified`
+ --> contracts/pifp_protocol/src/test_events.rs:5:21
+  |
+5 | use crate::events::{ProjectCreated, ProjectFunded, ProjectVerified};
+  |                     ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^
+
+warning: unused import: `LedgerInfo`
+ --> contracts/pifp_protocol/src/test_refund.rs:4:39
+  |
+4 |     testutils::{Address as _, Ledger, LedgerInfo},
+  |                                       ^^^^^^^^^^
+
+warning: unused import: `LedgerInfo`
+ --> contracts/pifp_protocol/src/test_utils.rs:4:39
+  |
+4 |     testutils::{Address as _, Ledger, LedgerInfo},
+  |                                       ^^^^^^^^^^
+
+warning: `pifp_protocol` (lib test) generated 16 warnings (12 duplicates) (run `cargo fix --lib -p pifp_protocol --tests` to apply 4 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.84s
+     Running unittests src/lib.rs (target/debug/deps/pifp_protocol-7943ac6513467b8e)
+
+running 69 tests
+test fuzz_test::fuzz_register_valid_deadline ... ok
+test fuzz_test::fuzz_register_valid_goal ... ok
+test fuzz_test::fuzz_register_random_proof_hash ... ok
+test fuzz_test::fuzz_immutability_after_verify ... ok
+test rbac_test::test_admin_can_grant_project_manager ... ok
+test rbac_test::test_admin_cannot_grant_super_admin - should panic ... ok
+test rbac_test::test_init_sets_super_admin ... ok
+test rbac_test::test_oracle_can_verify ... ok
+test rbac_test::test_project_manager_can_register ... ok
+test rbac_test::test_super_admin_can_grant_admin ... ok
+test rbac_test::test_super_admin_can_grant_oracle ... ok
+test rbac_test::test_super_admin_can_revoke_admin ... ok
+test rbac_test::test_transfer_super_admin ... ok
+test test::test_admin_can_pause_and_unpause ... ok
+test test::test_deposit_after_deadline_fails - should panic ... ok
+test test::test_deposit_fails_when_paused - should panic ... ok
+test test::test_deposit_zero_amount_fails - should panic ... ok
+test test::test_init_sets_super_admin ... ok
+test test::test_init_twice_panics - should panic ... ok
+test test::test_non_admin_cannot_pause - should panic ... ok
+test test::test_project_exists_and_maybe_load_helpers ... ok
+test test::test_queries_work_when_paused ... ok
+test test::test_register_duplicate_tokens_fails - should panic ... ok
+test test::test_register_past_deadline_fails - should panic ... ok
+test test::test_register_project_success ... ok
+test test::test_register_zero_goal_fails - should panic ... ok
+test test::test_registration_fails_when_paused - should panic ... ok
+test test_donation_count::test_donation_count_complex_scenario ... ok
+test test_donation_count::test_donation_count_increments_for_different_donors ... ok
+test test_donation_count::test_donation_count_increments_for_new_donor ... ok
+test fuzz_test::fuzz_immutability_after_deposit ... ok
+test test_donation_count::test_donation_count_initialized_to_zero ... ok
+test test_donation_count::test_donation_count_increments_for_same_donor_different_tokens ... ok
+test test_errors::test_deposit_on_nonexistent_project - should panic ... ok
+test fuzz_test::fuzz_deposit_single ... ok
+test test_errors::test_deposit_unaccepted_token_fails - should panic ... ok
+test test_errors::test_expire_completed_project_fails_with_invalid_transition - should panic ... ok
+test test_errors::test_expire_project_before_deadline_fails - should panic ... ok
+test test_errors::test_get_project_balances_not_found - should panic ... ok
+test test_donation_count::test_donation_count_stays_same_for_repeated_donor ... ok
+test test_errors::test_register_deadline_too_far_in_future_fails - should panic ... ok
+test test_errors::test_get_project_not_found - should panic ... ok
+test test_errors::test_register_empty_tokens_fails - should panic ... ok
+test test_errors::test_register_too_many_tokens_fails - should panic ... ok
+test test_errors::test_register_goal_exceeds_upper_bound_fails - should panic ... ok
+test test_errors::test_register_negative_goal_fails - should panic ... ok
+test test_errors::test_verify_wrong_proof_hash_fails - should panic ... ok
+test test_errors::test_verify_when_paused_fails - should panic ... ok
+test test_errors::test_verify_already_completed_project - should panic ... ok
+test test_events::test_project_created_event ... ok
+test test_events::test_funds_released_to_creator ... ok
+test test_events::test_get_project_balances ... ok
+test test_events::test_project_verified_event ... ok
+test test_events::test_project_funded_event ... ok
+test test_events::test_refunded_event ... ok
+test test_expire::test_expire_completed_project_panics - should panic ... ok
+test test_expire::test_expire_active_project_success ... ok
+test fuzz_test::fuzz_full_lifecycle ... ok
+test test_expire::test_expire_before_deadline_panics - should panic ... ok
+test test_expire::test_expire_project_success ... ok
+test test_expire::test_expire_wrong_status_panics - should panic ... ok
+test test_refund::test_refund_fails_when_not_expired - should panic ... ok
+test test_refund::test_refund_double_refund_fails - should panic ... ok
+test test_refund::test_refund_wrong_donator_fails - should panic ... ok
+test test_refund::test_refund_success_after_expiry ... ok
+test fuzz_test::fuzz_verify_wrong_hash_always_fails ... ok
+test fuzz_test::fuzz_verify_correct_hash_always_succeeds ... ok
+test fuzz_test::fuzz_sequential_ids ... ok
+test fuzz_test::fuzz_deposit_multiple ... ok
+
+test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 27.92s
+
+   Doc-tests pifp_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

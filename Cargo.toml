@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "contracts/pifp_protocol",
+  "backend/indexer",
+  "backend/oracle",
 ]
 
 [profile.release]
@@ -10,3 +12,4 @@ strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+overflow-checks = true

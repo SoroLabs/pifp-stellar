@@ -1,0 +1,42 @@
+commit 98b1e3251a8bb377ed68c7504555c3149f02fb59
+Merge: 8877b10 8e2bccb
+Author: Gideon Bature <83569891+GideonBature@users.noreply.github.com>
+Date:   Wed Mar 25 06:35:41 2026 +0100
+
+    Merge pull request #85 from SoroLabs/dependabot/cargo/rust-dependencies-b189926bbd
+    
+    chore(deps): bump the rust-dependencies group with 9 updates
+
+commit 8877b10b95206e621965553238117e58d7c8d124
+Merge: 43a1d8f 8511a6d
+Author: Gideon Bature <83569891+GideonBature@users.noreply.github.com>
+Date:   Wed Mar 25 06:35:11 2026 +0100
+
+    Merge pull request #86 from AYo101o/fix/implement-robust-error-handling
+    
+    fix: Implement Robust Error Handling (closes #5)
+
+commit 8511a6d44f520ad16e3a0cd2fbc61660f79027bb
+Merge: 8d6a3c5 43a1d8f
+Author: Gideon Bature <83569891+GideonBature@users.noreply.github.com>
+Date:   Wed Mar 25 06:35:00 2026 +0100
+
+    Merge branch 'main' into fix/implement-robust-error-handling
+
+commit 43a1d8fb8e5247bd173f7cdfe19338eb9ac7e901
+Merge: 54cbf0d 2c76cf2
+Author: Gideon Bature <83569891+GideonBature@users.noreply.github.com>
+Date:   Wed Mar 25 06:34:14 2026 +0100
+
+    Merge pull request #87 from AYo101o/fix/comprehensive-smart-contract-api-reference
+    
+    fix: comprehensive-smart-contract-api-reference closes(#79)
+
+commit 54cbf0d9d77477a15c227354caa3324251b5a9bd
+Merge: b685706 301b019
+Author: Gideon Bature <83569891+GideonBature@users.noreply.github.com>
+Date:   Wed Mar 25 06:33:43 2026 +0100
+
+    Merge pull request #88 from AYo101o/fix/backend-indexer-setup-and-architecture-guide
+    
+    fix: backend-indexer-setup-and-architecture-guide closes(#80)

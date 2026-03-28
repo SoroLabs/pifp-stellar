@@ -1,0 +1,105 @@
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:63:18
+   |
+63 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+   |
+   = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:73:18
+   |
+73 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:79:18
+   |
+79 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:89:18
+   |
+89 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+  --> contracts/pifp_protocol/src/events.rs:98:18
+   |
+98 |     env.events().publish(topics, data);
+   |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:108:18
+    |
+108 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:114:18
+    |
+114 |     env.events().publish(topics, data);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:118:18
+    |
+118 |     env.events().publish((symbol_short!("paused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/events.rs:122:18
+    |
+122 |     env.events().publish((symbol_short!("unpaused"), admin), ());
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:292:18
+    |
+292 |     env.events().publish((event, target.clone(), role_sym), by);
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> contracts/pifp_protocol/src/rbac.rs:298:10
+    |
+298 |         .publish((symbol_short!("role_del"), target.clone()), by);
+    |          ^^^^^^^
+
+warning: function `add_to_donator_balance` is never used
+   --> contracts/pifp_protocol/src/storage.rs:382:8
+    |
+382 | pub fn add_to_donator_balance(
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: `pifp_protocol` (lib) generated 12 warnings
+   Compiling pifp_protocol v0.1.0 (/home/edohwares/Desktop/Room/drips/pifp-stellar/contracts/pifp_protocol)
+error[E0599]: no method named `pop_back` found for struct `ContractEvents` in the current scope
+  --> contracts/pifp_protocol/src/test_events.rs:14:33
+   |
+14 |     let last_event = all_events.pop_back().expect("No events found");
+   |                                 ^^^^^^^^ method not found in `ContractEvents`
+
+error[E0599]: no method named `pop_back` found for struct `ContractEvents` in the current scope
+  --> contracts/pifp_protocol/src/test_events.rs:51:33
+   |
+51 |     let last_event = all_events.pop_back().expect("No events found");
+   |                                 ^^^^^^^^ method not found in `ContractEvents`
+
+error[E0599]: no method named `pop_back` found for struct `ContractEvents` in the current scope
+  --> contracts/pifp_protocol/src/test_events.rs:84:33
+   |
+84 |     let last_event = all_events.pop_back().expect("No events found");
+   |                                 ^^^^^^^^ method not found in `ContractEvents`
+
+error[E0599]: no method named `pop_back` found for struct `ContractEvents` in the current scope
+   --> contracts/pifp_protocol/src/test_events.rs:189:33
+    |
+189 |     let last_event = all_events.pop_back().expect("No events found");
+    |                                 ^^^^^^^^ method not found in `ContractEvents`
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `pifp_protocol` (lib test) generated 11 warnings (11 duplicates)
+error: could not compile `pifp_protocol` (lib test) due to 4 previous errors; 11 warnings emitted
