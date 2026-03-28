@@ -29,14 +29,13 @@ use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Byte
 
 pub mod errors;
 pub mod events;
+pub mod invariants_checker;
 pub mod rbac;
 mod storage;
 mod types;
 
 #[cfg(test)]
 mod fuzz_test;
-#[cfg(test)]
-mod invariants;
 #[cfg(test)]
 mod rbac_test;
 
@@ -329,7 +328,41 @@ impl PifpProtocol {
         events::emit_project_funded(&env, project_id, donator, amount);
     }
 
-    /// Refund a donator from an expired project that was not verified.
+    /// Mark an active project as cancelled.
+    ///
+    /// - `caller` must be `SuperAdmin` or `ProjectManager`.
+    /// - If `caller` is `ProjectManager`, it must be the project's creator.
+    /// - Only projects in `Active` status may be cancelled.
+    pub fn cancel_project(env: Env, caller: Address, project_id: u64) {
+        caller.require_auth();
+        rbac::require_can_cancel_project(&env, &caller);
+
+        let (config, mut state) = load_project_pair(&env, project_id);
+
+        if env.ledger().timestamp() >= config.deadline
+            && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
+        {
+            state.status = ProjectStatus::Expired;
+            save_project_state(&env, project_id, &state);
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+
+        if matches!(rbac::get_role(&env, &caller), Some(Role::ProjectManager))
+            && caller != config.creator
+        {
+            panic_with_error!(&env, Error::NotAuthorized);
+        }
+
+        if state.status != ProjectStatus::Active {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+
+        state.status = ProjectStatus::Cancelled;
+        save_project_state(&env, project_id, &state);
+        events::emit_project_cancelled(&env, project_id, caller);
+    }
+
+    /// Refund a donator from a cancelled or expired project that was not verified.
     pub fn refund(env: Env, donator: Address, project_id: u64, token: Address) {
         donator.require_auth();
 
@@ -342,7 +375,10 @@ impl PifpProtocol {
             save_project_state(&env, project_id, &state);
         }
 
-        if state.status != ProjectStatus::Expired {
+        if !matches!(
+            state.status,
+            ProjectStatus::Expired | ProjectStatus::Cancelled
+        ) {
             panic_with_error!(&env, Error::ProjectNotExpired);
         }
 
@@ -409,6 +445,7 @@ impl PifpProtocol {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
             ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
+            ProjectStatus::Cancelled => panic_with_error!(&env, Error::InvalidTransition),
         }
 
         // Mocked ZK verification: compare submitted hash to stored hash.

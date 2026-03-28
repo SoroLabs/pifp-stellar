@@ -24,3 +24,6 @@ keeper/node_modules/
 keeper/.env
 keeper/.env.*
 keeper/data/tasks.json
+
+# Backup configuration (contains sensitive credentials)
+scripts/.env.backup

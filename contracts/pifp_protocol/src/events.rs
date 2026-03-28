@@ -1,4 +1,6 @@
-use soroban_sdk::{contractevent, Address, BytesN, Env};
+#![allow(deprecated)]
+
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env};
 
 #[contractevent]
 pub struct ProjectCreated {
@@ -31,6 +33,13 @@ pub struct ProjectVerified {
 pub struct ProjectExpired {
     pub project_id: u64,
     pub deadline: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectCancelled {
+    pub project_id: u64,
+    pub cancelled_by: Address,
 }
 
 #[contractevent]
@@ -101,6 +110,15 @@ pub fn emit_project_expired(env: &Env, project_id: u64, deadline: u64) {
         deadline,
     }
     .publish(env);
+}
+
+pub fn emit_project_cancelled(env: &Env, project_id: u64, cancelled_by: Address) {
+    let topics = (symbol_short!("cancelled"), project_id);
+    let data = ProjectCancelled {
+        project_id,
+        cancelled_by,
+    };
+    env.events().publish(topics, data);
 }
 
 pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i128) {

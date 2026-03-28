@@ -193,3 +193,36 @@ fn test_deposit_unaccepted_token_fails() {
     ctx.client
         .deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
 }
+
+// ─────────────────────────────────────────────────────────
+// NotAuthorized (#6)
+// ─────────────────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #6)")]
+fn test_admin_cannot_cancel_project() {
+    let ctx = TestContext::new();
+    let (project, token, sac) = ctx.setup_project(500);
+    let donator = ctx.generate_address();
+    let other_admin = ctx.generate_address();
+
+    ctx.client
+        .grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
+    sac.mint(&donator, &600i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &600i128);
+
+    ctx.client.cancel_project(&other_admin, &project.id);
+}
+
+// ─────────────────────────────────────────────────────────
+// InvalidTransition (#22)
+// ─────────────────────────────────────────────────────────
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #22)")]
+fn test_cancel_non_active_project_fails() {
+    let ctx = TestContext::new();
+    let (project, _, _) = ctx.setup_project(1000);
+    ctx.client.cancel_project(&ctx.manager, &project.id);
+}
