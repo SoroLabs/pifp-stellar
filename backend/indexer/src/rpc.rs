@@ -18,6 +18,20 @@ use crate::events::{EventKind, PifpEvent};
 
 const MAX_BACKOFF_SECS: u64 = 60;
 const INITIAL_BACKOFF_SECS: u64 = 2;
+const PIFP_TOPIC_SYMBOLS: &[&str] = &[
+    "created",
+    "funded",
+    "active",
+    "verified",
+    "expired",
+    "cancelled",
+    "released",
+    "refunded",
+    "role_set",
+    "role_del",
+    "paused",
+    "unpaused",
+];
 
 // ─────────────────────────────────────────────────────────
 // JSON-RPC response shapes
@@ -78,15 +92,26 @@ pub struct RawEvent {
 pub async fn fetch_events(
     client: &Client,
     rpc_url: &str,
-    contract_id: &str,
+    contract_ids: &[String],
     start_ledger: u32,
     cursor: Option<&str>,
     limit: u32,
 ) -> Result<(Vec<RawEvent>, Option<String>, Option<u64>)> {
     let mut backoff = INITIAL_BACKOFF_SECS;
+    let mut use_topic_filter = true;
 
     loop {
-        let params = build_params(contract_id, start_ledger, cursor, limit);
+        let params = build_params(
+            contract_ids,
+            start_ledger,
+            cursor,
+            limit,
+            if use_topic_filter {
+                Some(PIFP_TOPIC_SYMBOLS)
+            } else {
+                None
+            },
+        );
 
         let response = client
             .post(rpc_url)
@@ -118,6 +143,16 @@ pub async fn fetch_events(
                 let body: RpcResponse = resp.json().await?;
 
                 if let Some(err) = body.error {
+                    // Some RPC nodes may reject `topics` filter formats.
+                    // Retry once with contract-only filtering.
+                    if err.code == -32602 && use_topic_filter {
+                        warn!(
+                            "RPC rejected topic filter (code {}), retrying with contract-only filter",
+                            err.code
+                        );
+                        use_topic_filter = false;
+                        continue;
+                    }
                     // Code -32600 / -32601 are hard failures; everything else we retry
                     if err.code == -32600 || err.code == -32601 {
                         return Err(IndexerError::EventParse(format!(
@@ -150,13 +185,28 @@ pub async fn fetch_events(
     }
 }
 
-fn build_params(contract_id: &str, start_ledger: u32, cursor: Option<&str>, limit: u32) -> Value {
+fn build_params(
+    contract_ids: &[String],
+    start_ledger: u32,
+    cursor: Option<&str>,
+    limit: u32,
+    topic_symbols: Option<&[&str]>,
+) -> Value {
+    let mut filter = json!({
+        "type": "contract",
+        "contractIds": contract_ids,
+    });
+    if let Some(symbols) = topic_symbols {
+        let topics: Vec<Value> = symbols
+            .iter()
+            .map(|s| json!([{"type":"symbol","value": s}]))
+            .collect();
+        filter["topics"] = Value::Array(topics);
+    }
+
     let mut params = json!({
         "filters": [
-            {
-                "type": "contract",
-                "contractIds": [contract_id]
-            }
+            filter
         ],
         "pagination": {
             "limit": limit
@@ -177,16 +227,30 @@ fn build_params(contract_id: &str, start_ledger: u32, cursor: Option<&str>, limi
 // ─────────────────────────────────────────────────────────
 
 /// Decode a list of raw RPC events into [`PifpEvent`] structs.
-pub fn decode_events(raw: &[RawEvent], contract_id: &str) -> Vec<PifpEvent> {
+pub fn decode_events(raw: &[RawEvent], contract_ids: &[String]) -> Vec<PifpEvent> {
     raw.iter()
-        .filter_map(|e| decode_single(e, contract_id))
+        .filter_map(|e| decode_single(e, contract_ids))
         .collect()
 }
 
-fn decode_single(raw: &RawEvent, contract_id: &str) -> Option<PifpEvent> {
+fn decode_single(raw: &RawEvent, contract_ids: &[String]) -> Option<PifpEvent> {
     // Extract leading topic symbol to determine event type.
     let first_topic = raw.topic.first()?;
-    let kind = EventKind::from_topic(&extract_symbol(first_topic));
+    let first_symbol = extract_symbol(first_topic);
+    if !PIFP_TOPIC_SYMBOLS.contains(&first_symbol.as_str()) {
+        return None;
+    }
+    let kind = EventKind::from_topic(&first_symbol);
+    if kind == EventKind::Unknown {
+        return None;
+    }
+
+    // Defense-in-depth: ignore events for contracts outside configured scope.
+    if let Some(cid) = raw.contract_id.as_deref() {
+        if !contract_ids.iter().any(|c| c == cid) {
+            return None;
+        }
+    }
 
     let ledger = raw.ledger.unwrap_or(0) as i64;
     let timestamp = raw
@@ -196,27 +260,30 @@ fn decode_single(raw: &RawEvent, contract_id: &str) -> Option<PifpEvent> {
         .unwrap_or(0);
 
     let project_id = raw.topic.get(1).map(|t| extract_u64_or_raw(t));
-
-    let (actor, amount) = decode_data(&raw.value, &kind);
+    let (actor, amount, extra_data) = decode_data(&raw.value, &kind);
 
     Some(PifpEvent {
         event_type: kind.as_str().to_string(),
         project_id,
         actor,
         amount,
+        extra_data,
         ledger,
         timestamp,
         contract_id: raw
             .contract_id
             .clone()
-            .unwrap_or_else(|| contract_id.to_string()),
+            .unwrap_or_else(|| contract_ids.first().cloned().unwrap_or_default()),
         tx_hash: raw.tx_hash.clone(),
     })
 }
 
 /// Pull apart the JSON `value` blob that Soroban returns for event data.
 /// The XDR is decoded by the RPC into a `{"type":…, …}` JSON object.
-fn decode_data(value: &Value, kind: &EventKind) -> (Option<String>, Option<String>) {
+fn decode_data(
+    value: &Value,
+    kind: &EventKind,
+) -> (Option<String>, Option<String>, Option<String>) {
     match kind {
         EventKind::ProjectCreated => {
             let actor = value
@@ -230,20 +297,28 @@ fn decode_data(value: &Value, kind: &EventKind) -> (Option<String>, Option<Strin
                     .map(String::from)
                     .or_else(|| v.as_i64().map(|n| n.to_string()))
             });
-            (actor, amount)
+            let extra = value.get("token").and_then(value_to_string);
+            (actor, amount, extra)
         }
         EventKind::ProjectFunded => {
             let actor = extract_field(value, &["donator", "funder", "address"]);
             let amount = extract_field(value, &["amount"]);
-            (actor, amount)
+            (actor, amount, None)
+        }
+        EventKind::ProjectActive | EventKind::ProjectExpired => (None, None, None),
+        EventKind::ProjectCancelled => {
+            let actor = extract_field(value, &["cancelled_by", "address"]);
+            (actor, None, None)
         }
         EventKind::ProjectVerified => {
             let actor = extract_field(value, &["oracle", "verifier", "address"]);
-            (actor, None)
+            let extra = extract_field(value, &["proof_hash", "hash", "data"]);
+            (actor, None, extra)
         }
         EventKind::FundsReleased => {
             let amount = extract_field(value, &["amount"]);
-            (None, amount)
+            let token = extract_field(value, &["token"]);
+            (None, amount, token)
         }
         EventKind::DonatorRefunded => {
             let actor = extract_field(value, &["donator", "address"]).or_else(|| {
@@ -258,24 +333,23 @@ fn decode_data(value: &Value, kind: &EventKind) -> (Option<String>, Option<Strin
                     .and_then(|arr| arr.get(1))
                     .and_then(value_to_string)
             });
-            (actor, amount)
+            (actor, amount, None)
         }
         EventKind::RoleSet | EventKind::RoleDel => {
-            // For role events the "data" is typically the caller address
             let actor = value
                 .as_str()
                 .map(String::from)
                 .or_else(|| extract_field(value, &["address", "caller", "by"]));
-            (actor, None)
+            (actor, None, None)
         }
         EventKind::ProtocolPaused | EventKind::ProtocolUnpaused => {
             let actor = value
                 .as_str()
                 .map(String::from)
                 .or_else(|| extract_field(value, &["address"]));
-            (actor, None)
+            (actor, None, None)
         }
-        EventKind::Unknown => (None, None),
+        EventKind::Unknown => (None, None, None),
     }
 }
 
@@ -362,6 +436,7 @@ fn parse_iso_to_unix(s: &str) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     #[test]
     fn event_kind_from_topic() {
@@ -425,7 +500,7 @@ mod tests {
             paging_token: None,
         };
 
-        let events = decode_events(&[raw], "CONTRACT1");
+        let events = decode_events(&[raw], &["CONTRACT1".to_string()]);
         assert_eq!(events.len(), 1);
         let ev = &events[0];
         assert_eq!(ev.event_type, "project_funded");
@@ -453,7 +528,7 @@ mod tests {
             paging_token: None,
         };
 
-        let events = decode_events(&[raw], "CONTRACT1");
+        let events = decode_events(&[raw], &["CONTRACT1".to_string()]);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].event_type, "role_set");
         assert_eq!(events[0].actor.as_deref(), Some("GCALLER"));
@@ -476,7 +551,7 @@ mod tests {
             paging_token: None,
         };
 
-        let events = decode_events(&[raw], "CONTRACT1");
+        let events = decode_events(&[raw], &["CONTRACT1".to_string()]);
         assert_eq!(events.len(), 1);
         let ev = &events[0];
         assert_eq!(ev.event_type, "donator_refunded");
@@ -489,5 +564,122 @@ mod tests {
     fn parse_iso_timestamp() {
         let ts = parse_iso_to_unix("2024-01-01T00:00:00Z").unwrap();
         assert_eq!(ts, 1_704_067_200);
+    }
+
+    #[test]
+    fn build_params_uses_multiple_contract_ids_and_topics() {
+        let ids = vec!["C1".to_string(), "C2".to_string()];
+        let params = build_params(&ids, 123, None, 50, Some(PIFP_TOPIC_SYMBOLS));
+        let filters = params.get("filters").and_then(|v| v.as_array()).unwrap();
+        let filter = &filters[0];
+        let contract_ids = filter
+            .get("contractIds")
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert_eq!(contract_ids.len(), 2);
+        assert_eq!(contract_ids[0], "C1");
+        assert_eq!(contract_ids[1], "C2");
+        assert!(filter.get("topics").is_some());
+    }
+
+    #[test]
+    fn decode_skips_events_for_untracked_contract() {
+        let raw = RawEvent {
+            topic: vec![
+                r#"{"type":"symbol","value":"funded"}"#.to_string(),
+                r#"{"type":"u64","value":"42"}"#.to_string(),
+            ],
+            value: serde_json::json!({ "donator": "GABC123", "amount": "5000" }),
+            contract_id: Some("OTHER_CONTRACT".to_string()),
+            tx_hash: Some("TX1".to_string()),
+            id: None,
+            ledger: Some(1000),
+            ledger_closed_at: Some("2024-01-01T00:00:00Z".to_string()),
+            in_successful_contract_call: Some(true),
+            paging_token: None,
+        };
+
+        let events = decode_events(&[raw], &["CONTRACT1".to_string()]);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn compare_filtered_vs_broad_decode_speed() {
+        let tracked = ["CONTRACT1".to_string()];
+        let mut events = Vec::new();
+        for i in 0..50_000u64 {
+            let is_relevant = i % 10 == 0;
+            let topic = if is_relevant {
+                r#"{"type":"symbol","value":"funded"}"#
+            } else {
+                r#"{"type":"symbol","value":"not_pifp"}"#
+            };
+            let contract = if is_relevant { "CONTRACT1" } else { "OTHER" };
+
+            events.push(RawEvent {
+                topic: vec![
+                    topic.to_string(),
+                    format!(r#"{{"type":"u64","value":"{}"}}"#, i % 500),
+                ],
+                value: serde_json::json!({ "donator": "GABC123", "amount": "5" }),
+                contract_id: Some(contract.to_string()),
+                tx_hash: None,
+                id: None,
+                ledger: Some(1),
+                ledger_closed_at: Some("2024-01-01T00:00:00Z".to_string()),
+                in_successful_contract_call: Some(true),
+                paging_token: None,
+            });
+        }
+
+        let t_filtered = Instant::now();
+        let filtered = decode_events(&events, &tracked);
+        let filtered_dur = t_filtered.elapsed();
+
+        let t_broad = Instant::now();
+        let broad = decode_events_broad_for_benchmark(&events, &tracked[0]);
+        let broad_dur = t_broad.elapsed();
+
+        assert_eq!(filtered.len(), 5_000);
+        assert_eq!(broad.len(), 50_000);
+        println!(
+            "decode benchmark: filtered={} in {:?}, broad={} in {:?}",
+            filtered.len(),
+            filtered_dur,
+            broad.len(),
+            broad_dur
+        );
+    }
+
+    fn decode_events_broad_for_benchmark(
+        raw: &[RawEvent],
+        fallback_contract: &str,
+    ) -> Vec<PifpEvent> {
+        raw.iter()
+            .filter_map(|r| {
+                let first_topic = r.topic.first()?;
+                let kind = EventKind::from_topic(&extract_symbol(first_topic));
+                let project_id = r.topic.get(1).map(|t| extract_u64_or_raw(t));
+                let (actor, amount, extra_data) = decode_data(&r.value, &kind);
+                Some(PifpEvent {
+                    event_type: kind.as_str().to_string(),
+                    project_id,
+                    actor,
+                    amount,
+                    extra_data,
+                    ledger: r.ledger.unwrap_or(0) as i64,
+                    timestamp: r
+                        .ledger_closed_at
+                        .as_deref()
+                        .and_then(parse_iso_to_unix)
+                        .unwrap_or(0),
+                    contract_id: r
+                        .contract_id
+                        .clone()
+                        .unwrap_or_else(|| fallback_contract.to_string()),
+                    tx_hash: r.tx_hash.clone(),
+                })
+            })
+            .collect()
     }
 }

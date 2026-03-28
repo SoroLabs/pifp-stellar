@@ -273,10 +273,7 @@ pub fn load_project(env: &Env, id: u64) -> Project {
 /// TTL of both underlying entries when present.
 #[allow(dead_code)]
 pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
-    let config = match maybe_load_project_config(env, id) {
-        Some(c) => c,
-        None => return None,
-    };
+    let config = maybe_load_project_config(env, id)?;
 
     // If config exists, state must exist. This maintains the invariant while avoiding
     // a redundant .has() check before .get().
@@ -385,6 +382,7 @@ pub fn set_donator_balance(
 }
 
 /// Add `amount` to a donator's contributed balance for (project_id, token).
+#[allow(dead_code)]
 pub fn add_to_donator_balance(
     env: &Env,
     project_id: u64,

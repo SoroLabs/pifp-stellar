@@ -28,6 +28,7 @@ hex = "0.4"
 tokio-util = "0.7"
 ed25519-dalek = { version = "2", features = ["serde"] }
 stellar-strkey = "0.0.16"
+redis = { version = "0.27", features = ["tokio-comp"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

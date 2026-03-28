@@ -1,6 +1,6 @@
 //! Database layer — migrations, queries, and cursor management.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use tracing::info;
 
@@ -75,8 +75,8 @@ pub async fn insert_events(pool: &SqlitePool, events: &[PifpEvent]) -> Result<us
         let rows_affected = sqlx::query(
             r#"
             INSERT OR IGNORE INTO events
-                (event_type, project_id, actor, amount, ledger, timestamp, contract_id, tx_hash)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                (event_type, project_id, actor, amount, ledger, timestamp, contract_id, tx_hash, extra_data)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             "#,
         )
         .bind(&ev.event_type)
@@ -87,9 +87,50 @@ pub async fn insert_events(pool: &SqlitePool, events: &[PifpEvent]) -> Result<us
         .bind(ev.timestamp)
         .bind(&ev.contract_id)
         .bind(&ev.tx_hash)
+        .bind(&ev.extra_data)
         .execute(pool)
         .await?
         .rows_affected();
+
+        // Update Project Registry for life-cycle tracking
+        if let Some(id) = &ev.project_id {
+            match ev.event_type.as_str() {
+                "project_created" => {
+                    sqlx::query(
+                        r#"
+                        INSERT OR IGNORE INTO projects (project_id, creator, goal, primary_token, created_ledger)
+                        VALUES (?1, ?2, ?3, ?4, ?5)
+                        "#
+                    )
+                    .bind(id)
+                    .bind(ev.actor.as_deref().unwrap_or("unknown"))
+                    .bind(ev.amount.as_deref().unwrap_or("0"))
+                    .bind(ev.extra_data.as_deref().unwrap_or("unknown"))
+                    .bind(ev.ledger)
+                    .execute(pool)
+                    .await?;
+                }
+                "project_active" => {
+                    sqlx::query("UPDATE projects SET status = 'Active' WHERE project_id = ?1")
+                        .bind(id)
+                        .execute(pool)
+                        .await?;
+                }
+                "project_verified" => {
+                    sqlx::query("UPDATE projects SET status = 'Completed' WHERE project_id = ?1")
+                        .bind(id)
+                        .execute(pool)
+                        .await?;
+                }
+                "project_expired" => {
+                    sqlx::query("UPDATE projects SET status = 'Expired' WHERE project_id = ?1")
+                        .bind(id)
+                        .execute(pool)
+                        .await?;
+                }
+                _ => {}
+            }
+        }
 
         count += rows_affected as usize;
     }
@@ -101,6 +142,7 @@ pub async fn insert_events(pool: &SqlitePool, events: &[PifpEvent]) -> Result<us
 // ─────────────────────────────────────────────────────────
 
 /// Fetch all events for a given project, ordered by ledger ascending.
+#[allow(dead_code)]
 pub async fn get_events_for_project(
     pool: &SqlitePool,
     project_id: &str,
@@ -108,7 +150,7 @@ pub async fn get_events_for_project(
     let rows = sqlx::query_as::<_, EventRecord>(
         r#"
         SELECT id, event_type, project_id, actor, amount, ledger, timestamp,
-               contract_id, tx_hash, created_at
+               contract_id, tx_hash, extra_data, created_at
         FROM   events
         WHERE  project_id = ?1
         ORDER  BY ledger ASC, id ASC
@@ -125,11 +167,145 @@ pub async fn get_all_events(pool: &SqlitePool) -> Result<Vec<EventRecord>> {
     let rows = sqlx::query_as::<_, EventRecord>(
         r#"
         SELECT id, event_type, project_id, actor, amount, ledger, timestamp,
-               contract_id, tx_hash, created_at
+               contract_id, tx_hash, extra_data, created_at
         FROM   events
         ORDER  BY ledger ASC, id ASC
         "#,
     )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct TopProject {
+    pub project_id: String,
+    pub total_funded: i64,
+    pub donation_events: i64,
+}
+
+/// Return top projects ranked by total funded amount from indexed funding events.
+pub async fn get_top_projects(pool: &SqlitePool, limit: u32) -> Result<Vec<TopProject>> {
+    let capped_limit = limit.clamp(1, 100) as i64;
+    let rows = sqlx::query_as::<_, TopProject>(
+        r#"
+        SELECT
+            project_id,
+            COALESCE(SUM(CAST(amount AS INTEGER)), 0) AS total_funded,
+            COUNT(*) AS donation_events
+        FROM events
+        WHERE event_type = 'project_funded'
+          AND project_id IS NOT NULL
+        GROUP BY project_id
+        ORDER BY total_funded DESC, donation_events DESC, project_id ASC
+        LIMIT ?1
+        "#,
+    )
+    .bind(capped_limit)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// Return the current number of active projects inferred from latest status events.
+pub async fn get_active_projects_count(pool: &SqlitePool) -> Result<i64> {
+    let row: (i64,) = sqlx::query_as(
+        r#"
+        WITH status_events AS (
+            SELECT project_id, event_type, ledger, id
+            FROM events
+            WHERE project_id IS NOT NULL
+              AND event_type IN (
+                  'project_active',
+                  'project_verified',
+                  'project_expired',
+                  'project_cancelled'
+              )
+        ),
+        ranked AS (
+            SELECT
+                project_id,
+                event_type,
+                ROW_NUMBER() OVER (
+                    PARTITION BY project_id
+                    ORDER BY ledger DESC, id DESC
+                ) AS rn
+            FROM status_events
+        )
+        SELECT COUNT(*) FROM ranked
+        WHERE rn = 1 AND event_type = 'project_active'
+        "#,
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
+// ─────────────────────────────────────────────────────────
+// Project Registry Reads
+// ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct ProjectRecord {
+    pub project_id: String,
+    pub creator: String,
+    pub status: String,
+    pub goal: String,
+    pub primary_token: String,
+    pub created_ledger: i64,
+    pub created_at: i64,
+}
+
+/// List projects with filtering and pagination.
+pub async fn list_projects(
+    pool: &SqlitePool,
+    status: Option<String>,
+    creator: Option<String>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ProjectRecord>> {
+    let mut query = "SELECT * FROM projects WHERE 1=1".to_string();
+    if status.is_some() {
+        query.push_str(" AND status = ?");
+    }
+    if creator.is_some() {
+        query.push_str(" AND creator = ?");
+    }
+    query.push_str(" ORDER BY created_ledger DESC LIMIT ? OFFSET ?");
+
+    let mut q = sqlx::query_as::<_, ProjectRecord>(&query);
+    if let Some(s) = status {
+        q = q.bind(s);
+    }
+    if let Some(c) = creator {
+        q = q.bind(c);
+    }
+    q = q.bind(limit).bind(offset);
+
+    let rows = q.fetch_all(pool).await?;
+    Ok(rows)
+}
+
+/// Fetch project history with pagination.
+pub async fn get_project_history(
+    pool: &SqlitePool,
+    project_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<EventRecord>> {
+    let rows = sqlx::query_as::<_, EventRecord>(
+        r#"
+        SELECT id, event_type, project_id, actor, amount, ledger, timestamp,
+               contract_id, tx_hash, extra_data, created_at
+        FROM   events
+        WHERE  project_id = ?1
+        ORDER  BY ledger DESC, id DESC
+        LIMIT  ?2 OFFSET ?3
+        "#,
+    )
+    .bind(project_id)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
     .await?;
     Ok(rows)
@@ -232,6 +408,32 @@ mod tests {
         // Run migrations manually from the migrations folder
         // For simplicity in unit tests, we can just run the specific DDL
         sqlx::query(
+            "CREATE TABLE events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                project_id TEXT,
+                actor TEXT,
+                amount TEXT,
+                ledger INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL,
+                contract_id TEXT NOT NULL,
+                tx_hash TEXT,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("CREATE INDEX idx_events_project_id ON events (project_id);")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("CREATE INDEX idx_events_event_type ON events (event_type);")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query(
             "CREATE TABLE quorum_settings (id INTEGER PRIMARY KEY CHECK (id = 1), threshold INTEGER NOT NULL DEFAULT 1);",
         ).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO quorum_settings (id, threshold) VALUES (1, 1);")
@@ -255,6 +457,92 @@ mod tests {
         // Update to 3
         set_quorum_threshold(&pool, 3).await.unwrap();
         assert_eq!(get_quorum_threshold(&pool).await.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_get_top_projects() {
+        let pool = setup_test_db().await;
+        sqlx::query("INSERT INTO events (event_type, project_id, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind("project_funded")
+            .bind("1")
+            .bind("100")
+            .bind(1i64)
+            .bind(1i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO events (event_type, project_id, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind("project_funded")
+            .bind("2")
+            .bind("300")
+            .bind(2i64)
+            .bind(2i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO events (event_type, project_id, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+            .bind("project_funded")
+            .bind("1")
+            .bind("50")
+            .bind(3i64)
+            .bind(3i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let top = get_top_projects(&pool, 10).await.unwrap();
+        assert_eq!(top.len(), 2);
+        assert_eq!(top[0].project_id, "2");
+        assert_eq!(top[0].total_funded, 300);
+        assert_eq!(top[1].project_id, "1");
+        assert_eq!(top[1].total_funded, 150);
+    }
+
+    #[tokio::test]
+    async fn test_get_active_projects_count() {
+        let pool = setup_test_db().await;
+        sqlx::query("INSERT INTO events (event_type, project_id, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .bind("project_active")
+            .bind("1")
+            .bind(10i64)
+            .bind(10i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO events (event_type, project_id, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .bind("project_active")
+            .bind("2")
+            .bind(10i64)
+            .bind(10i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO events (event_type, project_id, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .bind("project_verified")
+            .bind("2")
+            .bind(11i64)
+            .bind(11i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO events (event_type, project_id, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5)")
+            .bind("project_cancelled")
+            .bind("3")
+            .bind(12i64)
+            .bind(12i64)
+            .bind("c")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let count = get_active_projects_count(&pool).await.unwrap();
+        assert_eq!(count, 1);
     }
 
     #[tokio::test]
