@@ -5,12 +5,14 @@
 //! exposes a small Axum REST API for frontend / admin consumption.
 
 mod api;
+mod cache;
 mod config;
 mod db;
 mod errors;
 mod events;
 mod indexer;
 mod rpc;
+mod webhook;
 
 use std::sync::Arc;
 
@@ -24,6 +26,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+use cache::Cache;
 use config::Config;
 use indexer::IndexerState;
 
@@ -48,21 +51,49 @@ async fn main() -> anyhow::Result<()> {
         .timeout(std::time::Duration::from_secs(30))
         .build()?;
 
+    let cache = config
+        .redis_url
+        .as_deref()
+        .and_then(|url| match Cache::new(url) {
+            Ok(c) => {
+                info!("Redis cache enabled");
+                Some(c)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize Redis cache; continuing without cache: {e}");
+                None
+            }
+        });
+
     // ─── Background indexer ───────────────────────────────
     let indexer_state = Arc::new(IndexerState {
         pool: pool.clone(),
         config: config.clone(),
         client,
+        cache: cache.clone(),
     });
     tokio::spawn(indexer::run(indexer_state));
 
     // ─── REST API ─────────────────────────────────────────
-    let api_state = Arc::new(api::ApiState { pool });
+    let api_state = Arc::new(api::ApiState {
+        pool,
+        cache,
+        cache_ttl_top_projects_secs: config.cache_ttl_top_projects_secs,
+        cache_ttl_active_projects_count_secs: config.cache_ttl_active_projects_count_secs,
+    });
 
     let app = Router::new()
         .route("/health", get(api::health))
         .route("/events", get(api::get_all_events))
-        .route("/projects/:id/events", get(api::get_project_events))
+        .route("/projects", get(api::get_projects))
+        .route("/projects/:id/history", get(api::get_project_history_paged))
+        .route("/projects/top", get(api::get_top_projects))
+        .route(
+            "/projects/active/count",
+            get(api::get_active_projects_count),
+        )
+        .route("/webhooks", post(api::register_webhook))
+        .route("/webhooks", get(api::list_webhooks))
         .route("/admin/quorum", post(api::set_quorum_threshold))
         .route("/projects/:id/vote", post(api::submit_vote))
         .route("/projects/:id/quorum", get(api::get_project_quorum))

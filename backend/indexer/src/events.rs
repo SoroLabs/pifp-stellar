@@ -13,8 +13,14 @@ pub enum EventKind {
     ProjectCreated,
     /// A donation was made to a project (`funded` topic).
     ProjectFunded,
+    /// A project reached active state (`active` topic).
+    ProjectActive,
     /// An oracle verified a project's proof (`verified` topic).
     ProjectVerified,
+    /// A project expired without completion (`expired` topic).
+    ProjectExpired,
+    /// A project was manually cancelled (`cancelled` topic).
+    ProjectCancelled,
     /// Verified funds were released to the creator (`released` topic).
     FundsReleased,
     /// Donator funds were refunded from an expired project (`refunded` topic).
@@ -37,7 +43,10 @@ impl EventKind {
         match topic {
             "created" => Self::ProjectCreated,
             "funded" => Self::ProjectFunded,
+            "active" => Self::ProjectActive,
             "verified" => Self::ProjectVerified,
+            "expired" => Self::ProjectExpired,
+            "cancelled" => Self::ProjectCancelled,
             "released" => Self::FundsReleased,
             "refunded" => Self::DonatorRefunded,
             "role_set" => Self::RoleSet,
@@ -53,7 +62,10 @@ impl EventKind {
         match self {
             Self::ProjectCreated => "project_created",
             Self::ProjectFunded => "project_funded",
+            Self::ProjectActive => "project_active",
             Self::ProjectVerified => "project_verified",
+            Self::ProjectExpired => "project_expired",
+            Self::ProjectCancelled => "project_cancelled",
             Self::FundsReleased => "funds_released",
             Self::DonatorRefunded => "donator_refunded",
             Self::RoleSet => "role_set",
@@ -76,6 +88,7 @@ pub struct PifpEvent {
     pub timestamp: i64,
     pub contract_id: String,
     pub tx_hash: Option<String>,
+    pub extra_data: Option<String>,
 }
 
 /// A raw event record as stored in / read from the database.
@@ -90,5 +103,6 @@ pub struct EventRecord {
     pub timestamp: i64,
     pub contract_id: String,
     pub tx_hash: Option<String>,
+    pub extra_data: Option<String>,
     pub created_at: i64,
 }

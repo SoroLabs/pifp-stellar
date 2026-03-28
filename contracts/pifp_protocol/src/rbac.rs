@@ -32,6 +32,7 @@
 //! - An address holds **at most one role** at a time; granting a new role replaces the old one.
 
 #![allow(unused)]
+#![allow(deprecated)]
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
 
@@ -264,6 +265,13 @@ pub fn require_can_register(env: &Env, address: &Address) {
         address,
         &[Role::SuperAdmin, Role::Admin, Role::ProjectManager],
     );
+}
+
+/// Assert that `address` may cancel projects.
+/// Only SuperAdmin and ProjectManager are permitted.
+#[inline]
+pub fn require_can_cancel_project(env: &Env, address: &Address) {
+    require_any_of(env, address, &[Role::SuperAdmin, Role::ProjectManager]);
 }
 
 // ─────────────────────────────────────────────────────────
