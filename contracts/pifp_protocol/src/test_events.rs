@@ -10,7 +10,7 @@ fn test_project_created_event() {
     let (_project, _token, _) = ctx.setup_project(5000);
 
     // let all_events = ctx.env.events().all();
-    // In SDK 25, testing events is more complex with ContractEvents type. 
+    // In SDK 25, testing events is more complex with ContractEvents type.
     // Skipping for now to focus on core logic tests.
 }
 

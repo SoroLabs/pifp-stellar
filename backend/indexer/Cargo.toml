@@ -26,6 +26,8 @@ chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22"
 hex = "0.4"
 tokio-util = "0.7"
+ed25519-dalek = { version = "2", features = ["serde"] }
+stellar-strkey = "0.0.16"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

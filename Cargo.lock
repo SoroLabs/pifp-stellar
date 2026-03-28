@@ -849,6 +849,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
+ "serde",
  "signature",
 ]
 
@@ -1561,11 +1562,13 @@ dependencies = [
  "base64",
  "chrono",
  "dotenvy",
+ "ed25519-dalek",
  "hex",
  "reqwest",
  "serde",
  "serde_json",
  "sqlx",
+ "stellar-strkey 0.0.16",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",

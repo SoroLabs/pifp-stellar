@@ -8,11 +8,15 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use base64::Engine;
+use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
+use stellar_strkey::ed25519::PublicKey as StellarPublicKey;
 
 use crate::db;
 use crate::events::EventRecord;
+use crate::profiles::{self, ProfileUpdate};
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -62,6 +66,38 @@ pub struct ThresholdRequest {
 pub struct VoteResponse {
     pub accepted: bool,
     pub message: String,
+}
+
+/// Signed profile upsert request.
+///
+/// The client must sign the canonical message `"pifp-profile:{address}"` with
+/// the Ed25519 private key corresponding to `address` and provide the
+/// base64-encoded signature in `signature`.
+#[derive(Deserialize)]
+pub struct ProfileRequest {
+    pub address: String,
+    pub signature: String,
+    #[serde(flatten)]
+    pub update: ProfileUpdate,
+}
+
+fn verify_profile_signature(address: &str, signature_b64: &str) -> bool {
+    let Ok(strkey) = StellarPublicKey::from_string(address) else {
+        return false;
+    };
+    let Ok(sig_bytes) = base64::engine::general_purpose::STANDARD.decode(signature_b64) else {
+        return false;
+    };
+    let Ok(sig_array): Result<&[u8; 64], _> = sig_bytes.as_slice().try_into() else {
+        return false;
+    };
+    let sig = Signature::from_bytes(sig_array);
+    let Ok(vk) = VerifyingKey::from_bytes(&strkey.0) else {
+        return false;
+    };
+    let message = format!("pifp-profile:{address}");
+    use ed25519_dalek::Verifier;
+    vk.verify(message.as_bytes(), &sig).is_ok()
 }
 
 // ─────────────────────────────────────────────────────────
@@ -202,6 +238,123 @@ pub async fn get_project_quorum(
 ) -> impl IntoResponse {
     match db::get_quorum_status(&state.pool, &project_id).await {
         Ok(status) => (StatusCode::OK, Json(status)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `GET /profiles/:address`
+pub async fn get_profile(
+    State(state): State<Arc<ApiState>>,
+    Path(address): Path<String>,
+) -> impl IntoResponse {
+    match profiles::get_profile(&state.pool, &address).await {
+        Ok(Some(profile)) => (StatusCode::OK, Json(serde_json::json!(profile))).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Profile not found".to_string()
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `PUT /profiles/:address`
+///
+/// Upserts a profile. Requires a valid Ed25519 signature over
+/// `"pifp-profile:{address}"` from the address owner.
+pub async fn upsert_profile(
+    State(state): State<Arc<ApiState>>,
+    Path(address): Path<String>,
+    Json(payload): Json<ProfileRequest>,
+) -> impl IntoResponse {
+    if payload.address != address {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Address mismatch".to_string()
+            })),
+        )
+            .into_response();
+    }
+
+    if !verify_profile_signature(&address, &payload.signature) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Invalid signature".to_string()
+            })),
+        )
+            .into_response();
+    }
+
+    match profiles::upsert_profile(&state.pool, &address, &payload.update).await {
+        Ok(profile) => (StatusCode::OK, Json(serde_json::json!(profile))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `DELETE /profiles/:address`
+///
+/// Deletes a profile. Requires a valid Ed25519 signature over
+/// `"pifp-profile:{address}"` from the address owner.
+pub async fn delete_profile(
+    State(state): State<Arc<ApiState>>,
+    Path(address): Path<String>,
+    Json(payload): Json<ProfileRequest>,
+) -> impl IntoResponse {
+    if payload.address != address {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Address mismatch".to_string()
+            })),
+        )
+            .into_response();
+    }
+
+    if !verify_profile_signature(&address, &payload.signature) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Invalid signature".to_string()
+            })),
+        )
+            .into_response();
+    }
+
+    match profiles::delete_profile(&state.pool, &address).await {
+        Ok(true) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "deleted" })),
+        )
+            .into_response(),
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!(ErrorResponse {
+                error: "Profile not found".to_string()
+            })),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!(ErrorResponse {

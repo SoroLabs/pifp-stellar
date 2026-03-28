@@ -10,6 +10,7 @@ mod db;
 mod errors;
 mod events;
 mod indexer;
+mod profiles;
 mod rpc;
 
 use std::sync::Arc;
@@ -66,6 +67,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/admin/quorum", post(api::set_quorum_threshold))
         .route("/projects/:id/vote", post(api::submit_vote))
         .route("/projects/:id/quorum", get(api::get_project_quorum))
+        .route("/profiles/:address", get(api::get_profile))
+        .route(
+            "/profiles/:address",
+            axum::routing::put(api::upsert_profile),
+        )
+        .route(
+            "/profiles/:address",
+            axum::routing::delete(api::delete_profile),
+        )
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(api_state);

@@ -277,8 +277,8 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         Some(c) => c,
         None => return None,
     };
-    
-    // If config exists, state must exist. This maintains the invariant while avoiding 
+
+    // If config exists, state must exist. This maintains the invariant while avoiding
     // a redundant .has() check before .get().
     let state: ProjectState = env
         .storage()
