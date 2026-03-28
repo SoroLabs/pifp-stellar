@@ -79,6 +79,45 @@ pub struct RawEvent {
 }
 
 // ─────────────────────────────────────────────────────────
+// getTransaction response shapes
+// ─────────────────────────────────────────────────────────
+
+/// Top-level JSON-RPC envelope for a `getTransaction` call.
+#[derive(Debug, Deserialize)]
+pub struct TransactionRpcResponse {
+    pub result: Option<TransactionResponse>,
+    pub error: Option<RpcError>,
+}
+
+/// Response payload for the Soroban `getTransaction` RPC method.
+///
+/// Fields follow the Soroban RPC spec:
+/// <https://developers.stellar.org/docs/data/rpc/api-reference/methods/getTransaction>
+#[allow(dead_code)]
+#[derive(Debug, Deserialize, Clone)]
+pub struct TransactionResponse {
+    /// One of `"SUCCESS"`, `"FAILED"`, or `"NOT_FOUND"`.
+    pub status: String,
+    /// Ledger sequence number in which the transaction was included (absent when NOT_FOUND).
+    pub ledger: Option<u64>,
+    /// ISO-8601 close time of the ledger that included this transaction.
+    #[serde(rename = "createdAt")]
+    pub created_at: Option<String>,
+    /// Base64-encoded XDR of the `TransactionEnvelope`.
+    #[serde(rename = "envelopeXdr")]
+    pub envelope_xdr: Option<String>,
+    /// Base64-encoded XDR of the `TransactionResult`.
+    #[serde(rename = "resultXdr")]
+    pub result_xdr: Option<String>,
+    /// Base64-encoded XDR of the `TransactionResultMeta` (includes contract return value).
+    #[serde(rename = "resultMetaXdr")]
+    pub result_meta_xdr: Option<String>,
+    /// Diagnostic events emitted during execution (only present when `FAILED`).
+    #[serde(rename = "diagnosticEventsXdr")]
+    pub diagnostic_events_xdr: Option<Vec<String>>,
+}
+
+// ─────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────
 
@@ -183,6 +222,46 @@ pub async fn fetch_events(
             }
         }
     }
+}
+
+/// Query the status of a submitted transaction by its hash.
+///
+/// Calls the Soroban JSON-RPC `getTransaction` method and returns the full
+/// [`TransactionResponse`].  Unlike [`fetch_events`] this function does **not**
+/// retry on `NOT_FOUND` — the caller is responsible for polling if needed.
+///
+/// # Errors
+/// Returns [`IndexerError::Http`] on network failures and
+/// [`IndexerError::EventParse`] when the RPC returns a JSON-RPC error object.
+#[allow(dead_code)]
+pub async fn get_transaction(
+    client: &Client,
+    rpc_url: &str,
+    hash: &str,
+) -> Result<TransactionResponse> {
+    let resp = client
+        .post(rpc_url)
+        .json(&json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTransaction",
+            "params": [hash],
+        }))
+        .send()
+        .await?;
+
+    let body: TransactionRpcResponse = resp.json().await?;
+
+    if let Some(err) = body.error {
+        return Err(IndexerError::EventParse(format!(
+            "getTransaction RPC error {}: {}",
+            err.code, err.message
+        )));
+    }
+
+    body.result.ok_or_else(|| {
+        IndexerError::EventParse("getTransaction returned empty result".to_string())
+    })
 }
 
 fn build_params(
@@ -566,6 +645,84 @@ mod tests {
         assert_eq!(ts, 1_704_067_200);
     }
 
+    // ── get_transaction ──────────────────────────────────────────────────────
+
+    #[test]
+    fn deserialize_transaction_response_success() {
+        let json = serde_json::json!({
+            "result": {
+                "status": "SUCCESS",
+                "ledger": 12345,
+                "createdAt": "2024-06-01T12:00:00Z",
+                "envelopeXdr": "AAAA",
+                "resultXdr": "BBBB",
+                "resultMetaXdr": "CCCC",
+                "diagnosticEventsXdr": null
+            },
+            "error": null
+        });
+
+        let parsed: TransactionRpcResponse = serde_json::from_value(json).unwrap();
+        let tx = parsed.result.unwrap();
+        assert_eq!(tx.status, "SUCCESS");
+        assert_eq!(tx.ledger, Some(12345));
+        assert_eq!(tx.result_xdr.as_deref(), Some("BBBB"));
+        assert!(tx.diagnostic_events_xdr.is_none());
+    }
+
+    #[test]
+    fn deserialize_transaction_response_failed_with_diagnostics() {
+        let json = serde_json::json!({
+            "result": {
+                "status": "FAILED",
+                "ledger": 12346,
+                "createdAt": "2024-06-01T12:01:00Z",
+                "envelopeXdr": "AAAA",
+                "resultXdr": "BBBB",
+                "resultMetaXdr": "CCCC",
+                "diagnosticEventsXdr": ["DIAG1", "DIAG2"]
+            },
+            "error": null
+        });
+
+        let parsed: TransactionRpcResponse = serde_json::from_value(json).unwrap();
+        let tx = parsed.result.unwrap();
+        assert_eq!(tx.status, "FAILED");
+        let diags = tx.diagnostic_events_xdr.unwrap();
+        assert_eq!(diags.len(), 2);
+        assert_eq!(diags[0], "DIAG1");
+    }
+
+    #[test]
+    fn deserialize_transaction_response_not_found() {
+        let json = serde_json::json!({
+            "result": {
+                "status": "NOT_FOUND"
+            },
+            "error": null
+        });
+
+        let parsed: TransactionRpcResponse = serde_json::from_value(json).unwrap();
+        let tx = parsed.result.unwrap();
+        assert_eq!(tx.status, "NOT_FOUND");
+        assert!(tx.ledger.is_none());
+        assert!(tx.result_xdr.is_none());
+    }
+
+    #[test]
+    fn deserialize_transaction_rpc_error() {
+        let json = serde_json::json!({
+            "result": null,
+            "error": { "code": -32602, "message": "invalid hash" }
+        });
+
+        let parsed: TransactionRpcResponse = serde_json::from_value(json).unwrap();
+        assert!(parsed.result.is_none());
+        let err = parsed.error.unwrap();
+        assert_eq!(err.code, -32602);
+        assert_eq!(err.message, "invalid hash");
+    }
+
     #[test]
     fn build_params_uses_multiple_contract_ids_and_topics() {
         let ids = vec!["C1".to_string(), "C2".to_string()];
@@ -660,12 +817,13 @@ mod tests {
                 let first_topic = r.topic.first()?;
                 let kind = EventKind::from_topic(&extract_symbol(first_topic));
                 let project_id = r.topic.get(1).map(|t| extract_u64_or_raw(t));
-                let (actor, amount) = decode_data(&r.value, &kind);
+                let (actor, amount, extra_data) = decode_data(&r.value, &kind);
                 Some(PifpEvent {
                     event_type: kind.as_str().to_string(),
                     project_id,
                     actor,
                     amount,
+                    extra_data,
                     ledger: r.ledger.unwrap_or(0) as i64,
                     timestamp: r
                         .ledger_closed_at
