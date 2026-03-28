@@ -33,9 +33,22 @@
 
 #![allow(unused)]
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Vec};
+use soroban_sdk::{contractevent, contracttype, Address, Env, Vec};
 
 use crate::errors::Error;
+
+#[contractevent]
+pub struct RoleSet {
+    pub target: Address,
+    pub role: Role,
+    pub by: Option<Address>,
+}
+
+#[contractevent]
+pub struct RoleDel {
+    pub target: Address,
+    pub by: Option<Address>,
+}
 
 // ─────────────────────────────────────────────────────────
 // Role enum — stored per address
@@ -118,13 +131,7 @@ pub fn init_super_admin(env: &Env, super_admin: &Address) {
         .set(&RbacKey::SuperAdmin, super_admin);
     store_role(env, super_admin, &Role::SuperAdmin);
 
-    emit(
-        env,
-        symbol_short!("role_set"),
-        super_admin,
-        &Role::SuperAdmin,
-        None::<Address>,
-    );
+    emit(env, super_admin, &Role::SuperAdmin, None::<Address>);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -160,13 +167,7 @@ pub fn grant_role(env: &Env, caller: &Address, target: &Address, role: Role) {
     }
 
     store_role(env, target, &role);
-    emit(
-        env,
-        symbol_short!("role_set"),
-        target,
-        &role,
-        Some(caller.clone()),
-    );
+    emit(env, target, &role, Some(caller.clone()));
 }
 
 /// Revoke any role from `target`.
@@ -208,13 +209,7 @@ pub fn transfer_super_admin(env: &Env, current: &Address, new: &Address) {
     // Set new SuperAdmin
     env.storage().persistent().set(&RbacKey::SuperAdmin, new);
     store_role(env, new, &Role::SuperAdmin);
-    emit(
-        env,
-        symbol_short!("role_set"),
-        new,
-        &Role::SuperAdmin,
-        Some(current.clone()),
-    );
+    emit(env, new, &Role::SuperAdmin, Some(current.clone()));
 }
 
 // ─────────────────────────────────────────────────────────
@@ -285,28 +280,22 @@ pub fn has_role(env: &Env, address: Address, role: Role) -> bool {
 // ─────────────────────────────────────────────────────────
 
 /// Emit a role assignment event.
-/// Topic: `(role_set, target_address, role_name_symbol)`
-/// Data:  `Option<caller_address>`
-fn emit(env: &Env, event: soroban_sdk::Symbol, target: &Address, role: &Role, by: Option<Address>) {
-    let role_sym = role_to_symbol(env, role);
-    env.events().publish((event, target.clone(), role_sym), by);
+fn emit(env: &Env, target: &Address, role: &Role, by: Option<Address>) {
+    RoleSet {
+        target: target.clone(),
+        role: role.clone(),
+        by,
+    }
+    .publish(env);
 }
 
 /// Emit a role revocation event.
 fn emit_revoke(env: &Env, target: &Address, by: Option<Address>) {
-    env.events()
-        .publish((symbol_short!("role_del"), target.clone()), by);
-}
-
-/// Convert a Role to a short Symbol for event topics.
-fn role_to_symbol(env: &Env, role: &Role) -> soroban_sdk::Symbol {
-    match role {
-        Role::SuperAdmin => symbol_short!("supadmin"),
-        Role::Admin => symbol_short!("admin"),
-        Role::Oracle => symbol_short!("oracle"),
-        Role::Auditor => symbol_short!("auditor"),
-        Role::ProjectManager => symbol_short!("proj_mgr"),
+    RoleDel {
+        target: target.clone(),
+        by,
     }
+    .publish(env);
 }
 
 /// Thin wrapper so we can call panic_with_error from inside rbac.rs

@@ -25,9 +25,7 @@
 
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, panic_with_error, token, Address, BytesN, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, BytesN, Env, Vec};
 
 pub mod errors;
 pub mod events;
@@ -47,6 +45,8 @@ mod test;
 #[cfg(test)]
 mod test_donation_count;
 #[cfg(test)]
+mod test_errors;
+#[cfg(test)]
 mod test_events;
 #[cfg(test)]
 mod test_expire;
@@ -54,8 +54,6 @@ mod test_expire;
 mod test_refund;
 #[cfg(test)]
 mod test_utils;
-#[cfg(test)]
-mod test_errors;
 
 pub use errors::Error;
 pub use events::emit_funds_released;
@@ -65,8 +63,6 @@ use storage::{
     load_project_pair, maybe_load_project, save_project, save_project_state,
 };
 pub use types::{Project, ProjectBalances, ProjectStatus};
-
-
 
 #[contract]
 pub struct PifpProtocol;
@@ -294,9 +290,10 @@ impl PifpProtocol {
 
         // Check if this is a new unique (donator, token) pair.
         // A donator balance of 0 implicitly proves they have not donated yet, saving a storage key entirely.
-        let current_donor_balance = storage::get_donator_balance(&env, project_id, &token, &donator);
+        let current_donor_balance =
+            storage::get_donator_balance(&env, project_id, &token, &donator);
         let is_new_donor = current_donor_balance == 0;
-        
+
         if is_new_donor {
             // Increment donation count
             state.donation_count += 1;
@@ -306,7 +303,7 @@ impl PifpProtocol {
 
         // Transfer tokens from donator to contract.
         let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&donator, &env.current_contract_address(), &amount);
+        token_client.transfer(&donator, env.current_contract_address(), &amount);
 
         // Update the per-token balance.
         let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);
@@ -323,7 +320,9 @@ impl PifpProtocol {
         }
 
         // Track per-donator refundable amount for this token.
-        let new_donor_balance = current_donor_balance.checked_add(amount).expect("donator balance overflow");
+        let new_donor_balance = current_donor_balance
+            .checked_add(amount)
+            .expect("donator balance overflow");
         storage::set_donator_balance(&env, project_id, &token, &donator, new_donor_balance);
 
         // Standardized event emission
