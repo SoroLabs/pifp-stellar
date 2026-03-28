@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { loadTaskRegistry, saveTaskRegistry } from './taskRegistry.js';
 import { startMonitoring } from './monitor.js';
+import { checkHealth } from './health.js';
 
 dotenv.config();
 
@@ -12,12 +13,10 @@ const HOST = process.env.HOST || '0.0.0.0';
 app.use(express.json());
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
+app.get('/health', async (req, res) => {
+  const result = await checkHealth();
+  const statusCode = result.status === 'UP' ? 200 : 503;
+  res.status(statusCode).json(result);
 });
 
 // Metrics endpoint
