@@ -24,7 +24,7 @@ fn test_register_project_success() {
     let tokens = Vec::from_array(&ctx.env, [token.clone()]);
     let goal: i128 = 1_000;
 
-    let project = ctx.register_project(&tokens, goal);
+    let project = ctx.register_project(&tokens, goal, false);
 
     assert_eq!(project.id, 0);
     assert_eq!(project.creator, ctx.manager);
@@ -40,7 +40,7 @@ fn test_register_duplicate_tokens_fails() {
     let token = ctx.generate_address();
     let tokens = Vec::from_array(&ctx.env, [token.clone(), token.clone()]);
 
-    ctx.register_project(&tokens, 1000);
+    ctx.register_project(&tokens, 1000, false);
 }
 
 #[test]
@@ -48,7 +48,7 @@ fn test_register_duplicate_tokens_fails() {
 fn test_register_zero_goal_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
-    ctx.register_project(&tokens, 0);
+    ctx.register_project(&tokens, 0, false);
 }
 
 #[test]
@@ -69,6 +69,7 @@ fn test_register_past_deadline_fails() {
         &ctx.dummy_proof(),
         &ctx.dummy_metadata_uri(),
         &past_deadline,
+        &false,
     );
 }
 
@@ -148,7 +149,7 @@ fn test_registration_fails_when_paused() {
     ctx.client.pause(&ctx.admin);
 
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
-    ctx.register_project(&tokens, 1000);
+    ctx.register_project(&tokens, 1000, false);
 }
 
 #[test]

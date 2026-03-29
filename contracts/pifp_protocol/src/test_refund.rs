@@ -35,7 +35,10 @@ fn dummy_proof(env: &Env) -> BytesN<32> {
 }
 
 fn dummy_metadata_uri(env: &Env) -> Bytes {
-    Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+    Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    )
 }
 
 #[test]
@@ -56,6 +59,7 @@ fn test_refund_success_after_expiry() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
@@ -106,6 +110,7 @@ fn test_refund_fails_when_not_expired() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
@@ -134,6 +139,7 @@ fn test_refund_double_refund_fails() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
@@ -169,6 +175,7 @@ fn test_refund_wrong_donator_fails() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
@@ -201,6 +208,7 @@ fn test_refund_success_after_cancellation() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
@@ -244,6 +252,7 @@ fn test_refund_distribution_after_cancellation_multi_donor() {
         &dummy_proof(&env),
         &dummy_metadata_uri(&env),
         &deadline,
+        &false,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);

@@ -27,7 +27,10 @@ fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
 }
 
 fn dummy_metadata_uri(env: &Env) -> Bytes {
-    Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+    Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    )
 }
 
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
@@ -56,6 +59,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         check_all_project_invariants(&env, &project);
@@ -84,6 +88,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         check_all_project_invariants(&env, &project);
@@ -111,6 +116,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         check_all_project_invariants(&env, &project);
@@ -144,6 +150,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let donator = Address::generate(&env);
@@ -182,6 +189,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
@@ -239,6 +247,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let oracle = Address::generate(&env);
@@ -272,6 +281,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let oracle = Address::generate(&env);
@@ -311,8 +321,9 @@ proptest! {
                 &tokens,
                 &1000,
                 &proof_hash,
-            &dummy_metadata_uri(&env),
+                &dummy_metadata_uri(&env),
                 &deadline,
+                &false,
             );
             projects.push(p);
         }
@@ -351,6 +362,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let donator = Address::generate(&env);
@@ -385,6 +397,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
 
         let oracle = Address::generate(&env);
@@ -428,6 +441,7 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
         );
         check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);

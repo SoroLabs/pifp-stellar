@@ -12,6 +12,8 @@ pub struct Config {
     pub database_url: String,
     /// Port for the REST API server
     pub api_port: u16,
+    /// Port for the Prometheus metrics server
+    pub metrics_port: u16,
     /// How often (in seconds) to poll the RPC for new events
     pub poll_interval_secs: u64,
     /// Maximum number of events to fetch per RPC request
@@ -43,6 +45,10 @@ impl Config {
                 .unwrap_or_else(|_| "3001".to_string())
                 .parse()
                 .map_err(|_| IndexerError::Config("Invalid API_PORT".to_string()))?,
+            metrics_port: env_var("METRICS_PORT")
+                .unwrap_or_else(|_| "9090".to_string())
+                .parse()
+                .map_err(|_| IndexerError::Config("Invalid METRICS_PORT".to_string()))?,
             poll_interval_secs: env_var("POLL_INTERVAL_SECS")
                 .unwrap_or_else(|_| "5".to_string())
                 .parse()

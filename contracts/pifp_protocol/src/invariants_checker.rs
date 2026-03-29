@@ -97,8 +97,10 @@ pub fn check_inv8_single_role(_env: &Env, _address: &Address) {
 
 /// INV-9: The SuperAdmin address is always set after init.
 pub fn check_inv9_super_admin_exists(env: &Env) {
-    let _ = env;
-    // Skipped in off-contract test contexts where storage is inaccessible.
+    assert!(
+        get_super_admin(env).is_some(),
+        "INV-9 violated: super admin missing"
+    );
 }
 
 /// INV-10: ProjectConfig fields are immutable after registration.

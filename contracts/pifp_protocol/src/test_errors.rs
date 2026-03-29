@@ -57,7 +57,7 @@ fn test_verify_already_completed_project() {
 fn test_register_negative_goal_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
-    ctx.register_project(&tokens, -100);
+    ctx.register_project(&tokens, -100, false);
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn test_register_goal_exceeds_upper_bound_fails() {
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     // 10^30 + 1 — exceeds upper bound
     let huge_goal: i128 = 1_000_000_000_000_000_000_000_000_000_001;
-    ctx.register_project(&tokens, huge_goal);
+    ctx.register_project(&tokens, huge_goal, false);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ fn test_register_too_many_tokens_fails() {
     for _ in 0..11 {
         tokens.push_back(ctx.generate_address());
     }
-    ctx.register_project(&tokens, 1000);
+    ctx.register_project(&tokens, 1000, false);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -103,6 +103,7 @@ fn test_register_deadline_too_far_in_future_fails() {
         &ctx.dummy_proof(),
         &ctx.dummy_metadata_uri(),
         &too_far_deadline,
+        &false,
     );
 }
 
@@ -130,7 +131,7 @@ fn test_verify_wrong_proof_hash_fails() {
 fn test_register_empty_tokens_fails() {
     let ctx = TestContext::new();
     let tokens: Vec<soroban_sdk::Address> = Vec::new(&ctx.env);
-    ctx.register_project(&tokens, 1000);
+    ctx.register_project(&tokens, 1000, false);
 }
 
 // ─────────────────────────────────────────────────────────
