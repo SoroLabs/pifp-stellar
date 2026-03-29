@@ -105,6 +105,16 @@ pub struct ActiveProjectsCountResponse {
     pub count: i64,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct StatsResponse {
+    pub total_projects: i64,
+    pub total_tvl: String,
+    pub total_donors: i64,
+    pub completed_projects: i64,
+    pub failed_projects: i64,
+    pub success_rate: f64,
+}
+
 #[derive(Deserialize)]
 pub struct RegisterWebhookRequest {
     pub url: String,
@@ -361,6 +371,39 @@ pub async fn get_active_projects_count(State(state): State<Arc<ApiState>>) -> im
                     .set_json(key, &payload, state.cache_ttl_active_projects_count_secs)
                     .await;
             }
+            (StatusCode::OK, Json(payload)).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `GET /stats`
+///
+/// Returns pre-calculated global protocol statistics.
+pub async fn get_stats(State(state): State<Arc<ApiState>>) -> impl IntoResponse {
+    match db::get_global_stats(&state.pool).await {
+        Ok(stats) => {
+            let total_terminal = stats.completed_projects + stats.failed_projects;
+            let success_rate = if total_terminal > 0 {
+                stats.completed_projects as f64 / total_terminal as f64
+            } else {
+                0.0
+            };
+
+            let payload = StatsResponse {
+                total_projects: stats.total_projects,
+                total_tvl: stats.total_tvl,
+                total_donors: stats.total_donors,
+                completed_projects: stats.completed_projects,
+                failed_projects: stats.failed_projects,
+                success_rate,
+            };
             (StatusCode::OK, Json(payload)).into_response()
         }
         Err(e) => (

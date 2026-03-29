@@ -11,6 +11,7 @@ mod db;
 mod errors;
 mod events;
 mod indexer;
+mod metrics;
 mod rpc;
 mod webhook;
 
@@ -92,6 +93,7 @@ async fn main() -> anyhow::Result<()> {
             "/projects/active/count",
             get(api::get_active_projects_count),
         )
+        .route("/stats", get(api::get_stats))
         .route("/webhooks", post(api::register_webhook))
         .route("/webhooks", get(api::list_webhooks))
         .route("/admin/quorum", post(api::set_quorum_threshold))
@@ -103,6 +105,20 @@ async fn main() -> anyhow::Result<()> {
 
     let addr = format!("0.0.0.0:{}", config.api_port);
     info!("API listening on http://{addr}");
+
+    // ─── Metrics server ───────────────────────────────────
+    let metrics_addr = format!("0.0.0.0:{}", config.metrics_port);
+    info!("Metrics listening on http://{metrics_addr}/metrics");
+    let metrics_app = Router::new().route(
+        "/metrics",
+        get(|| async { metrics::gather_metrics() }),
+    );
+    let metrics_listener = tokio::net::TcpListener::bind(&metrics_addr).await?;
+    tokio::spawn(async move {
+        axum::serve(metrics_listener, metrics_app)
+            .await
+            .expect("metrics server failed");
+    });
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;

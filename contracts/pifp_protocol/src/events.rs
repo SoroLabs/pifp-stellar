@@ -3,6 +3,15 @@
 use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env};
 
 #[contractevent]
+// ── Event Data Structs ──────────────────────────────────────────────
+//
+// Each event uses a dedicated struct so that indexers can decode every
+// field by name rather than relying on positional tuple elements.
+// Topic layout: (event_symbol, project_id) for project-scoped events,
+// (event_symbol, caller) for protocol-level events.
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectCreated {
     pub project_id: u64,
     pub creator: Address,
@@ -50,6 +59,9 @@ pub struct FundsReleased {
 }
 
 #[contractevent]
+/// Structured refund event data (previously emitted as a bare tuple).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Refunded {
     pub project_id: u64,
     pub donator: Address,
@@ -57,14 +69,32 @@ pub struct Refunded {
 }
 
 #[contractevent]
+/// Event data emitted when a creator reclaims unclaimed donor funds
+/// after the refund window has expired.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExpiredFundsReclaimed {
+    pub project_id: u64,
+    pub creator: Address,
+    pub token: Address,
+    pub amount: i128,
+}
+
+/// Event data for protocol pause / unpause.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolPaused {
     pub admin: Address,
 }
 
 #[contractevent]
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProtocolUnpaused {
     pub admin: Address,
 }
+
+// ── Emission helpers ────────────────────────────────────────────────
 
 pub fn emit_project_created(
     env: &Env,
@@ -145,4 +175,40 @@ pub fn emit_protocol_paused(env: &Env, admin: Address) {
 
 pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     ProtocolUnpaused { admin }.publish(env);
+    let topics = (symbol_short!("refunded"), project_id);
+    let data = Refunded {
+        project_id,
+        donator,
+        amount,
+    };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_expired_funds_reclaimed(
+    env: &Env,
+    project_id: u64,
+    creator: Address,
+    token: Address,
+    amount: i128,
+) {
+    let topics = (symbol_short!("reclaim"), project_id, token.clone());
+    let data = ExpiredFundsReclaimed {
+        project_id,
+        creator,
+        token,
+        amount,
+    };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_protocol_paused(env: &Env, admin: Address) {
+    let topics = (symbol_short!("paused"), admin.clone());
+    let data = ProtocolPaused { admin };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
+    let topics = (symbol_short!("unpaused"), admin.clone());
+    let data = ProtocolUnpaused { admin };
+    env.events().publish(topics, data);
 }

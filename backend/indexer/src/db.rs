@@ -7,6 +7,16 @@ use tracing::info;
 use crate::errors::Result;
 use crate::events::{EventRecord, PifpEvent};
 
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct GlobalStats {
+    pub total_projects: i64,
+    pub total_tvl: String,
+    pub total_donors: i64,
+    pub completed_projects: i64,
+    pub failed_projects: i64,
+    pub updated_at: i64,
+}
+
 /// Establish a SQLite connection pool and run pending migrations.
 pub async fn init_pool(database_url: &str) -> Result<SqlitePool> {
     // Make sure the file is created if it doesn't exist yet.
@@ -144,9 +154,80 @@ pub async fn insert_events_with_new(
                     _ => {}
                 }
             }
+
+            // Always update global stats incrementally
+            update_global_stats(pool, ev).await?;
         }
     }
     Ok(inserted_events)
+}
+
+/// Incrementally update the global project statistics based on the observed event.
+pub async fn update_global_stats(pool: &SqlitePool, event: &PifpEvent) -> Result<()> {
+    let mut tx = pool.begin().await?;
+
+    match event.event_type.as_str() {
+        "project_created" => {
+            sqlx::query("UPDATE project_stats SET total_projects = total_projects + 1, updated_at = strftime('%s', 'now') WHERE id = 1")
+                .execute(&mut *tx)
+                .await?;
+        }
+        "project_funded" => {
+            // Update TVL
+            if let Some(amt_str) = &event.amount {
+                // We use big-integer addition in SQLite if possible, but SQLite doesn't support i128 natively.
+                // For this implementation, we'll load, add in Rust, and save back.
+                let current_tvl_str: (String,) = sqlx::query_as("SELECT total_tvl FROM project_stats WHERE id = 1")
+                    .fetch_one(&mut *tx)
+                    .await?;
+
+                let current_tvl = current_tvl_str.0.parse::<i128>().unwrap_or(0);
+                let added_amt = amt_str.parse::<i128>().unwrap_or(0);
+                let new_tvl = (current_tvl + added_amt).to_string();
+
+                sqlx::query("UPDATE project_stats SET total_tvl = ?1, updated_at = strftime('%s', 'now') WHERE id = 1")
+                    .bind(new_tvl)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+
+            // Update unique donor count
+            if let Some(actor) = &event.actor {
+                let res = sqlx::query("INSERT OR IGNORE INTO unique_donors (address) VALUES (?1)")
+                    .bind(actor)
+                    .execute(&mut *tx)
+                    .await?;
+
+                if res.rows_affected() > 0 {
+                    sqlx::query("UPDATE project_stats SET total_donors = total_donors + 1, updated_at = strftime('%s', 'now') WHERE id = 1")
+                        .execute(&mut *tx)
+                        .await?;
+                }
+            }
+        }
+        "project_verified" => {
+            sqlx::query("UPDATE project_stats SET completed_projects = completed_projects + 1, updated_at = strftime('%s', 'now') WHERE id = 1")
+                .execute(&mut *tx)
+                .await?;
+        }
+        "project_expired" | "project_cancelled" => {
+            sqlx::query("UPDATE project_stats SET failed_projects = failed_projects + 1, updated_at = strftime('%s', 'now') WHERE id = 1")
+                .execute(&mut *tx)
+                .await?;
+        }
+        _ => {}
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Fetch the pre-calculated global statistics.
+pub async fn get_global_stats(pool: &SqlitePool) -> Result<GlobalStats> {
+    let stats = sqlx::query_as::<_, GlobalStats>("SELECT * FROM project_stats WHERE id = 1")
+        .fetch_one(pool)
+        .await?;
+    Ok(stats)
 }
 
 // ─────────────────────────────────────────────────────────
@@ -665,6 +746,15 @@ mod tests {
             "CREATE TABLE oracle_votes (id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL, oracle_address TEXT NOT NULL, proof_hash TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(project_id, oracle_address));",
         ).execute(&pool).await.unwrap();
 
+        sqlx::query(
+            "CREATE TABLE project_stats (id INTEGER PRIMARY KEY CHECK (id = 1), total_projects INTEGER NOT NULL DEFAULT 0, total_tvl TEXT NOT NULL DEFAULT '0', total_donors INTEGER NOT NULL DEFAULT 0, completed_projects INTEGER NOT NULL DEFAULT 0, failed_projects INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
+        ).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO project_stats (id, total_projects, total_tvl, total_donors, completed_projects, failed_projects) VALUES (1, 0, '0', 0, 0, 0);").execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TABLE unique_donors (address TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
+        ).execute(&pool).await.unwrap();
+
         pool
     }
 
@@ -901,5 +991,98 @@ mod tests {
                 .count,
             2
         );
+    }
+
+    #[tokio::test]
+    async fn test_global_statistics_aggregation() {
+        let pool = setup_test_db().await;
+
+        // 1. Initial state
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.total_projects, 0);
+        assert_eq!(stats.total_tvl, "0");
+
+        // 2. Project Created
+        let ev_created = PifpEvent {
+            event_type: "project_created".to_string(),
+            project_id: Some("1".to_string()),
+            actor: Some("creator_1".to_string()),
+            amount: Some("1000".to_string()),
+            ledger: 100,
+            timestamp: 1000,
+            contract_id: "contract_1".to_string(),
+            tx_hash: Some("tx_1".to_string()),
+            extra_data: None,
+        };
+        update_global_stats(&pool, &ev_created).await.unwrap();
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.total_projects, 1);
+
+        // 3. Project Funded
+        let ev_funded = PifpEvent {
+            event_type: "project_funded".to_string(),
+            project_id: Some("1".to_string()),
+            actor: Some("donor_1".to_string()),
+            amount: Some("500".to_string()),
+            ledger: 101,
+            timestamp: 1010,
+            contract_id: "contract_1".to_string(),
+            tx_hash: Some("tx_2".to_string()),
+            extra_data: None,
+        };
+        update_global_stats(&pool, &ev_funded).await.unwrap();
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.total_tvl, "500");
+        assert_eq!(stats.total_donors, 1);
+
+        // 4. Project Funded by same donor (should not increment donor count)
+        let ev_funded_2 = PifpEvent {
+            event_type: "project_funded".to_string(),
+            project_id: Some("1".to_string()),
+            actor: Some("donor_1".to_string()),
+            amount: Some("300".to_string()),
+            ledger: 102,
+            timestamp: 1020,
+            contract_id: "contract_1".to_string(),
+            tx_hash: Some("tx_3".to_string()),
+            extra_data: None,
+        };
+        update_global_stats(&pool, &ev_funded_2).await.unwrap();
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.total_tvl, "800");
+        assert_eq!(stats.total_donors, 1);
+
+        // 5. Project Funded by new donor
+        let ev_funded_3 = PifpEvent {
+            event_type: "project_funded".to_string(),
+            project_id: Some("1".to_string()),
+            actor: Some("donor_2".to_string()),
+            amount: Some("200".to_string()),
+            ledger: 103,
+            timestamp: 1030,
+            contract_id: "contract_1".to_string(),
+            tx_hash: Some("tx_4".to_string()),
+            extra_data: None,
+        };
+        update_global_stats(&pool, &ev_funded_3).await.unwrap();
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.total_tvl, "1000");
+        assert_eq!(stats.total_donors, 2);
+
+        // 6. Project Verified
+        let ev_verified = PifpEvent {
+            event_type: "project_verified".to_string(),
+            project_id: Some("1".to_string()),
+            actor: Some("oracle_1".to_string()),
+            amount: None,
+            ledger: 104,
+            timestamp: 1040,
+            contract_id: "contract_1".to_string(),
+            tx_hash: Some("tx_5".to_string()),
+            extra_data: None,
+        };
+        update_global_stats(&pool, &ev_verified).await.unwrap();
+        let stats = get_global_stats(&pool).await.unwrap();
+        assert_eq!(stats.completed_projects, 1);
     }
 }

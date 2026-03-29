@@ -17,3 +17,10 @@ testutils = ["soroban-sdk/testutils"]
 [dev-dependencies]
 soroban-sdk = { version = "25.3.0", features = ["testutils"] }
 proptest = "1.5"
+
+[profile.release]
+opt-level = "z"
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
