@@ -28,11 +28,11 @@ hex = "0.4"
 tokio-util = "0.7"
 ed25519-dalek = { version = "2", features = ["serde"] }
 stellar-strkey = "0.0.16"
-redis = { version = "0.27", features = ["tokio-comp"] }
+redis = { version = "1.1", features = ["tokio-comp"] }
 hmac = "0.12"
-sha2 = "0.10"
+sha2 = "0.11"
 async-trait = "0.1"
-prometheus = { version = "0.13", features = ["process"] }
+prometheus = { version = "0.14", features = ["process"] }
 lazy_static = "1"
 
 [dev-dependencies]
