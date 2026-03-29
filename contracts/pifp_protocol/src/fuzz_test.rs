@@ -2,9 +2,9 @@ extern crate std;
 use std::vec::Vec;
 
 use proptest::prelude::*;
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, Vec as SorobanVec};
+use soroban_sdk::{testutils::Address as _, token, Address, Bytes, BytesN, Env, Vec as SorobanVec};
 
-use crate::invariants::*;
+use crate::invariants_checker::*;
 pub use crate::types::ProjectStatus;
 pub use crate::Role;
 use crate::{PifpProtocol, PifpProtocolClient};
@@ -24,6 +24,10 @@ fn setup_env() -> (Env, PifpProtocolClient<'static>, Address) {
 fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     token::Client::new(env, &addr.address())
+}
+
+fn dummy_metadata_uri(env: &Env) -> Bytes {
+    Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
 }
 
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
@@ -50,10 +54,11 @@ proptest! {
             &tokens,
             &goal,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
-        assert_all_project_invariants(&project);
+        check_all_project_invariants(&env, &project);
         assert_eq!(project.goal, goal);
         assert_eq!(project.status, ProjectStatus::Funding);
     }
@@ -77,10 +82,11 @@ proptest! {
             &tokens,
             &100,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
-        assert_all_project_invariants(&project);
+        check_all_project_invariants(&env, &project);
         assert_eq!(project.deadline, deadline);
     }
 
@@ -103,10 +109,11 @@ proptest! {
             &tokens,
             &1000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
-        assert_all_project_invariants(&project);
+        check_all_project_invariants(&env, &project);
         assert_eq!(project.proof_hash, proof_hash);
     }
 }
@@ -135,6 +142,7 @@ proptest! {
             &tokens,
             &100_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -146,10 +154,9 @@ proptest! {
         client.deposit(&project.id, &donator, &token_client.address, &amount);
 
         let balance_after = client.get_balance(&project.id, &token_client.address);
-        assert_deposit_invariant(balance_before, balance_after, amount);
-
+        check_inv5_deposit_sums(balance_before, balance_after, amount);
         let updated = client.get_project(&project.id);
-        assert_all_project_invariants(&updated);
+        check_all_project_invariants(&env, &updated);
     }
 
     #[test]
@@ -173,6 +180,7 @@ proptest! {
             &tokens,
             &1_000_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -187,10 +195,10 @@ proptest! {
             client.deposit(&project.id, &donator, &token_client.address, amount);
             let after_balance = client.get_balance(&project.id, &token_client.address);
 
-            assert_deposit_invariant(before, after_balance, *amount);
+            check_inv5_deposit_sums(before, after_balance, *amount);
 
             let after = client.get_project(&project.id);
-            assert_all_project_invariants(&after);
+            check_all_project_invariants(&env, &after);
 
             expected_balance += amount;
         }
@@ -229,6 +237,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -261,6 +270,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -270,7 +280,7 @@ proptest! {
         client.verify_and_release(&oracle, &project.id, &proof_hash);
 
         let updated = client.get_project(&project.id);
-        assert_valid_status_transition(&ProjectStatus::Funding, &updated.status);
+        check_inv7_status_transition(&ProjectStatus::Funding, &updated.status);
         assert_eq!(updated.status, ProjectStatus::Completed);
     }
 }
@@ -301,12 +311,17 @@ proptest! {
                 &tokens,
                 &1000,
                 &proof_hash,
+            &dummy_metadata_uri(&env),
                 &deadline,
             );
             projects.push(p);
         }
 
-        assert_sequential_ids(&projects);
+        let mut soroban_projects = SorobanVec::new(&env);
+        for project in projects {
+            soroban_projects.push_back(project);
+        }
+        check_inv6_sequential_ids(&soroban_projects);
     }
 }
 
@@ -334,6 +349,7 @@ proptest! {
             &tokens,
             &100_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -343,7 +359,7 @@ proptest! {
         client.deposit(&original.id, &donator, &token_client.address, &amount);
 
         let after = client.get_project(&original.id);
-        assert_project_immutable_fields(&original, &after);
+        check_inv10_config_immutable(&original, &after);
     }
 
     #[test]
@@ -367,6 +383,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -375,7 +392,7 @@ proptest! {
         client.verify_and_release(&oracle, &original.id, &proof_hash);
 
         let after = client.get_project(&original.id);
-        assert_project_immutable_fields(&original, &after);
+        check_inv10_config_immutable(&original, &after);
     }
 }
 
@@ -409,9 +426,10 @@ proptest! {
             &tokens,
             &goal,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
-        assert_all_project_invariants(&project);
+        check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);
 
         // Phase 2: Multiple deposits.
@@ -426,11 +444,11 @@ proptest! {
             client.deposit(&project.id, &donator, &token_client.address, amount);
             let after_balance = client.get_balance(&project.id, &token_client.address);
 
-            assert_deposit_invariant(before_balance, after_balance, *amount);
+            check_inv5_deposit_sums(before_balance, after_balance, *amount);
 
             let after = client.get_project(&project.id);
-            assert_project_immutable_fields(&project, &after);
-            assert_all_project_invariants(&after);
+            check_inv10_config_immutable(&project, &after);
+            check_all_project_invariants(&env, &after);
 
             total_deposited += amount;
         }
@@ -444,8 +462,8 @@ proptest! {
         client.verify_and_release(&oracle, &project.id, &proof_hash);
 
         let final_project = client.get_project(&project.id);
-        assert_valid_status_transition(&ProjectStatus::Funding, &final_project.status);
-        assert_project_immutable_fields(&project, &final_project);
+        check_inv7_status_transition(&ProjectStatus::Funding, &final_project.status);
+        check_inv10_config_immutable(&project, &final_project);
         assert_eq!(final_project.status, ProjectStatus::Completed);
 
         // Phase 4: Balance verification after verification.

@@ -153,11 +153,13 @@ pub fn save_project(env: &Env, project: &Project) {
         proof_hash: project.proof_hash.clone(),
         deadline: project.deadline,
         is_private: project.is_private,
+        metadata_uri: project.metadata_uri.clone(),
     };
 
     let state = ProjectState {
         status: project.status.clone(),
         donation_count: project.donation_count,
+        refund_expiry: project.refund_expiry,
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -287,10 +289,12 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         accepted_tokens: config.accepted_tokens,
         goal: config.goal,
         proof_hash: config.proof_hash,
+        metadata_uri: config.metadata_uri,
         deadline: config.deadline,
         status: state.status,
         donation_count: state.donation_count,
         is_private: config.is_private,
+        refund_expiry: state.refund_expiry,
     }
 }
 
@@ -305,8 +309,9 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         Some(c) => c,
         None => return None,
     };
-    
-    // If config exists, state must exist. This maintains the invariant while avoiding 
+    let config = maybe_load_project_config(env, id)?;
+
+    // If config exists, state must exist. This maintains the invariant while avoiding
     // a redundant .has() check before .get().
     let state: ProjectState = env
         .storage()
@@ -320,10 +325,12 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         accepted_tokens: config.accepted_tokens,
         goal: config.goal,
         proof_hash: config.proof_hash,
+        metadata_uri: config.metadata_uri,
         deadline: config.deadline,
         status: state.status,
         donation_count: state.donation_count,
         is_private: config.is_private,
+        refund_expiry: state.refund_expiry,
     })
 }
 
@@ -414,6 +421,7 @@ pub fn set_donator_balance(
 }
 
 /// Add `amount` to a donator's contributed balance for (project_id, token).
+#[allow(dead_code)]
 pub fn add_to_donator_balance(
     env: &Env,
     project_id: u64,

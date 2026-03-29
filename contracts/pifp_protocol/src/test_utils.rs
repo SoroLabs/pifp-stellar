@@ -2,7 +2,7 @@ extern crate std;
 
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, Vec,
+    token, Address, Bytes, BytesN, Env, Vec,
 };
 
 use crate::{types::Project, PifpProtocol, PifpProtocolClient, Role};
@@ -72,9 +72,22 @@ impl TestContext {
 
     pub fn register_project(&self, tokens: &Vec<Address>, goal: i128, is_private: bool) -> Project {
         let proof_hash = self.dummy_proof();
+        let metadata_uri = self.dummy_metadata_uri();
         let deadline = self.env.ledger().timestamp() + 86400;
         self.client
             .register_project(&self.manager, tokens, &goal, &proof_hash, &deadline, &is_private)
+        self.client.register_project(
+            &self.manager,
+            tokens,
+            &goal,
+            &proof_hash,
+            &metadata_uri,
+            &deadline,
+        )
+    }
+
+    pub fn dummy_metadata_uri(&self) -> Bytes {
+        Bytes::from_slice(&self.env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
     }
 
     pub fn dummy_proof(&self) -> BytesN<32> {

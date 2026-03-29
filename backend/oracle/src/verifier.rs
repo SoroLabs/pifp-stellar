@@ -147,6 +147,8 @@ mod tests {
             contract_id: String::new(),
             oracle_secret_key: String::new(),
             network_passphrase: String::new(),
+            sentry_dsn: None,
+            metrics_port: 9090,
         };
 
         // Use a CID that definitely doesn't exist
