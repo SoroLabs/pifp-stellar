@@ -191,16 +191,17 @@ Query whether the protocol is currently paused.
 #### `register_project`
 Register a new project. Required to start accepting funds.
 
-- **Signature**: `fn register_project(env: Env, creator: Address, accepted_tokens: Vec<Address>, goal: i128, proof_hash: BytesN<32>, deadline: u64) -> Project`
+- **Signature**: `fn register_project(env: Env, creator: Address, accepted_tokens: Vec<Address>, goal: i128, proof_hash: BytesN<32>, metadata_uri: Bytes, deadline: u64) -> Project`
 - **Parameters**:
   - `creator` (`Address`): Address of the caller. Must hold Admin, SuperAdmin, or ProjectManager role.
   - `accepted_tokens` (`Vec<Address>`): SAC Token addresses acceptable for donation. Max length 10.
   - `goal` (`i128`): Funding target (>0).
   - `proof_hash` (`BytesN<32>`): 32-byte cryptographic hash of the proof artifact that the oracle will later supply.
+  - `metadata_uri` (`Bytes`): URI or CID pointing to external project metadata.
   - `deadline` (`u64`): Ledger closing timestamp indicating the expiry of the project. Minimum is current time, max 5 years.
 - **Returns**: `Project` struct representing the created project.
 - **Events**: `created` (`ProjectCreated`)
-- **Errors**: `ProtocolPaused` (19), `NotAuthorized` (6), `EmptyAcceptedTokens` (17), `TooManyTokens` (10), `DuplicateToken` (12), `InvalidGoal` (7), `InvalidDeadline` (13).
+- **Errors**: `ProtocolPaused` (19), `NotAuthorized` (6), `EmptyAcceptedTokens` (17), `TooManyTokens` (10), `DuplicateToken` (12), `InvalidGoal` (7), `InvalidDeadline` (13), `MetadataCidInvalid` (26).
 - **CLI Example**:
   ```bash
   soroban contract invoke --id $CONTRACT_ID --source manager_wallet \
@@ -209,6 +210,7 @@ Register a new project. Required to start accepting funds.
       --accepted_tokens '["<TOKEN_CONTRACT_A>"]' \
       --goal 5000000000 \
       --proof_hash 0000000000000000000000000000000000000000000000000000000000000000 \
+      --metadata_uri bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi \
       --deadline 1790000000
   ```
 
@@ -218,6 +220,14 @@ Retrieve a full Project configuration and state from storage.
 - **Signature**: `fn get_project(env: Env, id: u64) -> Project`
 - **Parameters**: `id` (`u64`) - Auto-incremented project ID.
 - **Returns**: `Project` struct.
+
+#### `get_project_metadata`
+Retrieve the immutable metadata URI attached to a project.
+
+- **Signature**: `fn get_project_metadata(env: Env, project_id: u64) -> Bytes`
+- **Parameters**:
+  - `project_id` (`u64`): Auto-incremented project ID.
+- **Returns**: `Bytes` containing the project's metadata URI.
 - **Errors**: `ProjectNotFound` (1).
 - **CLI Example**:
   ```bash

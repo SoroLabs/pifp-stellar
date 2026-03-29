@@ -135,6 +135,30 @@ cd backend/indexer
 cargo run
 ```
 
+### Database Backup & Restore
+
+Automated backup system for the indexer database with support for AWS S3 and Google Cloud Storage:
+
+**Features:**
+- Daily automated backups via cron job
+- Compressed backups (gzip)
+- 30-day retention policy with automatic cleanup
+- Point-in-time recovery capability
+- Comprehensive logging and error handling
+
+**Quick Start:**
+
+```bash
+cd scripts/
+cp .env.backup.example .env.backup
+# Edit .env.backup with your storage credentials
+./backup.sh          # Run manual backup
+./setup_cron.sh      # Setup automated daily backups
+./restore.sh         # Restore from latest backup
+```
+
+For detailed documentation, see [scripts/BACKUP_README.md](scripts/BACKUP_README.md).
+
 ## Docker Development Environment
 
 For a reproducible and isolated development environment, you can use Docker. The provided `Dockerfile` and `docker-compose.yml` set up Rust configured for Soroban smart contracts.

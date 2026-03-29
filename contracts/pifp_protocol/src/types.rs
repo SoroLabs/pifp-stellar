@@ -22,12 +22,13 @@
 //!     └──────────────────►┘
 //!     └──► Expired
 //! Active ──► Expired
+//! Active ──► Cancelled
 //! ```
 //!
 //! Backward transitions and transitions out of terminal states (`Completed`,
-//! `Expired`) are rejected by `verify_and_release`.
+//! `Expired`, `Cancelled`) are rejected by lifecycle entrypoints.
 
-use soroban_sdk::{contracttype, Address, BytesN, Vec};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Vec};
 
 /// Current lifecycle state of a funding project.
 #[contracttype]
@@ -41,6 +42,9 @@ pub enum ProjectStatus {
     Completed,
     /// Deadline passed without reaching goal or verification.
     Expired,
+    /// Project was manually cancelled after becoming active.
+    /// Remaining donor balances stay refundable.
+    Cancelled,
 }
 
 /// Immutable project configuration, written once at registration.
@@ -56,17 +60,23 @@ pub struct ProjectConfig {
     pub goal: i128,
     pub proof_hash: BytesN<32>,
     pub deadline: u64,
+    pub metadata_uri: Bytes,
 }
 
 /// Mutable project state, updated on deposits and verification.
 ///
-/// Kept small (~20 bytes) so that frequent writes (deposits) are cheap.
+/// Kept small so that frequent writes (deposits) are cheap.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectState {
     pub status: ProjectStatus,
     /// Count of unique (donator, token) pairs that have deposited.
     pub donation_count: u32,
+    /// Ledger timestamp after which donors can no longer refund and the
+    /// creator may reclaim unclaimed funds.  Set to `deadline + REFUND_WINDOW`
+    /// when the project transitions to Expired, or `cancel_time + REFUND_WINDOW`
+    /// when cancelled.  Zero while the project is still in a non-terminal state.
+    pub refund_expiry: u64,
 }
 
 /// Full on-chain representation of a funding project.
@@ -89,6 +99,8 @@ pub struct Project {
     pub goal: i128,
     /// Content hash (e.g. IPFS CID digest) of proof artifacts.
     pub proof_hash: soroban_sdk::BytesN<32>,
+    /// Optional CID or URI pointing to external project metadata.
+    pub metadata_uri: soroban_sdk::Bytes,
     /// Ledger timestamp by which the project must be completed.
     pub deadline: u64,
     /// Current lifecycle state.
@@ -96,6 +108,9 @@ pub struct Project {
     /// Count of unique (token, donator) pairs that have donated.
     /// Informational; incremented on each new deposit.
     pub donation_count: u32,
+    /// Ledger timestamp after which donors can no longer refund and the
+    /// creator may reclaim unclaimed funds.  Zero while non-terminal.
+    pub refund_expiry: u64,
 }
 
 impl Project {
