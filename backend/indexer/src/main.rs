@@ -92,6 +92,7 @@ async fn main() -> anyhow::Result<()> {
             "/projects/active/count",
             get(api::get_active_projects_count),
         )
+        .route("/stats", get(api::get_stats))
         .route("/webhooks", post(api::register_webhook))
         .route("/webhooks", get(api::list_webhooks))
         .route("/admin/quorum", post(api::set_quorum_threshold))
