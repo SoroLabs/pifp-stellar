@@ -28,7 +28,7 @@
 //! Backward transitions and transitions out of terminal states (`Completed`,
 //! `Expired`, `Cancelled`) are rejected by lifecycle entrypoints.
 
-use soroban_sdk::{contracttype, Address, BytesN, Vec};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Vec};
 
 /// Current lifecycle state of a funding project.
 #[contracttype]
@@ -60,6 +60,7 @@ pub struct ProjectConfig {
     pub goal: i128,
     pub proof_hash: BytesN<32>,
     pub deadline: u64,
+    pub metadata_uri: Bytes,
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -98,6 +99,8 @@ pub struct Project {
     pub goal: i128,
     /// Content hash (e.g. IPFS CID digest) of proof artifacts.
     pub proof_hash: soroban_sdk::BytesN<32>,
+    /// Optional CID or URI pointing to external project metadata.
+    pub metadata_uri: soroban_sdk::Bytes,
     /// Ledger timestamp by which the project must be completed.
     pub deadline: u64,
     /// Current lifecycle state.

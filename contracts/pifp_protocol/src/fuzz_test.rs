@@ -2,7 +2,7 @@ extern crate std;
 use std::vec::Vec;
 
 use proptest::prelude::*;
-use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, Vec as SorobanVec};
+use soroban_sdk::{testutils::Address as _, token, Address, Bytes, BytesN, Env, Vec as SorobanVec};
 
 use crate::invariants_checker::*;
 pub use crate::types::ProjectStatus;
@@ -24,6 +24,10 @@ fn setup_env() -> (Env, PifpProtocolClient<'static>, Address) {
 fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     token::Client::new(env, &addr.address())
+}
+
+fn dummy_metadata_uri(env: &Env) -> Bytes {
+    Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
 }
 
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
@@ -50,6 +54,7 @@ proptest! {
             &tokens,
             &goal,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -77,6 +82,7 @@ proptest! {
             &tokens,
             &100,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -103,6 +109,7 @@ proptest! {
             &tokens,
             &1000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -135,6 +142,7 @@ proptest! {
             &tokens,
             &100_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -172,6 +180,7 @@ proptest! {
             &tokens,
             &1_000_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -228,6 +237,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -260,6 +270,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -300,6 +311,7 @@ proptest! {
                 &tokens,
                 &1000,
                 &proof_hash,
+            &dummy_metadata_uri(&env),
                 &deadline,
             );
             projects.push(p);
@@ -337,6 +349,7 @@ proptest! {
             &tokens,
             &100_000,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -370,6 +383,7 @@ proptest! {
             &tokens,
             &500,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
 
@@ -412,6 +426,7 @@ proptest! {
             &tokens,
             &goal,
             &proof_hash,
+            &dummy_metadata_uri(&env),
             &deadline,
         );
         check_all_project_invariants(&env, &project);

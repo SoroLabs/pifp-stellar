@@ -25,12 +25,15 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec};
 
 /// Refund window: 6 months (in seconds) after a project enters a terminal
 /// refundable state (Expired or Cancelled).  Donors must claim refunds within
 /// this window; after it passes, the creator may reclaim unclaimed funds.
 const REFUND_WINDOW: u64 = 6 * 30 * 24 * 60 * 60; // 15_552_000 seconds
+
+/// Maximum allowed length for a project metadata URI / CID.
+const MAX_METADATA_URI_LEN: u32 = 64;
 
 pub mod errors;
 pub mod events;
@@ -170,6 +173,7 @@ impl PifpProtocol {
         accepted_tokens: Vec<Address>,
         goal: i128,
         proof_hash: BytesN<32>,
+        metadata_uri: Bytes,
         deadline: u64,
     ) -> Project {
         Self::require_not_paused(&env);
@@ -198,6 +202,11 @@ impl PifpProtocol {
         }
 
         let now = env.ledger().timestamp();
+        // Metadata must be non-empty and fit within the supported CID/URI length.
+        if metadata_uri.is_empty() || metadata_uri.len() > MAX_METADATA_URI_LEN {
+            panic_with_error!(&env, Error::MetadataCidInvalid);
+        }
+
         // Max 5 years deadline (5 * 365 * 24 * 60 * 60)
         let max_deadline = now + 157_680_000;
         if deadline <= now || deadline > max_deadline {
@@ -211,6 +220,7 @@ impl PifpProtocol {
             accepted_tokens: accepted_tokens.clone(),
             goal,
             proof_hash,
+            metadata_uri: metadata_uri.clone(),
             deadline,
             status: ProjectStatus::Funding,
             donation_count: 0,
@@ -229,6 +239,12 @@ impl PifpProtocol {
 
     pub fn get_project(env: Env, id: u64) -> Project {
         load_project(&env, id)
+    }
+
+    /// Return the immutable metadata URI attached to a project.
+    pub fn get_project_metadata(env: Env, project_id: u64) -> Bytes {
+        let config = storage::load_project_config(&env, project_id);
+        config.metadata_uri
     }
 
     /// Return the balance of `token` for `project_id`.
