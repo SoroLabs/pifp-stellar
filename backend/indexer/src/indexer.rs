@@ -12,6 +12,7 @@ use crate::cache::Cache;
 use crate::config::Config;
 use crate::db;
 use crate::rpc;
+use crate::webhook;
 
 pub struct IndexerState {
     pub pool: SqlitePool,
@@ -100,7 +101,8 @@ async fn poll_once(
 
     if !raw_events.is_empty() {
         let decoded = rpc::decode_events(&raw_events, &config.contract_ids);
-        let inserted = db::insert_events(pool, &decoded).await?;
+        let inserted_events = db::insert_events_with_new(pool, &decoded).await?;
+        let inserted = inserted_events.len();
         info!(
             "Polled {} raw events → {} decoded PIFP events stored",
             raw_events.len(),
@@ -109,6 +111,18 @@ async fn poll_once(
         if inserted > 0 {
             if let Some(cache) = cache {
                 cache.invalidate_all().await;
+            }
+        }
+
+        if inserted > 0 {
+            for event in inserted_events {
+                let dispatch_ctx = webhook::DispatchContext {
+                    pool: pool.clone(),
+                    client: client.clone(),
+                };
+                tokio::spawn(async move {
+                    webhook::dispatch_event(dispatch_ctx, event).await;
+                });
             }
         }
     }

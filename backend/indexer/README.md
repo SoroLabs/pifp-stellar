@@ -89,6 +89,10 @@ In parallel to the background indexing daemon, an Axum web server runs to expose
 - `POST /projects/:id/vote` : Submit an oracle vote (expects a `{ oracle: string, proof_hash: string }` JSON payload).
 - `GET /projects/:id/quorum` : Returns the active vote count vs existing threshold for the given project.
 
+**Webhook Endpoints:**
+- `POST /webhooks` : Register webhook URL + event subscriptions + secret (`{ "url": "...", "secret": "...", "event_types": ["project_active"] }`).
+- `GET /webhooks` : List registered webhook subscriptions.
+
 ## 🧠 Caching Behavior
 
 When `REDIS_URL` is provided, the API stores frequent response payloads in Redis:
@@ -98,6 +102,14 @@ When `REDIS_URL` is provided, the API stores frequent response payloads in Redis
 On each successful indexing batch that inserts new events, the indexer bumps a global cache version key in Redis. This invalidates previous cached entries without key scans.
 
 If Redis is unavailable (startup or runtime), requests automatically fall back to SQLite queries and continue serving responses.
+
+## 🔔 Webhook Dispatch
+
+The indexer can dispatch signed webhook notifications whenever newly indexed events match subscriptions:
+- Registry tables: `webhooks`, `webhook_subscriptions`, `webhook_deliveries`
+- Signature header: `X-PIFP-Signature` with format `sha256=<hex_hmac>`
+- HMAC algorithm: SHA-256 over raw JSON payload using the webhook secret
+- Retry policy: exponential backoff (`500ms`, `1s`, `2s`, `4s`) for transient failures
 
 ## 🔧 Troubleshooting
 

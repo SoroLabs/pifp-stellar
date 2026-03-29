@@ -101,6 +101,7 @@ fn test_register_deadline_too_far_in_future_fails() {
         &tokens,
         &1000,
         &ctx.dummy_proof(),
+        &ctx.dummy_metadata_uri(),
         &too_far_deadline,
     );
 }
