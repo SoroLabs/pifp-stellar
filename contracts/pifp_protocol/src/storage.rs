@@ -135,11 +135,13 @@ pub fn save_project(env: &Env, project: &Project) {
         goal: project.goal,
         proof_hash: project.proof_hash.clone(),
         deadline: project.deadline,
+        metadata_uri: project.metadata_uri.clone(),
     };
 
     let state = ProjectState {
         status: project.status.clone(),
         donation_count: project.donation_count,
+        refund_expiry: project.refund_expiry,
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -260,9 +262,11 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         accepted_tokens: config.accepted_tokens,
         goal: config.goal,
         proof_hash: config.proof_hash,
+        metadata_uri: config.metadata_uri,
         deadline: config.deadline,
         status: state.status,
         donation_count: state.donation_count,
+        refund_expiry: state.refund_expiry,
     }
 }
 
@@ -293,9 +297,11 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         accepted_tokens: config.accepted_tokens,
         goal: config.goal,
         proof_hash: config.proof_hash,
+        metadata_uri: config.metadata_uri,
         deadline: config.deadline,
         status: state.status,
         donation_count: state.donation_count,
+        refund_expiry: state.refund_expiry,
     })
 }
 

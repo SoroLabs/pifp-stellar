@@ -67,6 +67,7 @@ fn test_register_past_deadline_fails() {
         &tokens,
         &1000,
         &ctx.dummy_proof(),
+        &ctx.dummy_metadata_uri(),
         &past_deadline,
     );
 }
