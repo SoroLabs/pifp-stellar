@@ -39,6 +39,7 @@ fn test_register_duplicate_tokens_fails() {
     let ctx = TestContext::new();
     let token = ctx.generate_address();
     let tokens = Vec::from_array(&ctx.env, [token.clone(), token.clone()]);
+
     ctx.register_project(&tokens, 1000, false);
 }
 
@@ -66,8 +67,6 @@ fn test_register_past_deadline_fails() {
         &ctx.dummy_metadata_uri(),
         &past_deadline,
         &false,
-        &empty_oracles,
-        &0u32,
     );
 }
 

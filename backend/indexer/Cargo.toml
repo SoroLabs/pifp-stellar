@@ -39,4 +39,4 @@ dashmap = "6"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-axum-test = "17"
+rand = "0.8"

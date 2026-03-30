@@ -15,6 +15,7 @@ use tracing::{debug, warn};
 
 use crate::errors::{IndexerError, Result};
 use crate::events::{EventKind, PifpEvent};
+use crate::metrics;
 
 const MAX_BACKOFF_SECS: u64 = 60;
 const INITIAL_BACKOFF_SECS: u64 = 2;
@@ -113,7 +114,11 @@ pub async fn fetch_events(
             },
         );
 
-        let response = client
+        // Start the latency timer before the request; it records on drop,
+        // so it covers both the network send and the response body parse.
+        let rpc_timer = metrics::RPC_LATENCY.start_timer();
+
+        let send_result = client
             .post(rpc_url)
             .json(&json!({
                 "jsonrpc": "2.0",
@@ -124,8 +129,10 @@ pub async fn fetch_events(
             .send()
             .await;
 
-        match response {
+        match send_result {
             Err(e) => {
+                rpc_timer.stop_and_record();
+                metrics::RPC_ERRORS_TOTAL.inc();
                 warn!("RPC request failed (will retry in {backoff}s): {e}");
                 tokio::time::sleep(Duration::from_secs(backoff)).await;
                 backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
@@ -134,13 +141,24 @@ pub async fn fetch_events(
             Ok(resp) => {
                 let status = resp.status();
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    rpc_timer.stop_and_record();
+                    metrics::RPC_ERRORS_TOTAL.inc();
                     warn!("Rate-limited by RPC (will retry in {backoff}s)");
                     tokio::time::sleep(Duration::from_secs(backoff)).await;
                     backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
                     continue;
                 }
 
-                let body: RpcResponse = resp.json().await?;
+                // Parse the body — timer is still live, covering the full round-trip.
+                let body: RpcResponse = match resp.json().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        rpc_timer.stop_and_record();
+                        metrics::RPC_ERRORS_TOTAL.inc();
+                        return Err(e.into());
+                    }
+                };
+                rpc_timer.stop_and_record();
 
                 if let Some(err) = body.error {
                     // Some RPC nodes may reject `topics` filter formats.
@@ -153,7 +171,8 @@ pub async fn fetch_events(
                         use_topic_filter = false;
                         continue;
                     }
-                    // Code -32600 / -32601 are hard failures; everything else we retry
+                    // Code -32600 / -32601 are hard failures; everything else we retry.
+                    metrics::RPC_ERRORS_TOTAL.inc();
                     if err.code == -32600 || err.code == -32601 {
                         return Err(IndexerError::EventParse(format!(
                             "RPC hard error {}: {}",

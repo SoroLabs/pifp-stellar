@@ -15,7 +15,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec,
+};
 
 /// Refund window: 6 months after a project enters a terminal refundable state.
 pub const REFUND_WINDOW: u64 = 6 * 30 * 24 * 60 * 60;
@@ -30,6 +32,7 @@ pub mod errors;
 pub mod events;
 pub mod invariants_checker;
 pub mod rbac;
+pub mod categories;
 mod storage;
 mod types;
 
@@ -40,6 +43,8 @@ mod rbac_test;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
+mod test_deadline;
+#[cfg(test)]
 mod test_donation_count;
 #[cfg(test)]
 mod test_errors;
@@ -48,27 +53,26 @@ mod test_events;
 #[cfg(test)]
 mod test_expire;
 #[cfg(test)]
-mod test_refund;
-#[cfg(test)]
-mod test_reclaim;
-#[cfg(test)]
-mod test_deadline;
+mod test_project_pause;
 #[cfg(test)]
 mod test_protocol_config;
 #[cfg(test)]
-mod test_whitelist;
+mod test_reclaim;
 #[cfg(test)]
-mod test_multi_oracle;
+mod test_refund;
+#[cfg(test)]
 mod test_utils;
+#[cfg(test)]
+mod test_whitelist;
 
+use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    add_to_whitelist, clear_oracle_agreement, drain_token_balance, get_all_balances,
-    get_and_increment_project_id, get_protocol_config, is_whitelisted, load_oracle_agreement,
-    load_project, load_project_pair, maybe_load_project, remove_from_whitelist, save_oracle_agreement,
-    save_project, save_project_config, save_project_state, set_protocol_config,
+    drain_token_balance, get_all_balances, get_and_increment_project_id, get_protocol_config,
+    is_whitelisted, load_project, load_project_pair, maybe_load_project, save_project,
+    save_project_config, save_project_state, set_protocol_config,
 };
 pub use types::{OracleAgreement, Project, ProjectBalances, ProjectConfig, ProjectState, ProjectStatus, ProtocolConfig};
 
@@ -208,8 +212,8 @@ impl PifpProtocol {
 
     /// Register a new funding project with M-of-N oracle verification.
     ///
-    /// `authorized_oracles` is the initial oracle set; `threshold` is M.
-    /// Both may be empty/zero to use the legacy single-oracle path via `set_oracle`.
+    /// `creator` must hold the `ProjectManager`, `Admin`, or `SuperAdmin` role.
+    #[allow(clippy::too_many_arguments)]
     pub fn register_project(
         env: Env,
         creator: Address,
@@ -219,8 +223,7 @@ impl PifpProtocol {
         metadata_uri: Bytes,
         deadline: u64,
         is_private: bool,
-        authorized_oracles: Vec<Address>,
-        threshold: u32,
+        categories: u32,
     ) -> Project {
         Self::require_not_paused(&env);
         creator.require_auth();
@@ -270,9 +273,9 @@ impl PifpProtocol {
             status: ProjectStatus::Funding,
             donation_count: 0,
             is_private,
+            paused: false,
             refund_expiry: 0,
-            authorized_oracles,
-            threshold,
+            categories,
         };
 
         save_project(&env, &project);
@@ -284,6 +287,42 @@ impl PifpProtocol {
         project
     }
 
+    /// Pause a project, blocking deposits and proof verification/releases.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    pub fn pause_project(env: Env, caller: Address, project_id: u64) {
+        caller.require_auth();
+        rbac::require_admin_or_above(&env, &caller);
+
+        let (_config, mut state) = load_project_pair(&env, project_id);
+        if !state.paused {
+            state.paused = true;
+            save_project_state(&env, project_id, &state);
+            events::emit_project_paused(&env, project_id, caller);
+        }
+    }
+
+    /// Unpause a project.
+    ///
+    /// - `caller` must hold `SuperAdmin` or `Admin`.
+    pub fn unpause_project(env: Env, caller: Address, project_id: u64) {
+        caller.require_auth();
+        rbac::require_admin_or_above(&env, &caller);
+
+        let (_config, mut state) = load_project_pair(&env, project_id);
+        if state.paused {
+            state.paused = false;
+            save_project_state(&env, project_id, &state);
+            events::emit_project_unpaused(&env, project_id, caller);
+        }
+    }
+
+    /// Extend a project's deadline.
+    ///
+    /// - `caller` must hold `ProjectManager`, `Admin`, or `SuperAdmin`.
+    /// - Project must be in `Funding` or `Active` state.
+    /// - New deadline must be later than the current one.
+    /// - Total extension cannot exceed 1 year from the current ledger time.
     pub fn extend_deadline(env: Env, caller: Address, project_id: u64, new_deadline: u64) {
         Self::require_not_paused(&env);
         caller.require_auth();
@@ -297,6 +336,8 @@ impl PifpProtocol {
         }
 
         let now = env.ledger().timestamp();
+
+        // Ensure the project hasn't already expired by current time.
         if now >= config.deadline {
             panic_with_error!(&env, Error::ProjectExpired);
         }
@@ -317,6 +358,8 @@ impl PifpProtocol {
     pub fn add_to_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
         caller.require_auth();
         let config = storage::load_project_config(&env, project_id);
+
+        // Auth check: creator or Admin/SuperAdmin
         if caller != config.creator {
             rbac::require_admin_or_above(&env, &caller);
         }
@@ -327,6 +370,8 @@ impl PifpProtocol {
     pub fn remove_from_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
         caller.require_auth();
         let config = storage::load_project_config(&env, project_id);
+
+        // Auth check: creator or Admin/SuperAdmin
         if caller != config.creator {
             rbac::require_admin_or_above(&env, &caller);
         }
@@ -364,6 +409,7 @@ impl PifpProtocol {
         }
 
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         if env.ledger().timestamp() >= config.deadline {
             if matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active) {
@@ -374,6 +420,7 @@ impl PifpProtocol {
             panic_with_error!(&env, Error::ProjectExpired);
         }
 
+        // Whitelist check
         if config.is_private && !is_whitelisted(&env, project_id, &donator) {
             panic_with_error!(&env, Error::NotWhitelisted);
         }
@@ -432,6 +479,7 @@ impl PifpProtocol {
         rbac::require_can_cancel_project(&env, &caller);
 
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         if env.ledger().timestamp() >= config.deadline
             && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
@@ -503,7 +551,7 @@ impl PifpProtocol {
 
     pub fn update_protocol_config(env: Env, caller: Address, fee_recipient: Address, fee_bps: u32) {
         caller.require_auth();
-        rbac::require_super_admin(&env, &caller);
+        rbac::require_role(&env, &caller, &Role::SuperAdmin);
 
         if fee_bps > 1000 {
             panic_with_error!(&env, Error::InvalidFeeBasisPoints);
@@ -534,6 +582,7 @@ impl PifpProtocol {
         oracle.require_auth();
 
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         // Expiry check.
         if env.ledger().timestamp() >= config.deadline
@@ -720,6 +769,12 @@ impl PifpProtocol {
     fn require_not_paused(env: &Env) {
         if storage::is_paused(env) {
             panic_with_error!(env, Error::ProtocolPaused);
+        }
+    }
+
+    fn require_project_not_paused(env: &Env, state: &ProjectState) {
+        if state.paused {
+            panic_with_error!(env, Error::ProjectPaused);
         }
     }
 }

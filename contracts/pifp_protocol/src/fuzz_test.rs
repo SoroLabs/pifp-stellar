@@ -27,7 +27,10 @@ fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
 }
 
 fn dummy_metadata_uri(env: &Env) -> Bytes {
-    Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+    Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    )
 }
 
 fn register<'a>(
@@ -72,7 +75,18 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, goal, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &goal,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
+
+        check_all_project_invariants(&env, &project);
+        assert_eq!(project.goal, goal);
         assert_eq!(project.status, ProjectStatus::Funding);
     }
 
@@ -90,7 +104,15 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 100, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &100,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
 
         check_all_project_invariants(&env, &project);
         assert_eq!(project.deadline, deadline);
@@ -110,7 +132,15 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 1000, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &1000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
 
         check_all_project_invariants(&env, &project);
         assert_eq!(project.proof_hash, proof_hash);
@@ -136,7 +166,17 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 100_000, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &100_000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
+
+        let donator = Address::generate(&env);
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
         sac.mint(&donator, &amount);
 
@@ -165,7 +205,17 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 1_000_000, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &1_000_000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
+
+        let sac = token::StellarAssetClient::new(&env, &token_client.address);
         let mut expected_balance: i128 = 0;
 
         for amount in &amounts {
@@ -213,7 +263,15 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &500,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
@@ -239,7 +297,15 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &500,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
@@ -273,7 +339,15 @@ proptest! {
             let creator = Address::generate(&env);
             client.grant_role(&admin, &creator, &Role::ProjectManager);
 
-            let p = register(&env, &client, &creator, &tokens, 1000, &proof_hash, deadline);
+            let p = client.register_project(
+                &creator,
+                &tokens,
+                &1000,
+                &proof_hash,
+                &dummy_metadata_uri(&env),
+                &deadline,
+                &false,
+            );
             projects.push(p);
         }
 
@@ -304,7 +378,17 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let original = register(&env, &client, &creator, &tokens, 100_000, &proof_hash, deadline);
+        let original = client.register_project(
+            &creator,
+            &tokens,
+            &100_000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
+
+        let donator = Address::generate(&env);
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
         sac.mint(&donator, &amount);
         client.deposit(&original.id, &donator, &token_client.address, &amount);
@@ -329,7 +413,19 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let original = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
+        let original = client.register_project(
+            &creator,
+            &tokens,
+            &500,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
+
+        let oracle = Address::generate(&env);
+        client.set_oracle(&admin, &oracle);
+        client.verify_and_release(&oracle, &original.id, &proof_hash);
 
         let after = client.get_project(&original.id);
         check_inv10_config_immutable(&original, &after);
@@ -361,7 +457,15 @@ proptest! {
         tokens.push_back(token_client.address.clone());
 
         // Phase 1: Register project.
-        let project = register(&env, &client, &creator, &tokens, goal, &proof_hash, deadline);
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &goal,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+            &false,
+        );
         check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);
 
@@ -412,5 +516,125 @@ proptest! {
         // Phase 5: Double-verify should fail.
         let result = client.try_verify_and_release(&oracle, &project.id, &proof_hash);
         prop_assert!(result.is_err(), "double verification should fail");
+    }
+}
+
+// ── 7. Invalid Deposit Amounts Are Rejected ─────────────────────────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn fuzz_deposit_zero_or_negative_rejected(amount in i128::MIN..=0i128) {
+        let (env, client, admin) = setup_env();
+        let creator = Address::generate(&env);
+        client.grant_role(&admin, &creator, &Role::ProjectManager);
+
+        let token_admin = Address::generate(&env);
+        let token_client = create_token(&env, &token_admin);
+        let proof_hash = BytesN::from_array(&env, &[9u8; 32]);
+        let deadline = env.ledger().timestamp() + 86_400;
+
+        let mut tokens = SorobanVec::new(&env);
+        tokens.push_back(token_client.address.clone());
+
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &100_000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+        );
+
+        let donator = Address::generate(&env);
+        let result = client.try_deposit(&project.id, &donator, &token_client.address, &amount);
+        prop_assert!(result.is_err(), "deposit of {} should be rejected", amount);
+    }
+}
+
+// ── 8. Non-Existent Project ID Is Rejected ──────────────────────────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn fuzz_verify_nonexistent_project_rejected(
+        fake_id in 100u64..=u64::MAX,
+        hash_bytes in prop::array::uniform32(any::<u8>()),
+    ) {
+        let (env, client, admin) = setup_env();
+        let oracle = Address::generate(&env);
+        client.set_oracle(&admin, &oracle);
+
+        let wrong_hash = BytesN::from_array(&env, &hash_bytes);
+        let result = client.try_verify_and_release(&oracle, &fake_id, &wrong_hash);
+        prop_assert!(result.is_err(), "verify on non-existent project {} should fail", fake_id);
+    }
+
+    #[test]
+    fn fuzz_deposit_nonexistent_project_rejected(
+        fake_id in 100u64..=u64::MAX,
+        amount in 1i128..=10_000i128,
+    ) {
+        let (env, client, admin) = setup_env();
+        let token_admin = Address::generate(&env);
+        let token_client = create_token(&env, &token_admin);
+        let donator = Address::generate(&env);
+
+        let sac = token::StellarAssetClient::new(&env, &token_client.address);
+        sac.mint(&donator, &amount);
+
+        let _ = admin;
+        let result = client.try_deposit(&fake_id, &donator, &token_client.address, &amount);
+        prop_assert!(result.is_err(), "deposit to non-existent project {} should fail", fake_id);
+    }
+}
+
+// ── 9. Hash Collision Resistance ────────────────────────────────────
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// For any two distinct 32-byte arrays, submitting the wrong one must fail.
+    #[test]
+    fn fuzz_no_hash_collision_bypasses_verification(
+        stored in prop::array::uniform32(any::<u8>()),
+        submitted in prop::array::uniform32(any::<u8>()),
+    ) {
+        prop_assume!(stored != submitted);
+
+        let (env, client, admin) = setup_env();
+        let creator = Address::generate(&env);
+        client.grant_role(&admin, &creator, &Role::ProjectManager);
+
+        let token_admin = Address::generate(&env);
+        let token = create_token(&env, &token_admin);
+        let proof_hash = BytesN::from_array(&env, &stored);
+        let deadline = env.ledger().timestamp() + 86_400;
+
+        let mut tokens = SorobanVec::new(&env);
+        tokens.push_back(token.address.clone());
+
+        let project = client.register_project(
+            &creator,
+            &tokens,
+            &1_000,
+            &proof_hash,
+            &dummy_metadata_uri(&env),
+            &deadline,
+        );
+
+        let oracle = Address::generate(&env);
+        client.set_oracle(&admin, &oracle);
+
+        let wrong = BytesN::from_array(&env, &submitted);
+        let result = client.try_verify_and_release(&oracle, &project.id, &wrong);
+        prop_assert!(result.is_err(), "wrong hash should never bypass verification");
+
+        // Correct hash must still succeed.
+        client.verify_and_release(&oracle, &project.id, &proof_hash);
+        let updated = client.get_project(&project.id);
+        assert_eq!(updated.status, ProjectStatus::Completed);
     }
 }

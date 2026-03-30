@@ -4,7 +4,6 @@
 //! as defined in ARCHITECTURE.md. These checkers are used both in fuzz tests
 //! and can be triggered as post-execution assertions in debug builds.
 
-use crate::rbac::get_super_admin;
 use crate::types::{Project, ProjectStatus};
 use soroban_sdk::{Address, Env, Vec};
 
@@ -97,8 +96,10 @@ pub fn check_inv8_single_role(_env: &Env, _address: &Address) {
 
 /// INV-9: The SuperAdmin address is always set after init.
 pub fn check_inv9_super_admin_exists(env: &Env) {
-    let _ = env;
-    // Skipped in off-contract test contexts where storage is inaccessible.
+    assert!(
+        get_super_admin(env).is_some(),
+        "INV-9 violated: super admin missing"
+    );
 }
 
 /// INV-10: ProjectConfig fields are immutable after registration.

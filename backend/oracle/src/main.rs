@@ -14,7 +14,7 @@ use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::config::Config;
-use crate::errors::Result;
+use crate::errors::{OracleError, Result};
 use crate::metrics::OracleMetrics;
 
 const MAX_CONCURRENT_PROOFS: usize = 5;
@@ -42,7 +42,7 @@ struct Cli {
     #[arg(long)]
     batch: Option<String>,
 
-    /// Dry run — compute hash and log without submitting transaction
+    /// Dry run: compute hash and log without submitting transaction
     #[arg(long, default_value_t = false)]
     dry_run: bool,
 
@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
-    let config = Arc::new(Config::from_env().map_err(|e| anyhow::anyhow!("{e}"))?);
+    let config = Arc::new(Config::from_env()?);
 
     // Initialise Sentry if DSN is configured.
     let _sentry_guard = config.sentry_dsn.as_deref().map(|dsn| {
@@ -80,21 +80,19 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let tasks = build_task_list(&cli).map_err(|e| anyhow::anyhow!("{e}"))?;
-
+    let tasks = build_task_list(&cli)?;
     if tasks.is_empty() {
         warn!("No proofs to process. Use --project-id/--proof-cid or --batch.");
         return Ok(());
     }
 
     info!(
-        "PIFP Oracle starting — processing {} proof(s) with max {} concurrent",
+        "PIFP Oracle starting - processing {} proof(s) with max {} concurrent",
         tasks.len(),
         MAX_CONCURRENT_PROOFS
     );
 
-    process_batch(tasks, config, cli.dry_run).await;
-
+    process_batch(tasks, config, cli.dry_run, metrics).await;
     Ok(())
 }
 
@@ -107,18 +105,17 @@ fn build_task_list(cli: &Cli) -> Result<Vec<ProofTask>> {
             if entry.is_empty() {
                 continue;
             }
+
             let mut parts = entry.splitn(2, ':');
             let id_str = parts.next().unwrap_or("").trim();
             let cid = parts.next().unwrap_or("").trim();
 
             let project_id: u64 = id_str.parse().map_err(|_| {
-                crate::errors::OracleError::Config(format!(
-                    "Invalid project_id in batch entry: '{entry}'"
-                ))
+                OracleError::Config(format!("Invalid project_id in batch entry: '{entry}'"))
             })?;
 
             if cid.is_empty() {
-                return Err(crate::errors::OracleError::Config(format!(
+                return Err(OracleError::Config(format!(
                     "Missing proof_cid in batch entry: '{entry}'"
                 )));
             }
@@ -128,29 +125,42 @@ fn build_task_list(cli: &Cli) -> Result<Vec<ProofTask>> {
                 proof_cid: cid.to_string(),
             });
         }
-    } else if let (Some(project_id), Some(proof_cid)) = (cli.project_id, cli.proof_cid.clone()) {
-        tasks.push(ProofTask {
-            project_id,
-            proof_cid,
-        });
+    } else {
+        match (cli.project_id, cli.proof_cid.clone()) {
+            (Some(project_id), Some(proof_cid)) => tasks.push(ProofTask {
+                project_id,
+                proof_cid,
+            }),
+            (None, None) => {}
+            _ => {
+                return Err(OracleError::Config(
+                    "Both --project-id and --proof-cid are required in single mode".to_string(),
+                ));
+            }
+        }
     }
 
     Ok(tasks)
 }
 
-async fn process_batch(tasks: Vec<ProofTask>, config: Arc<Config>, dry_run: bool) {
+async fn process_batch(
+    tasks: Vec<ProofTask>,
+    config: Arc<Config>,
+    dry_run: bool,
+    metrics: Arc<OracleMetrics>,
+) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_PROOFS));
     let mut handles = Vec::with_capacity(tasks.len());
 
     for task in tasks {
         let config = Arc::clone(&config);
         let semaphore = Arc::clone(&semaphore);
+        let metrics = Arc::clone(&metrics);
 
         let handle = tokio::spawn(async move {
             let _permit = semaphore.acquire().await.expect("semaphore closed");
-            process_single_proof(task, config, dry_run).await
+            process_single_proof(task, config, dry_run, metrics).await
         });
-
         handles.push(handle);
     }
 
@@ -182,9 +192,10 @@ async fn process_single_proof(
     task: ProofTask,
     config: Arc<Config>,
     dry_run: bool,
+    metrics: Arc<OracleMetrics>,
 ) -> std::result::Result<(u64, Option<String>), (u64, String)> {
     let project_id = task.project_id;
-    let project_id_str = project_id.to_string();
+    metrics.verifications_total.inc();
 
     info!(
         project_id = project_id,
@@ -192,28 +203,15 @@ async fn process_single_proof(
         "fetching proof"
     );
 
-    // ── Step 1: fetch + hash ──────────────────────────────────────────────────
-    let proof_hash = match verifier::fetch_and_hash_proof(&task.proof_cid, &config).await {
-        Ok(h) => h,
-        Err(e) => {
-            let err_str = e.to_string();
-
-            tracing::error!(
-                project_id = %project_id_str,
-                proof_cid  = %task.proof_cid,
-                error      = %err_str,
-                "oracle proof verification failed"
-            );
-
-            // Best-effort Slack alert — 3s timeout, result discarded.
-            notifications::alert_verification_failure(
-                &project_id_str,
-                &task.proof_cid,
-                &err_str,
-            )
-            .await;
-
-            return Err((project_id, err_str));
+    let proof_hash = {
+        let _timer = metrics.ipfs_fetch_duration_seconds.start_timer();
+        match verifier::fetch_and_hash_proof(&task.proof_cid, &config).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                metrics.verification_errors_total.inc();
+                sentry::capture_message(&e.to_string(), sentry::Level::Error);
+                return Err((project_id, e.to_string()));
+            }
         }
     };
 
@@ -232,27 +230,15 @@ async fn process_single_proof(
         return Ok((project_id, None));
     }
 
-    // ── Step 2: submit on-chain ───────────────────────────────────────────────
-    let tx_hash = match chain::submit_verification(&config, project_id, proof_hash).await {
-        Ok(h) => h,
-        Err(e) => {
-            let err_str = e.to_string();
-
-            tracing::error!(
-                project_id = %project_id_str,
-                proof_cid  = %task.proof_cid,
-                error      = %err_str,
-                "oracle proof verification failed"
-            );
-
-            notifications::alert_verification_failure(
-                &project_id_str,
-                &task.proof_cid,
-                &err_str,
-            )
-            .await;
-
-            return Err((project_id, err_str));
+    let tx_hash = {
+        let _timer = metrics.chain_submit_duration_seconds.start_timer();
+        match chain::submit_verification(&config, project_id, proof_hash).await {
+            Ok(hash) => hash,
+            Err(e) => {
+                metrics.verification_errors_total.inc();
+                sentry::capture_message(&e.to_string(), sentry::Level::Error);
+                return Err((project_id, e.to_string()));
+            }
         }
     };
 
