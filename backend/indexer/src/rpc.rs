@@ -2,16 +2,20 @@
 //!
 //! ## Resilience
 //!
-//! * Exponential back-off is applied when the RPC returns an error or rate-limit
-//!   response, up to [`MAX_BACKOFF_SECS`] seconds.
-//! * Transient network errors (connection reset, timeout) are retried silently.
+//! * [`ProviderManager`] holds a prioritised list of RPC URLs.  On a 5xx,
+//!   429, or connection error the current provider is marked unhealthy and
+//!   the next one is tried immediately (zero extra latency on the happy path).
+//! * A failed provider re-enters the rotation after `cooldown_secs` (default 60 s).
+//! * When **all** providers are unhealthy the call falls back to exponential
+//!   back-off and logs a critical error.
 
-use std::time::Duration;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::errors::{IndexerError, Result};
 use crate::events::{EventKind, PifpEvent};
@@ -80,10 +84,78 @@ pub struct RawEvent {
 }
 
 // ─────────────────────────────────────────────────────────
+// Provider health tracking
+// ─────────────────────────────────────────────────────────
+
+#[derive(Debug)]
+struct ProviderState {
+    url: String,
+    /// `Some(instant)` means the provider failed at that time and is in cool-down.
+    failed_at: Option<Instant>,
+}
+
+/// Thread-safe, prioritised list of RPC providers with automatic cool-down.
+///
+/// Clone is cheap — the inner state is behind an `Arc`.
+#[derive(Debug, Clone)]
+pub struct ProviderManager {
+    providers: Arc<RwLock<Vec<ProviderState>>>,
+    cooldown: Duration,
+}
+
+impl ProviderManager {
+    /// Build from a primary URL plus any number of fallbacks.
+    pub fn new(primary: String, fallbacks: Vec<String>, cooldown_secs: u64) -> Self {
+        let mut providers: Vec<ProviderState> = std::iter::once(primary)
+            .chain(fallbacks)
+            .map(|url| ProviderState { url, failed_at: None })
+            .collect();
+        // Deduplicate while preserving order.
+        let mut seen = std::collections::HashSet::new();
+        providers.retain(|p| seen.insert(p.url.clone()));
+
+        Self {
+            providers: Arc::new(RwLock::new(providers)),
+            cooldown: Duration::from_secs(cooldown_secs),
+        }
+    }
+
+    /// Return the URL of the first healthy provider, or `None` if all are in cool-down.
+    pub fn healthy_url(&self) -> Option<String> {
+        let mut providers = self.providers.write().unwrap();
+        let now = Instant::now();
+        for p in providers.iter_mut() {
+            match p.failed_at {
+                None => return Some(p.url.clone()),
+                Some(t) if now.duration_since(t) >= self.cooldown => {
+                    // Cool-down expired — re-enable.
+                    p.failed_at = None;
+                    return Some(p.url.clone());
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    /// Mark the provider with the given URL as unhealthy.
+    pub fn mark_failed(&self, url: &str) {
+        let mut providers = self.providers.write().unwrap();
+        if let Some(p) = providers.iter_mut().find(|p| p.url == url) {
+            if p.failed_at.is_none() {
+                warn!("RPC provider marked unhealthy: {url}");
+                p.failed_at = Some(Instant::now());
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────
 
-/// Fetch a page of events from the RPC.
+/// Fetch a page of events from the RPC, automatically failing over to the
+/// next healthy provider on 5xx / 429 / connection errors.
 ///
 /// * `start_ledger` — the ledger sequence to scan from (inclusive).
 /// * `cursor`       — optional opaque pagination cursor from a previous response.
@@ -92,7 +164,7 @@ pub struct RawEvent {
 /// Returns `(events, next_cursor, latest_ledger)`.
 pub async fn fetch_events(
     client: &Client,
-    rpc_url: &str,
+    providers: &ProviderManager,
     contract_ids: &[String],
     start_ledger: u32,
     cursor: Option<&str>,
@@ -102,6 +174,17 @@ pub async fn fetch_events(
     let mut use_topic_filter = true;
 
     loop {
+        // ── Provider selection ────────────────────────────────────────────────
+        let rpc_url = match providers.healthy_url() {
+            Some(url) => url,
+            None => {
+                error!("All RPC providers are unhealthy — retrying in {backoff}s");
+                tokio::time::sleep(Duration::from_secs(backoff)).await;
+                backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
+                continue;
+            }
+        };
+
         let params = build_params(
             contract_ids,
             start_ledger,
@@ -114,12 +197,10 @@ pub async fn fetch_events(
             },
         );
 
-        // Start the latency timer before the request; it records on drop,
-        // so it covers both the network send and the response body parse.
         let rpc_timer = metrics::RPC_LATENCY.start_timer();
 
         let send_result = client
-            .post(rpc_url)
+            .post(&rpc_url)
             .json(&json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -133,23 +214,22 @@ pub async fn fetch_events(
             Err(e) => {
                 rpc_timer.stop_and_record();
                 metrics::RPC_ERRORS_TOTAL.inc();
-                warn!("RPC request failed (will retry in {backoff}s): {e}");
-                tokio::time::sleep(Duration::from_secs(backoff)).await;
-                backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
+                // Connection / timeout errors — mark provider unhealthy and retry immediately.
+                providers.mark_failed(&rpc_url);
+                warn!("RPC request failed ({rpc_url}): {e}");
                 continue;
             }
             Ok(resp) => {
                 let status = resp.status();
-                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+
+                if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
                     rpc_timer.stop_and_record();
                     metrics::RPC_ERRORS_TOTAL.inc();
-                    warn!("Rate-limited by RPC (will retry in {backoff}s)");
-                    tokio::time::sleep(Duration::from_secs(backoff)).await;
-                    backoff = (backoff * 2).min(MAX_BACKOFF_SECS);
+                    providers.mark_failed(&rpc_url);
+                    warn!("RPC provider {rpc_url} returned {status} — switching provider");
                     continue;
                 }
 
-                // Parse the body — timer is still live, covering the full round-trip.
                 let body: RpcResponse = match resp.json().await {
                     Ok(b) => b,
                     Err(e) => {
@@ -161,8 +241,6 @@ pub async fn fetch_events(
                 rpc_timer.stop_and_record();
 
                 if let Some(err) = body.error {
-                    // Some RPC nodes may reject `topics` filter formats.
-                    // Retry once with contract-only filtering.
                     if err.code == -32602 && use_topic_filter {
                         warn!(
                             "RPC rejected topic filter (code {}), retrying with contract-only filter",
@@ -171,7 +249,6 @@ pub async fn fetch_events(
                         use_topic_filter = false;
                         continue;
                     }
-                    // Code -32600 / -32601 are hard failures; everything else we retry.
                     metrics::RPC_ERRORS_TOTAL.inc();
                     if err.code == -32600 || err.code == -32601 {
                         return Err(IndexerError::EventParse(format!(
@@ -193,8 +270,9 @@ pub async fn fetch_events(
                 })?;
 
                 debug!(
-                    "Fetched {} events (latest_ledger={:?})",
+                    "Fetched {} events via {} (latest_ledger={:?})",
                     result.events.len(),
+                    rpc_url,
                     result.latest_ledger
                 );
 

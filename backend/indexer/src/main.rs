@@ -36,6 +36,7 @@ use tracing_subscriber::EnvFilter;
 use cache::Cache;
 use config::Config;
 use indexer::IndexerState;
+use rpc::ProviderManager;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -73,11 +74,17 @@ async fn main() -> anyhow::Result<()> {
         });
 
     // ─── Background indexer ───────────────────────────────
+    let providers = ProviderManager::new(
+        config.rpc_url.clone(),
+        config.rpc_fallback_urls.clone(),
+        config.rpc_cooldown_secs,
+    );
     let indexer_state = Arc::new(IndexerState {
         pool: pool.clone(),
         config: config.clone(),
         client,
         cache: cache.clone(),
+        providers,
     });
     tokio::spawn(indexer::run(indexer_state));
 

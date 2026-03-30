@@ -4,8 +4,13 @@ use crate::errors::{IndexerError, Result};
 
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Soroban/Horizon RPC endpoint (e.g. https://soroban-testnet.stellar.org)
+    /// Primary Soroban/Horizon RPC endpoint (e.g. https://soroban-testnet.stellar.org)
     pub rpc_url: String,
+    /// Ordered list of fallback RPC URLs tried when the primary is unhealthy.
+    /// Comma-separated via `RPC_FALLBACK_URLS`.
+    pub rpc_fallback_urls: Vec<String>,
+    /// Seconds a failed provider stays in cool-down before being re-enabled.
+    pub rpc_cooldown_secs: u64,
     /// PIFP contract addresses (Strkey format). Supports multi-deployment indexing.
     pub contract_ids: Vec<String>,
     /// Path to the SQLite database file
@@ -39,6 +44,17 @@ impl Config {
         Ok(Config {
             rpc_url: env_var("RPC_URL")
                 .unwrap_or_else(|_| "https://soroban-testnet.stellar.org".to_string()),
+            rpc_fallback_urls: std::env::var("RPC_FALLBACK_URLS")
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(ToString::to_string)
+                .collect(),
+            rpc_cooldown_secs: env_var("RPC_COOLDOWN_SECS")
+                .unwrap_or_else(|_| "60".to_string())
+                .parse()
+                .map_err(|_| IndexerError::Config("Invalid RPC_COOLDOWN_SECS".to_string()))?,
             contract_ids,
             database_url: env_var("DATABASE_URL")
                 .unwrap_or_else(|_| "sqlite:./pifp_events.db".to_string()),
