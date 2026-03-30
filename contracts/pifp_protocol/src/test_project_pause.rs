@@ -52,7 +52,7 @@ fn test_verify_and_release_fails_when_project_paused() {
 
     ctx.client.pause_project(&ctx.admin, &project.id);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
 
 #[test]

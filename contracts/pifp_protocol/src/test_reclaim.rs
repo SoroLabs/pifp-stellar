@@ -156,7 +156,9 @@ fn test_reclaim_on_completed_project_fails() {
 
     // Verify and release — project becomes Completed
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
 
     ctx.jump_time(REFUND_WINDOW + 1);
 

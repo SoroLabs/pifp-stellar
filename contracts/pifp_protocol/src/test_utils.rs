@@ -89,11 +89,11 @@ impl TestContext {
     ) {
         let (token, sac) = self.create_token();
         let tokens = Vec::from_array(&self.env, [token.address.clone()]);
-        let project = self.register_project(&tokens, goal);
+        let project = self.register_project(&tokens, goal, false);
         (project, token, sac)
     }
 
-    pub fn register_project(&self, tokens: &Vec<Address>, goal: i128) -> Project {
+    pub fn register_project(&self, tokens: &Vec<Address>, goal: i128, is_private: bool) -> Project {
         let proof_hash = self.dummy_proof();
         let metadata_uri = self.dummy_metadata_uri();
         let deadline = self.env.ledger().timestamp() + 86400;
@@ -105,6 +105,7 @@ impl TestContext {
             &metadata_uri,
             &deadline,
             &is_private,
+            &0u32,
         )
     }
 

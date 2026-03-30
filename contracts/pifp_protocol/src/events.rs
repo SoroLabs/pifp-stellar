@@ -139,6 +139,13 @@ pub struct ProtocolUnpaused {
     pub admin: Address,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FundsClaimed {
+    pub project_id: u64,
+    pub creator: Address,
+}
+
 // ── Emission helpers ────────────────────────────────────────────────
 
 pub fn emit_project_created(
@@ -320,5 +327,14 @@ pub fn emit_protocol_paused(env: &Env, admin: Address) {
 pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     let topics = (symbol_short!("prot_unp"),);
     let data = ProtocolUnpaused { admin };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_funds_claimed(env: &Env, project_id: u64, creator: Address) {
+    let topics = (symbol_short!("fnd_clm"), project_id);
+    let data = FundsClaimed {
+        project_id,
+        creator,
+    };
     env.events().publish(topics, data);
 }

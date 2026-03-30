@@ -10,7 +10,7 @@
 //! |------|--------------------------|-------------------------------------------------------------|
 //! |  1   | `ProjectNotFound`        | Querying or operating on a project ID that does not exist   |
 //! |  2   | `MilestoneNotFound`      | Reserved for future milestone-level operations              |
-//! |  3   | `MilestoneAlreadyReleased` | Calling `verify_and_release` on an already-completed project |
+//! |  3   | `MilestoneAlreadyReleased` | Calling `verify_proof` on an already-verified/completed project |
 //! |  4   | `InsufficientBalance`    | Refund requested but donator has zero balance for that token |
 //! |  5   | `InvalidMilestones`      | Reserved for future milestone validation                    |
 //! |  6   | `NotAuthorized`          | Caller lacks the RBAC role required for the operation       |
@@ -40,7 +40,7 @@
 //! | 30   | `ReleaseAmountExceedsBalance` | The requested release amount exceeds the project's current on-chain balance |
 //! | 31   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length |
 //! | 32   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap |
-//! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |
+//! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |\n//! | 34   | `GracePeriodActive`      | `claim_funds` called before the 24-hour grace period has elapsed |
 
 use soroban_sdk::contracterror;
 
@@ -59,7 +59,7 @@ pub enum Error {
     /// Reserved — will be used when milestone-level operations are added.
     MilestoneNotFound = 2,
 
-    /// `verify_and_release` was called on a project that is already `Completed`.
+    /// `verify_proof` was called on a project that is already `Verified` or `Completed`.
     MilestoneAlreadyReleased = 3,
 
     /// The donator has no refundable balance for the requested token.
@@ -135,10 +135,6 @@ pub enum Error {
     RefundWindowExpired = 28,
     /// A method that requires the protocol to be initialised was called before
     /// `initialize()` had been executed on this contract instance.
-    ProtocolNotInitialized = 28,
-
-    /// The requested release amount exceeds the project's current on-chain balance.
-    ReleaseAmountExceedsBalance = 29,
     ProtocolNotInitialized = 29,
 
     /// The requested release amount exceeds the project's current on-chain balance.
@@ -153,4 +149,7 @@ pub enum Error {
 
     /// The target project is paused; deposits and releases are temporarily blocked.
     ProjectPaused = 33,
+
+    /// The 24-hour grace period after proof verification has not yet elapsed.
+    GracePeriodActive = 34,
 }

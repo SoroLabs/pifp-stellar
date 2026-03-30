@@ -60,6 +60,9 @@
                 },
                 {
                   "bool": false
+                },
+                {
+                  "u32": 0
                 }
               ]
             }
@@ -109,6 +112,14 @@
                           "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                         }
                       ]
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "categories"
+                    },
+                    "val": {
+                      "u32": 0
                     }
                   },
                   {
@@ -201,6 +212,14 @@
                     },
                     "val": {
                       "u32": 0
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_proof_time"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {

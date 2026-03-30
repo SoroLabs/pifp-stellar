@@ -27,6 +27,7 @@ fn test_extend_deadline_success() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &0u32,
     );
 
     let new_deadline = deadline + 5000;
@@ -57,6 +58,7 @@ fn test_extend_deadline_by_admin() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &0u32,
     );
 
     let new_deadline = deadline + 5000;
@@ -85,6 +87,7 @@ fn test_extend_deadline_unauthorized() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &0u32,
     );
 
     client.extend_deadline(&stranger, &project.id, &(env.ledger().timestamp() + 15000));
@@ -109,6 +112,7 @@ fn test_extend_deadline_backwards() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &0u32,
     );
 
     // New deadline same as or earlier than current is Error::InvalidDeadline (13)
@@ -137,6 +141,7 @@ fn test_extend_deadline_expired() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &0u32,
     );
 
     // Fast forward past deadline
@@ -167,6 +172,7 @@ fn test_extend_deadline_too_long() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &0u32,
     );
 
     // 1 year + 1 second

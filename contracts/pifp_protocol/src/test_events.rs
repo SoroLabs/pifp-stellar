@@ -34,7 +34,7 @@ fn test_project_verified_event() {
     let proof = ctx.dummy_proof();
 
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &proof);
+        .verify_proof(&ctx.oracle, &project.id, &proof);
 }
 
 #[test]
@@ -56,6 +56,7 @@ fn test_get_project_balances() {
         &metadata_uri,
         &(ctx.env.ledger().timestamp() + 86400),
         &false,
+        &0u32,
     );
 
     let donator = ctx.generate_address();
@@ -99,7 +100,9 @@ fn test_funds_released_to_creator() {
 
     // Verify and release
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
 
     // Check creator (manager) received the funds
     assert_eq!(token.balance(&ctx.manager), deposit_amount);

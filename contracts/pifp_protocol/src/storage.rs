@@ -164,6 +164,7 @@ pub fn save_project(env: &Env, project: &Project) {
         donation_count: project.donation_count,
         paused: project.paused,
         refund_expiry: project.refund_expiry,
+        last_proof_time: project.last_proof_time,
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -259,7 +260,7 @@ pub fn maybe_load_project_state(env: &Env, id: u64) -> Option<ProjectState> {
 /// caller performing two separate lookups (which would each bump TTLs and
 /// incur independent gas costs), this helper reads both entries, bumps both
 /// TTLs, and returns them together. It is heavily used by high‑frequency
-/// operations such as `deposit` and `verify_and_release`.
+/// operations such as `deposit` and `verify_proof`.
 ///
 /// Panics with `project not found` if either component is missing.
 pub fn load_project_pair(env: &Env, id: u64) -> (ProjectConfig, ProjectState) {
@@ -301,6 +302,7 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         paused: state.paused,
         refund_expiry: state.refund_expiry,
         categories: config.categories,
+        last_proof_time: state.last_proof_time,
     }
 }
 
@@ -336,6 +338,7 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         paused: state.paused,
         refund_expiry: state.refund_expiry,
         categories: config.categories,
+        last_proof_time: state.last_proof_time,
     })
 }
 
@@ -371,7 +374,7 @@ pub fn add_to_token_balance(env: &Env, project_id: u64, token: &Address, amount:
 }
 
 /// Zero out the balance of `token` for `project_id` and return what it was.
-/// Called during `verify_and_release` after transferring funds to the creator.
+/// Called during `claim_funds` after transferring funds to the creator.
 #[allow(dead_code)]
 pub fn drain_token_balance(env: &Env, project_id: u64, token: &Address) -> i128 {
     let balance = get_token_balance(env, project_id, token);

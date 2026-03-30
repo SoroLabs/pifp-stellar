@@ -4,6 +4,7 @@
 //! as defined in ARCHITECTURE.md. These checkers are used both in fuzz tests
 //! and can be triggered as post-execution assertions in debug builds.
 
+use crate::rbac::get_super_admin;
 use crate::types::{Project, ProjectStatus};
 use soroban_sdk::{Address, Env, Vec};
 
@@ -74,11 +75,14 @@ pub fn check_inv7_status_transition(from: &ProjectStatus, to: &ProjectStatus) {
     let valid = matches!(
         (from, to),
         (ProjectStatus::Funding, ProjectStatus::Active)
+            | (ProjectStatus::Funding, ProjectStatus::Verified)
             | (ProjectStatus::Funding, ProjectStatus::Completed)
             | (ProjectStatus::Funding, ProjectStatus::Expired)
+            | (ProjectStatus::Active, ProjectStatus::Verified)
             | (ProjectStatus::Active, ProjectStatus::Completed)
             | (ProjectStatus::Active, ProjectStatus::Expired)
             | (ProjectStatus::Active, ProjectStatus::Cancelled)
+            | (ProjectStatus::Verified, ProjectStatus::Completed)
     );
 
     assert!(

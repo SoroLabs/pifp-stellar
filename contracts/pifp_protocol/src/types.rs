@@ -38,7 +38,9 @@ pub enum ProjectStatus {
     Funding,
     /// Goal reached; work in progress (oracle has not yet verified).
     Active,
-    /// Oracle verified the proof; funds released to creator.
+    /// Oracle verified the proof; 24-hour grace period before fund release.
+    Verified,
+    /// Grace period elapsed; funds released to creator.
     Completed,
     /// Deadline passed without reaching goal or verification.
     Expired,
@@ -83,6 +85,10 @@ pub struct ProjectState {
     /// when the project transitions to Expired, or `cancel_time + REFUND_WINDOW`
     /// when cancelled.  Zero while the project is still in a non-terminal state.
     pub refund_expiry: u64,
+    /// Ledger timestamp when the oracle verified the proof.  Zero until
+    /// `verify_proof` is called.  Used to enforce the 24-hour grace period
+    /// before funds can be claimed.
+    pub last_proof_time: u64,
 }
 
 /// Full on-chain representation of a funding project.
@@ -123,6 +129,9 @@ pub struct Project {
     pub refund_expiry: u64,
     /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
     pub categories: u32,
+    /// Ledger timestamp when the oracle verified the proof.  Zero until
+    /// `verify_proof` is called.
+    pub last_proof_time: u64,
 }
 
 impl Project {

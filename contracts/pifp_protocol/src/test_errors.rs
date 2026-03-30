@@ -41,11 +41,11 @@ fn test_verify_already_completed_project() {
 
     // First verification succeeds.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 
     // Second verification must fail with MilestoneAlreadyReleased.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
 
 // ─────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ fn test_register_deadline_too_far_in_future_fails() {
         &ctx.dummy_metadata_uri(),
         &too_far_deadline,
         &false,
+        &0u32,
     );
 }
 
@@ -119,7 +120,7 @@ fn test_verify_wrong_proof_hash_fails() {
 
     let wrong_proof = BytesN::from_array(&ctx.env, &[0xffu8; 32]);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &wrong_proof);
+        .verify_proof(&ctx.oracle, &project.id, &wrong_proof);
 }
 
 // ─────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ fn test_verify_when_paused_fails() {
 
     ctx.client.pause(&ctx.admin);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
 
 // ─────────────────────────────────────────────────────────
@@ -174,7 +175,9 @@ fn test_expire_completed_project_fails_with_invalid_transition() {
 
     // Complete the project.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
 
     // Attempt to expire it — should fail with InvalidTransition.
     ctx.jump_time(project.deadline + 1);

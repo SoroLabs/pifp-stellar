@@ -11,7 +11,8 @@
 //! | Registration | [`PifpProtocol::register_project`]          |
 //! | Funding      | [`PifpProtocol::deposit`]                   |
 //! | Donor safety | [`PifpProtocol::refund`]                    |
-//! | Verification | [`PifpProtocol::verify_and_release`]        |
+//! | Verification | [`PifpProtocol::verify_proof`]              |
+//! | Claiming     | [`PifpProtocol::claim_funds`]               |
 //! | Queries      | `get_project`, `get_project_balances`, `role_of`, `has_role` |
 //!
 //! ## Architecture
@@ -33,6 +34,10 @@ use soroban_sdk::{
 /// refundable state (Expired or Cancelled).  Donors must claim refunds within
 /// this window; after it passes, the creator may reclaim unclaimed funds.
 const REFUND_WINDOW: u64 = 6 * 30 * 24 * 60 * 60; // 15_552_000 seconds
+
+/// Grace period: 24 hours (in seconds) between proof verification and fund
+/// release, allowing community disputes.
+const GRACE_PERIOD: u64 = 24 * 60 * 60; // 86_400 seconds
 
 /// Maximum allowed length for a project metadata URI / CID.
 const MAX_METADATA_URI_LEN: u32 = 64;
@@ -74,6 +79,8 @@ mod test_refund;
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
+#[cfg(test)]
+mod test_grace_period;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
@@ -244,6 +251,7 @@ impl PifpProtocol {
             paused: false,
             refund_expiry: 0,
             categories,
+            last_proof_time: 0,
         };
 
         save_project(&env, &project);
@@ -601,17 +609,18 @@ impl PifpProtocol {
         events::emit_protocol_config_updated(&env, old_config, new_config);
     }
 
-    /// Verify proof of impact and release funds to the creator.
+    /// Verify proof of impact and start the 24-hour grace period.
     ///
     /// The registered oracle submits a proof hash. If it matches the project's
-    /// stored `proof_hash`, the project status transitions to `Completed`.
+    /// stored `proof_hash`, the project status transitions to `Verified` and
+    /// the current timestamp is recorded as `last_proof_time`.
+    ///
+    /// Funds are **not** released here — see [`claim_funds`] which requires the
+    /// grace period to have elapsed first.
     ///
     /// NOTE: This is a mocked verification (hash equality).
     /// The structure is prepared for future ZK-STARK verification.
-    ///
-    /// Reads the immutable config (for proof_hash) and mutable state (for status),
-    /// then writes back only the small state entry.
-    pub fn verify_and_release(
+    pub fn verify_proof(
         env: Env,
         oracle: Address,
         project_id: u64,
@@ -638,6 +647,7 @@ impl PifpProtocol {
         // Ensure the project is in a verifiable state.
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
+            ProjectStatus::Verified => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
             ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
             ProjectStatus::Cancelled => panic_with_error!(&env, Error::InvalidTransition),
@@ -648,26 +658,56 @@ impl PifpProtocol {
             panic_with_error!(&env, Error::VerificationFailed);
         }
 
-        // Transition to Completed — only write the state entry.
+        // Transition to Verified and record the proof timestamp.
+        state.status = ProjectStatus::Verified;
+        state.last_proof_time = env.ledger().timestamp();
+
+        // Save the updated state.
+        save_project_state(&env, project_id, &state);
+
+        // Standardized event emission
+        events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
+    }
+
+    /// Release funds to the project creator after the 24-hour grace period.
+    ///
+    /// Can be called by anyone (permissionless) once the grace period has
+    /// elapsed.  The project must be in `Verified` status.  On success the
+    /// project transitions to `Completed` and all deposited tokens (minus
+    /// platform fees) are transferred to the creator.
+    pub fn claim_funds(env: Env, project_id: u64) {
+        Self::require_not_paused(&env);
+
+        let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
+
+        // Only Verified projects can have funds claimed.
+        if state.status != ProjectStatus::Verified {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+
+        // Enforce the 24-hour grace period.
+        let now = env.ledger().timestamp();
+        if now < state.last_proof_time + GRACE_PERIOD {
+            panic_with_error!(&env, Error::GracePeriodActive);
+        }
+
+        // Transition to Completed.
         state.status = ProjectStatus::Completed;
 
         // Transfer all deposited tokens to the creator.
-        // If any transfer fails, panic to revert the entire transaction.
         let contract_address = env.current_contract_address();
         let protocol_config = get_protocol_config(&env);
 
         for token in config.accepted_tokens.iter() {
-            // Drain the token balance (gets balance and zeros it).
             let mut balance = drain_token_balance(&env, project_id, &token);
 
-            // Only transfer if there's a non-zero balance.
             if balance > 0 {
                 let token_client = token::Client::new(&env, &token);
 
                 // Deduct platform fee if configured.
                 if let Some(config) = &protocol_config {
                     if config.fee_bps > 0 {
-                        // fee = balance * bps / 10000
                         let fee_amount = balance
                             .checked_mul(config.fee_bps as i128)
                             .unwrap_or(0)
@@ -695,7 +735,6 @@ impl PifpProtocol {
                 // Transfer remaining to creator.
                 if balance > 0 {
                     token_client.transfer(&contract_address, &config.creator, &balance);
-                    // Emit funds_released event for this token.
                     events::emit_funds_released(&env, project_id, token, balance);
                 }
             }
@@ -704,8 +743,7 @@ impl PifpProtocol {
         // Save the updated state (now marked as Completed).
         save_project_state(&env, project_id, &state);
 
-        // Standardized event emission
-        events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
+        events::emit_funds_claimed(&env, project_id, config.creator);
     }
 
     /// Mark a project as expired if its deadline has passed.

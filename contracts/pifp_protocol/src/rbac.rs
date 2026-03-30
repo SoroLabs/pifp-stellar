@@ -66,7 +66,7 @@ pub enum Role {
     SuperAdmin,
     /// Can grant/revoke non-SuperAdmin roles and configure protocol parameters.
     Admin,
-    /// Can call `verify_and_release`; replaces the single oracle address.
+    /// Can call `verify_proof`; replaces the single oracle address.
     Oracle,
     /// Read-only observer; confirmed by off-chain checks rather than on-chain gates.
     Auditor,
@@ -245,7 +245,7 @@ pub fn require_admin_or_above(env: &Env, address: &Address) {
 }
 
 /// Assert that `address` holds the Oracle role.
-/// Used to gate `verify_and_release`.
+/// Used to gate `verify_proof`.
 #[inline]
 pub fn require_oracle(env: &Env, address: &Address) {
     require_role(env, address, &Role::Oracle);

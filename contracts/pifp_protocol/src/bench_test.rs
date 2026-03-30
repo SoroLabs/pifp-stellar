@@ -233,10 +233,10 @@ fn bench_update_metadata() {
 }
 
 // ---------------------------------------------------------------------------
-// verify_and_release  (legacy stub)
+// verify_proof  (legacy stub)
 // ---------------------------------------------------------------------------
 #[test]
-fn bench_verify_and_release() {
+fn bench_verify_proof() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -247,8 +247,8 @@ fn bench_verify_and_release() {
     let proof_hash = BytesN::from_array(&env, &[12u8; 32]);
 
     env.cost_estimate().budget().reset_default();
-    client.verify_and_release(&project_id, &proof_hash);
+    client.verify_proof(&project_id, &proof_hash);
 
     let b = env.cost_estimate().budget();
-    report("verify_and_release", b.cpu_instruction_cost(), b.memory_bytes_cost());
+    report("verify_proof", b.cpu_instruction_cost(), b.memory_bytes_cost());
 }
