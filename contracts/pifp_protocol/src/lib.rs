@@ -40,7 +40,7 @@ pub mod rbac;
 pub mod categories;
 mod storage;
 mod types;
-mod milestones; // Added module
+mod milestones;
 
 #[cfg(test)]
 mod fuzz_test;
@@ -71,25 +71,17 @@ mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
 #[cfg(test)]
-<<<<<<< HEAD
-mod test_reentrancy;
-=======
 mod test_grace_period;
 #[cfg(test)]
 mod test_batch_deposit;
->>>>>>> main
+#[cfg(test)]
+mod test_reentrancy;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-<<<<<<< HEAD
-    drain_token_balance, get_all_balances, get_and_increment_project_id, get_protocol_config,
-    is_whitelisted, load_project, load_project_pair, maybe_load_project, save_project,
-    save_project_config, save_project_state, set_protocol_config,
-};pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
-=======
     clear_oracle_agreement, drain_token_balance, get_all_balances, get_and_increment_project_id,
     get_protocol_config, is_whitelisted, load_oracle_agreement, load_project, load_project_pair,
     maybe_load_project, save_oracle_agreement, save_project, save_project_config,
@@ -99,7 +91,6 @@ pub use types::{
     DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
     ProjectState, ProtocolConfig,
 };
->>>>>>> main
 
 #[contract]
 pub struct PifpProtocol;
@@ -202,6 +193,12 @@ impl PifpProtocol {
         save_project_config(&env, project_id, &config);
         clear_oracle_agreement(&env, project_id);
         events::emit_oracle_removed(&env, project_id, oracle);
+    }
+
+    pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
+        caller.require_auth();
+        rbac::require_admin_or_above(&env, &caller);
+        rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -360,6 +357,9 @@ impl PifpProtocol {
         let contract_address = env.current_contract_address();
         let protocol_config = get_protocol_config(&env);
 
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
+
         for token in config.accepted_tokens.iter() {
             let mut balance = drain_token_balance(&env, project_id, &token);
             if balance > 0 {
@@ -380,6 +380,7 @@ impl PifpProtocol {
                 }
             }
         }
+        invariants_checker::release_lock(&env);
         save_project_state(&env, project_id, &state);
     }
 
@@ -421,12 +422,8 @@ impl PifpProtocol {
         invariants_checker::check_no_recursive_state(&env);
         invariants_checker::acquire_lock(&env);
         token_client.transfer(&donator, env.current_contract_address(), &amount);
-<<<<<<< HEAD
         invariants_checker::release_lock(&env);
 
-        // Update the per-token balance.
-=======
->>>>>>> main
         let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);
 
         if state.status == ProjectStatus::Funding {
@@ -482,33 +479,63 @@ impl PifpProtocol {
         if amount <= 0 { panic_with_error!(&env, Error::InsufficientBalance); }
 
         storage::set_donator_balance(&env, project_id, &token, &donator, 0);
-<<<<<<< HEAD
-        storage::add_to_token_balance(&env, project_id, &token, -refund_amount);
-
-        let contract_address = env.current_contract_address();
-        let token_client = token::Client::new(&env, &token);
+        storage::add_to_token_balance(&env, project_id, &token, -amount);
+        
         invariants_checker::check_no_recursive_state(&env);
         invariants_checker::acquire_lock(&env);
-        token_client.transfer(&contract_address, &donator, &refund_amount);
+        token::Client::new(&env, &token).transfer(&env.current_contract_address(), &donator, &amount);
         invariants_checker::release_lock(&env);
-
-        events::emit_refunded(&env, project_id, donator, refund_amount);
+        
+        events::emit_refunded(&env, project_id, donator, amount);
     }
 
-    /// Grant the Oracle role to `oracle`.
-    ///
-    /// Replaces the original `set_oracle(admin, oracle)`.
-    /// - `caller` must hold `SuperAdmin` or `Admin`.
-    pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
-        caller.require_auth();
-        rbac::require_admin_or_above(&env, &caller);
-        rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
+    pub fn expire_project(env: Env, project_id: u64) {
+        let (config, mut state) = load_project_pair(&env, project_id);
+        if env.ledger().timestamp() < config.deadline { panic_with_error!(&env, Error::ProjectNotExpired); }
+        state.status = ProjectStatus::Expired;
+        state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
+        save_project_state(&env, project_id, &state);
+        events::emit_project_expired(&env, project_id, config.deadline);
     }
 
-    /// Update the global protocol configuration.
-    ///
-    /// - `caller` must be the `SuperAdmin`.
-    /// - `fee_bps` must be less than or equal to 1000 (10%).
+    pub fn reclaim_expired_funds(env: Env, creator: Address, project_id: u64) {
+        Self::require_not_paused(&env);
+        creator.require_auth();
+
+        let (config, state) = load_project_pair(&env, project_id);
+
+        if creator != config.creator {
+            panic_with_error!(&env, Error::NotAuthorized);
+        }
+
+        if !matches!(state.status, ProjectStatus::Expired | ProjectStatus::Cancelled) {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+
+        if state.refund_expiry == 0 || env.ledger().timestamp() < state.refund_expiry {
+            panic_with_error!(&env, Error::RefundWindowActive);
+        }
+
+        let contract_address = env.current_contract_address();
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
+        for token in config.accepted_tokens.iter() {
+            let balance = drain_token_balance(&env, project_id, &token);
+            if balance > 0 {
+                let token_client = token::Client::new(&env, &token);
+                token_client.transfer(&contract_address, &config.creator, &balance);
+                events::emit_expired_funds_reclaimed(
+                    &env,
+                    project_id,
+                    config.creator.clone(),
+                    token,
+                    balance,
+                );
+            }
+        }
+        invariants_checker::release_lock(&env);
+    }
+
     pub fn update_protocol_config(env: Env, caller: Address, fee_recipient: Address, fee_bps: u32) {
         caller.require_auth();
         rbac::require_role(&env, &caller, &Role::SuperAdmin);
@@ -524,204 +551,7 @@ impl PifpProtocol {
         };
 
         set_protocol_config(&env, &new_config);
-
         events::emit_protocol_config_updated(&env, old_config, new_config);
-    }
-
-    /// Verify proof of impact and release funds to the creator.
-    ///
-    /// The registered oracle submits a proof hash. If it matches the project's
-    /// stored `proof_hash`, the project status transitions to `Completed`.
-    ///
-    /// NOTE: This is a mocked verification (hash equality).
-    /// The structure is prepared for future ZK-STARK verification.
-    ///
-    /// Reads the immutable config (for proof_hash) and mutable state (for status),
-    /// then writes back only the small state entry.
-    pub fn verify_and_release(
-        env: Env,
-        oracle: Address,
-        project_id: u64,
-        submitted_proof_hash: BytesN<32>,
-    ) {
-        Self::require_not_paused(&env);
-        oracle.require_auth();
-        // RBAC gate: caller must hold the Oracle role.
-        rbac::require_oracle(&env, &oracle);
-
-        // Optimised dual-read helper
-        let (config, mut state) = load_project_pair(&env, project_id);
-        Self::require_project_not_paused(&env, &state);
-
-        if env.ledger().timestamp() >= config.deadline
-            && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
-        {
-            state.status = ProjectStatus::Expired;
-            state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
-            save_project_state(&env, project_id, &state);
-            panic_with_error!(&env, Error::ProjectExpired);
-        }
-
-        // Ensure the project is in a verifiable state.
-        match state.status {
-            ProjectStatus::Funding | ProjectStatus::Active => {}
-            ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
-            ProjectStatus::Cancelled => panic_with_error!(&env, Error::InvalidTransition),
-        }
-
-        // Mocked ZK verification: compare submitted hash to stored hash.
-        if submitted_proof_hash != config.proof_hash {
-            panic_with_error!(&env, Error::VerificationFailed);
-        }
-
-        // Transition to Completed — only write the state entry.
-        state.status = ProjectStatus::Completed;
-
-        // Transfer all deposited tokens to the creator.
-        // If any transfer fails, panic to revert the entire transaction.
-        let contract_address = env.current_contract_address();
-        let protocol_config = get_protocol_config(&env);
-
-        invariants_checker::check_no_recursive_state(&env);
-        invariants_checker::acquire_lock(&env);
-
-        for token in config.accepted_tokens.iter() {
-            // Drain the token balance (gets balance and zeros it).
-            let mut balance = drain_token_balance(&env, project_id, &token);
-
-            // Only transfer if there's a non-zero balance.
-            if balance > 0 {
-                let token_client = token::Client::new(&env, &token);
-
-                // Deduct platform fee if configured.
-                if let Some(config) = &protocol_config {
-                    if config.fee_bps > 0 {
-                        // fee = balance * bps / 10000
-                        let fee_amount = balance
-                            .checked_mul(config.fee_bps as i128)
-                            .unwrap_or(0)
-                            .checked_div(10000)
-                            .unwrap_or(0);
-
-                        if fee_amount > 0 {
-                            token_client.transfer(
-                                &contract_address,
-                                &config.fee_recipient,
-                                &fee_amount,
-                            );
-                            balance = balance.checked_sub(fee_amount).unwrap_or(balance);
-                            events::emit_fee_deducted(
-                                &env,
-                                project_id,
-                                token.clone(),
-                                fee_amount,
-                                config.fee_recipient.clone(),
-                            );
-                        }
-                    }
-                }
-
-                // Transfer remaining to creator.
-                if balance > 0 {
-                    token_client.transfer(&contract_address, &config.creator, &balance);
-                    // Emit funds_released event for this token.
-                    events::emit_funds_released(&env, project_id, token, balance);
-                }
-            }
-        }
-
-        invariants_checker::release_lock(&env);
-
-        // Save the updated state (now marked as Completed).
-        save_project_state(&env, project_id, &state);
-
-        // Standardized event emission
-        events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
-    }
-
-    /// Mark a project as expired if its deadline has passed.
-    ///
-    /// Permissionless: anyone can trigger expiration once the deadline is met.
-    /// - Panics if project is not in Funding status.
-    /// - Panics if deadline has not passed.
-=======
-        storage::add_to_token_balance(&env, project_id, &token, -amount);
-        token::Client::new(&env, &token).transfer(&env.current_contract_address(), &donator, &amount);
-        events::emit_refunded(&env, project_id, donator, amount);
-    }
-
->>>>>>> main
-    pub fn expire_project(env: Env, project_id: u64) {
-        let (config, mut state) = load_project_pair(&env, project_id);
-        if env.ledger().timestamp() < config.deadline { panic_with_error!(&env, Error::ProjectNotExpired); }
-        state.status = ProjectStatus::Expired;
-        state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
-        save_project_state(&env, project_id, &state);
-        events::emit_project_expired(&env, project_id, config.deadline);
-    }
-
-<<<<<<< HEAD
-    // ─────────────────────────────────────────────────────────
-    // Donor Refund Expiry
-    // ─────────────────────────────────────────────────────────
-
-    /// Reclaim unclaimed donor funds after the 6-month refund window has expired.
-    ///
-    /// Only the project creator may call this, and only for projects that are
-    /// `Expired` or `Cancelled` whose `refund_expiry` timestamp has passed.
-    /// For each accepted token, any remaining balance is transferred to the creator.
-    pub fn reclaim_expired_funds(env: Env, creator: Address, project_id: u64) {
-        Self::require_not_paused(&env);
-        creator.require_auth();
-
-        let (config, state) = load_project_pair(&env, project_id);
-
-        // Only the project creator may reclaim.
-        if creator != config.creator {
-            panic_with_error!(&env, Error::NotAuthorized);
-        }
-
-        // Project must be in a terminal refundable state.
-        if !matches!(
-            state.status,
-            ProjectStatus::Expired | ProjectStatus::Cancelled
-        ) {
-            panic_with_error!(&env, Error::InvalidTransition);
-        }
-
-        // The refund window must have expired.
-        if state.refund_expiry == 0 || env.ledger().timestamp() < state.refund_expiry {
-            panic_with_error!(&env, Error::RefundWindowActive);
-        }
-
-        // Drain remaining balances for each accepted token.
-        let contract_address = env.current_contract_address();
-        invariants_checker::check_no_recursive_state(&env);
-        invariants_checker::acquire_lock(&env);
-        for token in config.accepted_tokens.iter() {
-            let balance = drain_token_balance(&env, project_id, &token);
-            if balance > 0 {
-                let token_client = token::Client::new(&env, &token);
-                token_client.transfer(&contract_address, &config.creator, &balance);
-
-                events::emit_expired_funds_reclaimed(
-                    &env,
-                    project_id,
-                    config.creator.clone(),
-                    token,
-                    balance,
-                );
-            }
-        }
-        invariants_checker::release_lock(&env);
-=======
-    pub fn unpause(env: Env, caller: Address) {
-        caller.require_auth();
-        rbac::require_admin_or_above(&env, &caller);
-        storage::set_paused(&env, false);
-        events::emit_protocol_unpaused(&env, caller);
->>>>>>> main
     }
 
     fn require_not_paused(env: &Env) {

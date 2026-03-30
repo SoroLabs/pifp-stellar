@@ -41,18 +41,13 @@
 //! | 31   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length |
 //! | 32   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap |
 //! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |
-<<<<<<< HEAD
-//! | 34   | `ReentrancyDetected`     | A re-entrant call was detected; the contract is already executing |
-=======
 //! | 34   | `GracePeriodActive`      | `claim_funds` called before the 24-hour grace period has elapsed |
->>>>>>> main
+//! | 35   | `ReentrancyDetected`     | A re-entrant call was detected; the contract is already executing |
+//! | 36   | `InvalidOracleConfig`    | Oracle threshold or count is invalid. |
 
 use soroban_sdk::contracterror;
 
 /// All contract-level errors returned by the PIFP protocol.
-///
-/// Each variant is assigned a fixed `u32` discriminant. 
-/// **Never reorder or reassign existing codes** once deployed to Mainnet.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -63,7 +58,7 @@ pub enum Error {
     /// The requested milestone index is out of bounds.
     MilestoneNotFound = 2,
 
-    /// `verify_and_release` was called on a milestone that is already completed.
+    /// Verification called on a project that is already verified or completed.
     MilestoneAlreadyReleased = 3,
 
     /// The donator has no refundable balance for the requested token.
@@ -96,7 +91,7 @@ pub enum Error {
     /// The deadline is in the past or more than 5 years in the future.
     InvalidDeadline = 13,
 
-    /// The project's deadline has passed; no further deposits or verification allowed.
+    /// The project's deadline has passed.
     ProjectExpired = 14,
 
     /// The project is not in `Funding` or `Active` status.
@@ -108,10 +103,10 @@ pub enum Error {
     /// Registration attempted with an empty `accepted_tokens` list.
     EmptyAcceptedTokens = 17,
 
-    /// Arithmetic overflow when adding to a token or donator balance.
+    /// Arithmetic overflow.
     Overflow = 18,
 
-    /// The protocol is currently paused; mutating operations are blocked.
+    /// The protocol is currently paused.
     ProtocolPaused = 19,
 
     /// Reserved — cross-token goal validation mismatch.
@@ -120,7 +115,7 @@ pub enum Error {
     /// Refund or explicit expiration attempted before the project deadline.
     ProjectNotExpired = 21,
 
-    /// The requested status transition is not allowed by the project lifecycle FSM.
+    /// The requested status transition is not allowed.
     InvalidTransition = 22,
 
     /// The deposit token is not in the project's `accepted_tokens` list.
@@ -129,44 +124,39 @@ pub enum Error {
     /// The new deadline exceeds the extension limits.
     DeadlineTooLong = 24,
 
-    /// Fee basis points exceed the maximum allowed (100% or 10,000 BPS).
+    /// Fee basis points exceed the maximum allowed.
     InvalidFeeBasisPoints = 25,
 
     /// Address is not on the project's whitelist.
     NotWhitelisted = 26,
 
-    /// The donor refund window is still active; creator cannot reclaim yet.
+    /// The donor refund window is still active.
     RefundWindowActive = 27,
 
-    /// The donor refund window has expired; donors can no longer claim refunds.
+    /// The donor refund window has expired.
     RefundWindowExpired = 28,
 
-<<<<<<< HEAD
-    /// A method that requires the protocol to be initialised was called before
-    /// `initialize()` had been executed on this contract instance.
-=======
     /// Contract state has not been initialized.
->>>>>>> main
     ProtocolNotInitialized = 29,
 
-    /// The requested release amount exceeds the project's current on-chain balance.
+    /// The requested release amount exceeds the project's current balance.
     ReleaseAmountExceedsBalance = 30,
 
-    /// The supplied IPFS CID byte string was either empty or exceeded MAX_METADATA_URI_LEN.
+    /// The supplied IPFS CID byte string was invalid.
     MetadataCidInvalid = 31,
 
-    /// The proposed fee in basis points exceeds the hard cap of 10,000.
+    /// The proposed fee in basis points exceeds the hard cap.
     FeeBpsExceedsMaximum = 32,
 
-    /// The target project is paused; deposits and releases are temporarily blocked.
+    /// The target project is paused.
     ProjectPaused = 33,
 
-<<<<<<< HEAD
-    /// A re-entrant call was detected; the contract is already executing a
-    /// sensitive operation. The transaction is rolled back immediately.
-    ReentrancyDetected = 34,
-=======
     /// The 24-hour grace period after proof verification has not yet elapsed.
     GracePeriodActive = 34,
->>>>>>> main
+
+    /// A re-entrant call was detected.
+    ReentrancyDetected = 35,
+
+    /// Oracle threshold or count is invalid.
+    InvalidOracleConfig = 36,
 }

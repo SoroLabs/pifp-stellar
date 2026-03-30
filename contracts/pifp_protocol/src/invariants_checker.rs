@@ -4,11 +4,8 @@
 //! as defined in ARCHITECTURE.md. These checkers are used both in fuzz tests
 //! and can be triggered as post-execution assertions in debug builds.
 
-<<<<<<< HEAD
 use crate::errors::Error;
-=======
 use crate::rbac::get_super_admin;
->>>>>>> main
 use crate::types::{Project, ProjectStatus};
 use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
@@ -154,14 +151,6 @@ pub fn check_no_recursive_state(env: &Env) {
 }
 
 /// Acquire the re-entrancy lock.  Must be paired with [`release_lock`].
-///
-/// Pattern:
-/// ```ignore
-/// check_no_recursive_state(&env);
-/// acquire_lock(&env);
-/// // ... external calls ...
-/// release_lock(&env);
-/// ```
 pub fn acquire_lock(env: &Env) {
     crate::storage::set_locked(env, true);
 }
