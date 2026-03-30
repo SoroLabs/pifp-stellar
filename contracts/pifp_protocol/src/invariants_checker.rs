@@ -1,11 +1,13 @@
 //! # Invariants Checker
 //!
-//! This module implements the PIFP protocol invariants (INV-1 through INV-10)
+//! This module implements the PIFP protocol invariants (INV-1 through INV-11)
 //! as defined in ARCHITECTURE.md. These checkers are used both in fuzz tests
 //! and can be triggered as post-execution assertions in debug builds.
 
+use crate::errors::Error;
+use crate::rbac::get_super_admin;
 use crate::types::{Project, ProjectStatus};
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{panic_with_error, Address, Env, Vec};
 
 /// INV-1: project.balance >= 0 for all projects.
 pub fn check_inv1_balance_non_negative(env: &Env, project_id: u64, tokens: &Vec<Address>) {
@@ -74,11 +76,14 @@ pub fn check_inv7_status_transition(from: &ProjectStatus, to: &ProjectStatus) {
     let valid = matches!(
         (from, to),
         (ProjectStatus::Funding, ProjectStatus::Active)
+            | (ProjectStatus::Funding, ProjectStatus::Verified)
             | (ProjectStatus::Funding, ProjectStatus::Completed)
             | (ProjectStatus::Funding, ProjectStatus::Expired)
+            | (ProjectStatus::Active, ProjectStatus::Verified)
             | (ProjectStatus::Active, ProjectStatus::Completed)
             | (ProjectStatus::Active, ProjectStatus::Expired)
             | (ProjectStatus::Active, ProjectStatus::Cancelled)
+            | (ProjectStatus::Verified, ProjectStatus::Completed)
     );
 
     assert!(
@@ -129,4 +134,28 @@ pub fn check_all_project_invariants(env: &Env, project: &Project) {
     check_inv1_balance_non_negative(env, project.id, &project.accepted_tokens);
     check_inv2_goal_positive(project);
     check_inv3_deadline_positive(project);
+}
+
+// ── INV-11: Re-entrancy Guard ─────────────────────────────────────────
+
+/// INV-11: The contract must not be in a locked (re-entrant) state when
+/// entering a sensitive operation.
+///
+/// Call this **before** acquiring the lock at the start of any function that
+/// performs an external token transfer.  If the lock is already held the
+/// transaction is rolled back immediately with `Error::ReentrancyDetected`.
+pub fn check_no_recursive_state(env: &Env) {
+    if crate::storage::is_locked(env) {
+        panic_with_error!(env, Error::ReentrancyDetected);
+    }
+}
+
+/// Acquire the re-entrancy lock.  Must be paired with [`release_lock`].
+pub fn acquire_lock(env: &Env) {
+    crate::storage::set_locked(env, true);
+}
+
+/// Release the re-entrancy lock acquired by [`acquire_lock`].
+pub fn release_lock(env: &Env) {
+    crate::storage::set_locked(env, false);
 }

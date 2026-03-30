@@ -28,13 +28,18 @@ hex = "0.4"
 tokio-util = "0.7"
 ed25519-dalek = { version = "2", features = ["serde"] }
 stellar-strkey = "0.0.16"
-redis = { version = "0.27", features = ["tokio-comp"] }
-hmac = "0.12"
-sha2 = "0.10"
+redis = { version = "1.1", features = ["tokio-comp"] }
+hmac = "0.13"
+sha2 = "0.11"
 async-trait = "0.1"
-prometheus = { version = "0.13", features = ["process"] }
+prometheus = { version = "0.14", features = ["process"] }
 lazy_static = "1"
+governor = { version = "0.10", features = ["dashmap"] }
+dashmap = "6"
+# Sentry error tracking
+sentry = { version = "0.34", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = "0.34"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-rand = "0.8"
+rand = "0.9"

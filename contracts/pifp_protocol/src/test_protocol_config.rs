@@ -1,6 +1,6 @@
 use crate::test_utils::{create_token, dummy_metadata_uri, dummy_proof, setup_test};
 use crate::Role;
-use soroban_sdk::{testutils::Address as _, token, Address, Vec};
+use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Vec};
 
 #[test]
 fn test_update_protocol_config_success() {
@@ -60,14 +60,22 @@ fn test_verify_and_release_with_fees() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &0u32,
     );
 
     // Deposit 1000 tokens
     token_sac.mint(&donor, &1000);
     client.deposit(&project.id, &donor, &token.address, &1000);
 
-    // Verify and release
-    client.verify_and_release(&oracle, &project.id, &proof_hash);
+    // Verify proof and wait grace period
+    client.verify_proof(&oracle, &project.id, &proof_hash);
+
+    // Advance time past 24h grace period
+    let mut ledger = env.ledger().get();
+    ledger.timestamp += 86_400;
+    env.ledger().set(ledger);
+
+    client.claim_funds(&project.id);
 
     // Fee = 1000 * 500 / 10000 = 50 tokens
     // Creator = 1000 - 50 = 950 tokens
@@ -104,12 +112,21 @@ fn test_verify_and_release_zero_fee() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &0u32,
     );
 
     token_sac.mint(&donor, &1000);
     client.deposit(&project.id, &donor, &token.address, &1000);
 
-    client.verify_and_release(&oracle, &project.id, &proof_hash);
+    // Verify proof and wait grace period
+    client.verify_proof(&oracle, &project.id, &proof_hash);
+
+    // Advance time past 24h grace period
+    let mut ledger = env.ledger().get();
+    ledger.timestamp += 86_400;
+    env.ledger().set(ledger);
+
+    client.claim_funds(&project.id);
 
     assert_eq!(token.balance(&fee_recipient), 0);
     assert_eq!(token.balance(&creator), 1000);

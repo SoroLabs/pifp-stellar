@@ -13,7 +13,7 @@ use crate::cache::Cache;
 use crate::config::Config;
 use crate::db;
 use crate::metrics;
-use crate::rpc;
+use crate::rpc::{self, ProviderManager};
 use crate::webhook;
 
 pub struct IndexerState {
@@ -21,6 +21,7 @@ pub struct IndexerState {
     pub config: Config,
     pub client: Client,
     pub cache: Option<Cache>,
+    pub providers: ProviderManager,
 }
 
 /// Spawn the indexer loop as a background [`tokio`] task.
@@ -61,6 +62,7 @@ pub async fn run(state: Arc<IndexerState>) {
             &state.pool,
             &state.client,
             &state.config,
+            &state.providers,
             state.cache.as_ref(),
             current_ledger,
             cursor.as_deref(),
@@ -87,14 +89,14 @@ async fn poll_once(
     pool: &SqlitePool,
     client: &Client,
     config: &Config,
+    providers: &ProviderManager,
     cache: Option<&Cache>,
     start_ledger: u32,
     cursor: Option<&str>,
 ) -> crate::errors::Result<(u32, Option<String>)> {
-    // Fetch events from the Stellar RPC — latency is recorded inside fetch_events.
     let (raw_events, next_cursor, latest_ledger) = rpc::fetch_events(
         client,
-        &config.rpc_url,
+        providers,
         &config.contract_ids,
         start_ledger,
         cursor,
