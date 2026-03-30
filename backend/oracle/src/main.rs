@@ -3,14 +3,17 @@ mod config;
 mod errors;
 mod health;
 mod metrics;
+mod notifications;
 mod verifier;
 
 use std::sync::Arc;
 
 use clap::Parser;
+use sentry::{self, protocol::Event};
+use sentry_tracing;
 use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 use crate::config::Config;
 use crate::errors::{OracleError, Result};
@@ -50,12 +53,24 @@ struct Cli {
     serve: bool,
 }
 
+fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
+    event.request = None;
+    event.user = None;
+    event.extra = None;
+    event.tags = event
+        .tags
+        .map(|mut t| {
+            t.retain(|k, _| {
+                let key = k.to_ascii_lowercase();
+                !key.contains("auth") && !key.contains("token") && !key.contains("password")
+            });
+            t
+        });
+    event
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
@@ -69,13 +84,23 @@ async fn main() -> anyhow::Result<()> {
             sentry::ClientOptions {
                 release: sentry::release_name!(),
                 traces_sample_rate: 1.0,
+                before_send: Some(std::sync::Arc::new(|event: Event<'static>| {
+                    Some(redact_sensitive_data(event))
+                })),
                 ..Default::default()
             },
         ))
     });
 
-    let metrics = Arc::new(OracleMetrics::new());
+    sentry::integrations::panic::register_panic_handler();
 
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry_tracing::layer())
+        .init();
+
+    let metrics = Arc::new(OracleMetrics::new());
     if cli.serve {
         health::serve(config.metrics_port).await?;
         return Ok(());
@@ -184,6 +209,11 @@ async fn process_batch(
     }
 }
 
+/// Process a single proof: fetch from IPFS, hash, optionally submit on-chain.
+///
+/// On any verification failure the Slack alert fires as a best-effort
+/// side-effect (3-second timeout, result discarded) before the original
+/// error is returned unchanged.
 async fn process_single_proof(
     task: ProofTask,
     config: Arc<Config>,
@@ -194,8 +224,9 @@ async fn process_single_proof(
     metrics.verifications_total.inc();
 
     info!(
-        "project={} cid={} status=fetching",
-        project_id, task.proof_cid
+        project_id = project_id,
+        cid = %task.proof_cid,
+        "fetching proof"
     );
 
     let proof_hash = {
@@ -211,16 +242,16 @@ async fn process_single_proof(
     };
 
     info!(
-        "project={} hash={} status=hashed",
-        project_id,
-        hex::encode(proof_hash)
+        project_id = project_id,
+        hash = %hex::encode(proof_hash),
+        "proof hashed"
     );
 
     if dry_run {
         warn!(
-            "project={} status=dry_run would submit verify_and_release with hash={}",
-            project_id,
-            hex::encode(proof_hash)
+            project_id = project_id,
+            hash = %hex::encode(proof_hash),
+            "dry_run — skipping chain submission"
         );
         return Ok((project_id, None));
     }

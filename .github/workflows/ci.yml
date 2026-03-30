@@ -35,6 +35,36 @@ jobs:
       - name: Run Tests
         run: cargo test --manifest-path ${{ env.MANIFEST_PATH }}
 
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo Registry & Build Artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-tarpaulin
+        run: cargo binstall cargo-tarpaulin --no-confirm
+
+      - name: Run Tarpaulin
+        run: cargo tarpaulin --out Xml --all-features --workspace
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: cobertura.xml
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   build:
     name: Build WASM
     runs-on: ubuntu-latest

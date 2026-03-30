@@ -3,10 +3,6 @@ extern crate std;
 use crate::test_utils::TestContext;
 use soroban_sdk::{BytesN, Vec};
 
-// ─────────────────────────────────────────────────────────
-// ProjectNotFound (#1)
-// ─────────────────────────────────────────────────────────
-
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #1)")]
 fn test_get_project_not_found() {
@@ -29,10 +25,6 @@ fn test_get_project_balances_not_found() {
     ctx.client.get_project_balances(&999);
 }
 
-// ─────────────────────────────────────────────────────────
-// MilestoneAlreadyReleased (#3)
-// ─────────────────────────────────────────────────────────
-
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #3)")]
 fn test_verify_already_completed_project() {
@@ -41,16 +33,16 @@ fn test_verify_already_completed_project() {
 
     // First verification succeeds.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 
-    // Second verification must fail with MilestoneAlreadyReleased.
+    // Transition to Completed by claiming.
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
+
+    // Second verification must fail with MilestoneAlreadyReleased or similar.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
-
-// ─────────────────────────────────────────────────────────
-// InvalidGoal (#7)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #7)")]
@@ -65,14 +57,9 @@ fn test_register_negative_goal_fails() {
 fn test_register_goal_exceeds_upper_bound_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
-    // 10^30 + 1 — exceeds upper bound
     let huge_goal: i128 = 1_000_000_000_000_000_000_000_000_000_001;
     ctx.register_project(&tokens, huge_goal, false);
 }
-
-// ─────────────────────────────────────────────────────────
-// TooManyTokens (#10)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #10)")]
@@ -85,46 +72,46 @@ fn test_register_too_many_tokens_fails() {
     ctx.register_project(&tokens, 1000, false);
 }
 
-// ─────────────────────────────────────────────────────────
-// InvalidDeadline (#13)
-// ─────────────────────────────────────────────────────────
-
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #13)")]
 fn test_register_deadline_too_far_in_future_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
-    // More than 5 years in the future
     let too_far_deadline = ctx.env.ledger().timestamp() + 200_000_000;
+    
+    let proof_hash = ctx.dummy_proof();
+    let metadata_uri = ctx.dummy_metadata_uri();
+    let mut milestones = Vec::new(&ctx.env);
+    milestones.push_back(crate::types::Milestone {
+        label: BytesN::from_array(&ctx.env, &[0u8; 32]),
+        amount_bps: 10000,
+        proof_hash: proof_hash.clone(),
+    });
+
     ctx.client.register_project(
         &ctx.manager,
         &tokens,
-        &1000,
-        &ctx.dummy_proof(),
-        &ctx.dummy_metadata_uri(),
+        &1000i128,
+        &proof_hash,
+        &metadata_uri,
         &too_far_deadline,
         &false,
+        &milestones,
+        &0u32,
+        &Vec::new(&ctx.env),
+        &0u32,
     );
 }
-
-// ─────────────────────────────────────────────────────────
-// VerificationFailed (#16)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #16)")]
 fn test_verify_wrong_proof_hash_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
-
     let wrong_proof = BytesN::from_array(&ctx.env, &[0xffu8; 32]);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &wrong_proof);
+        .verify_proof(&ctx.oracle, &project.id, &wrong_proof);
 }
-
-// ─────────────────────────────────────────────────────────
-// EmptyAcceptedTokens (#17)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #17)")]
@@ -134,37 +121,23 @@ fn test_register_empty_tokens_fails() {
     ctx.register_project(&tokens, 1000, false);
 }
 
-// ─────────────────────────────────────────────────────────
-// ProtocolPaused (#19)
-// ─────────────────────────────────────────────────────────
-
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #19)")]
 fn test_verify_when_paused_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
-
     ctx.client.pause(&ctx.admin);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
-
-// ─────────────────────────────────────────────────────────
-// ProjectNotExpired (#21)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #21)")]
 fn test_expire_project_before_deadline_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
-    // No time jump — deadline has not passed.
     ctx.client.expire_project(&project.id);
 }
-
-// ─────────────────────────────────────────────────────────
-// InvalidTransition (#22)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #22)")]
@@ -174,16 +147,14 @@ fn test_expire_completed_project_fails_with_invalid_transition() {
 
     // Complete the project.
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
 
     // Attempt to expire it — should fail with InvalidTransition.
     ctx.jump_time(project.deadline + 1);
     ctx.client.expire_project(&project.id);
 }
-
-// ─────────────────────────────────────────────────────────
-// TokenNotAccepted (#23)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #23)")]
@@ -191,14 +162,8 @@ fn test_deposit_unaccepted_token_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let rogue_token = ctx.generate_address();
-
-    ctx.client
-        .deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
+    ctx.client.deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
 }
-
-// ─────────────────────────────────────────────────────────
-// NotAuthorized (#6)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #6)")]
@@ -207,19 +172,11 @@ fn test_admin_cannot_cancel_project() {
     let (project, token, sac) = ctx.setup_project(500);
     let donator = ctx.generate_address();
     let other_admin = ctx.generate_address();
-
-    ctx.client
-        .grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
+    ctx.client.grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
     sac.mint(&donator, &600i128);
-    ctx.client
-        .deposit(&project.id, &donator, &token.address, &600i128);
-
+    ctx.client.deposit(&project.id, &donator, &token.address, &600i128);
     ctx.client.cancel_project(&other_admin, &project.id);
 }
-
-// ─────────────────────────────────────────────────────────
-// InvalidTransition (#22)
-// ─────────────────────────────────────────────────────────
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #22)")]

@@ -83,6 +83,7 @@ fn test_project_manager_can_register() {
         &metadata_uri,
         &(ctx.env.ledger().timestamp() + 86400),
         &false,
+        &0u32,
     );
     assert_eq!(project.creator, ctx.manager);
 }
@@ -93,8 +94,8 @@ fn test_oracle_can_verify() {
     let (project, _, _) = ctx.setup_project(100);
 
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 
     let completed = ctx.client.get_project(&project.id);
-    assert_eq!(completed.status, crate::ProjectStatus::Completed);
+    assert_eq!(completed.status, crate::ProjectStatus::Verified);
 }

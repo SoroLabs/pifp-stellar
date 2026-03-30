@@ -50,7 +50,9 @@ fn test_expire_completed_project_panics() {
 
     // Move to Completed
     ctx.client
-        .verify_and_release(&ctx.oracle, &project.id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
+    ctx.jump_time(86_400); // grace period
+    ctx.client.claim_funds(&project.id);
 
     // Attempt to expire
     ctx.jump_time(project.deadline + 1);

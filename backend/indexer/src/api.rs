@@ -63,6 +63,16 @@ pub struct ProjectQuery {
 }
 
 #[derive(Deserialize)]
+pub struct SearchQuery {
+    pub q: Option<String>,
+    pub limit: Option<i64>,
+    pub page: Option<i64>,
+}
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Deserialize)]
 pub struct HistoryQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -213,6 +223,38 @@ pub async fn get_projects(
     let offset = query.offset.unwrap_or(0);
 
     match db::list_projects(&state.pool, query.status, query.creator, limit, offset).await {
+        Ok(projects) => {
+            let count = projects.len();
+            (
+                StatusCode::OK,
+                Json(serde_json::json!(ProjectsResponse { count, projects })),
+            )
+                .into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `GET /projects/search?q=...&limit=20&page=0`
+///
+/// Full-text search over project title and description.
+/// Returns an empty array (not an error) for blank queries or no matches.
+pub async fn search_projects(
+    State(state): State<Arc<ApiState>>,
+    Query(query): Query<SearchQuery>,
+) -> impl IntoResponse {
+    let q = query.q.unwrap_or_default();
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let page = query.page.unwrap_or(0).max(0);
+    let offset = page * limit;
+
+    match db::search_projects(&state.pool, &q, limit, offset).await {
         Ok(projects) => {
             let count = projects.len();
             (

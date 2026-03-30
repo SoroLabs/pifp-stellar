@@ -2,7 +2,7 @@ extern crate std;
 use std::vec::Vec;
 
 use proptest::prelude::*;
-use soroban_sdk::{testutils::Address as _, token, Address, Bytes, BytesN, Env, Vec as SorobanVec};
+use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Bytes, BytesN, Env, Vec as SorobanVec};
 
 use crate::invariants_checker::*;
 pub use crate::types::ProjectStatus;
@@ -33,6 +33,29 @@ fn dummy_metadata_uri(env: &Env) -> Bytes {
     )
 }
 
+fn register<'a>(
+    env: &Env,
+    client: &PifpProtocolClient<'a>,
+    creator: &Address,
+    tokens: &SorobanVec<Address>,
+    goal: i128,
+    proof_hash: &BytesN<32>,
+    deadline: u64,
+) -> crate::types::Project {
+    let empty_oracles: SorobanVec<Address> = SorobanVec::new(env);
+    client.register_project(
+        creator,
+        tokens,
+        &goal,
+        proof_hash,
+        &dummy_metadata_uri(env),
+        &deadline,
+        &false,
+        &empty_oracles,
+        &0u32,
+    )
+}
+
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
 
 proptest! {
@@ -60,6 +83,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -89,6 +113,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -117,6 +142,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -151,6 +177,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let donator = Address::generate(&env);
@@ -190,6 +217,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
@@ -248,14 +276,15 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
 
         let wrong_hash = BytesN::from_array(&env, &submitted_bytes);
-        let result = client.try_verify_and_release(&oracle, &project.id, &wrong_hash);
-        prop_assert!(result.is_err(), "verify_and_release should fail with wrong hash");
+        let result = client.try_verify_proof(&oracle, &project.id, &wrong_hash);
+        prop_assert!(result.is_err(), "verify_proof should fail with wrong hash");
     }
 
     #[test]
@@ -282,16 +311,17 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
 
-        client.verify_and_release(&oracle, &project.id, &proof_hash);
+        client.verify_proof(&oracle, &project.id, &proof_hash);
 
         let updated = client.get_project(&project.id);
         check_inv7_status_transition(&ProjectStatus::Funding, &updated.status);
-        assert_eq!(updated.status, ProjectStatus::Completed);
+        assert_eq!(updated.status, ProjectStatus::Verified);
     }
 }
 
@@ -324,6 +354,7 @@ proptest! {
                 &dummy_metadata_uri(&env),
                 &deadline,
                 &false,
+        &0u32,
             );
             projects.push(p);
         }
@@ -363,6 +394,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let donator = Address::generate(&env);
@@ -398,11 +430,12 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
-        client.verify_and_release(&oracle, &original.id, &proof_hash);
+        client.verify_proof(&oracle, &original.id, &proof_hash);
 
         let after = client.get_project(&original.id);
         check_inv10_config_immutable(&original, &after);
@@ -442,6 +475,7 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+        &0u32,
         );
         check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);
@@ -473,16 +507,23 @@ proptest! {
         // Phase 3: Oracle verification.
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
-        client.verify_and_release(&oracle, &project.id, &proof_hash);
+        client.verify_proof(&oracle, &project.id, &proof_hash);
+
+        // Advance time past 24h grace period
+        let mut ledger = env.ledger().get();
+        ledger.timestamp += 86_400;
+        env.ledger().set(ledger);
+
+        client.claim_funds(&project.id);
 
         let final_project = client.get_project(&project.id);
         check_inv7_status_transition(&ProjectStatus::Funding, &final_project.status);
         check_inv10_config_immutable(&project, &final_project);
         assert_eq!(final_project.status, ProjectStatus::Completed);
 
-        // Phase 4: Balance verification after verification.
-        // Balance should be zero after verification — funds are drained and
-        // transferred to the creator during verify_and_release.
+        // Phase 4: Balance verification after claiming.
+        // Balance should be zero after claiming — funds are drained and
+        // transferred to the creator during claim_funds.
         let post_verify_balance = client.get_balance(&project.id, &token_client.address);
         assert_eq!(post_verify_balance, 0i128);
 
@@ -491,7 +532,7 @@ proptest! {
         assert_eq!(creator_actual_balance, total_deposited);
 
         // Phase 5: Double-verify should fail.
-        let result = client.try_verify_and_release(&oracle, &project.id, &proof_hash);
+        let result = client.try_verify_proof(&oracle, &project.id, &proof_hash);
         prop_assert!(result.is_err(), "double verification should fail");
     }
 }
@@ -522,6 +563,8 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
+            &0u32,
         );
 
         let donator = Address::generate(&env);
@@ -545,7 +588,7 @@ proptest! {
         client.set_oracle(&admin, &oracle);
 
         let wrong_hash = BytesN::from_array(&env, &hash_bytes);
-        let result = client.try_verify_and_release(&oracle, &fake_id, &wrong_hash);
+        let result = client.try_verify_proof(&oracle, &fake_id, &wrong_hash);
         prop_assert!(result.is_err(), "verify on non-existent project {} should fail", fake_id);
     }
 
@@ -600,18 +643,20 @@ proptest! {
             &proof_hash,
             &dummy_metadata_uri(&env),
             &deadline,
+            &false,
+            &0u32,
         );
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
 
         let wrong = BytesN::from_array(&env, &submitted);
-        let result = client.try_verify_and_release(&oracle, &project.id, &wrong);
+        let result = client.try_verify_proof(&oracle, &project.id, &wrong);
         prop_assert!(result.is_err(), "wrong hash should never bypass verification");
 
         // Correct hash must still succeed.
-        client.verify_and_release(&oracle, &project.id, &proof_hash);
+        client.verify_proof(&oracle, &project.id, &proof_hash);
         let updated = client.get_project(&project.id);
-        assert_eq!(updated.status, ProjectStatus::Completed);
+        assert_eq!(updated.status, ProjectStatus::Verified);
     }
 }

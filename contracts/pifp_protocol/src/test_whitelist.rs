@@ -30,7 +30,6 @@ fn test_whitelist_funding_restricted() {
     let result = client.try_deposit(&project.id, &donor, &token.address, &500);
 
     assert!(result.is_err());
-    // Error::NotWhitelisted = 26
 }
 
 #[test]
