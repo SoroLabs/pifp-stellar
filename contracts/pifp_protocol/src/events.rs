@@ -2,6 +2,10 @@
 
 use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env};
 
+const PROJECT_CREATED: Symbol = symbol_short!("created");
+const FUNDS_RELEASED: Symbol = symbol_short!("released");
+const MILESTONE_VERIFIED: Symbol = symbol_short!("m_verify");
+
 #[contractevent]
 // ── Event Data Structs ──────────────────────────────────────────────
 //
@@ -423,4 +427,25 @@ pub fn emit_deadline_extended(
         new_deadline,
     };
     env.events().publish(topics, data);
+}
+
+/// Emitted when a specific milestone is verified and its portion of funds is released.
+pub fn emit_milestone_verified(
+    env: &Env,
+    project_id: u64,
+    milestone_index: u32,
+    bps: u32,
+) {
+    let topics = (MILESTONE_VERIFIED, project_id, milestone_index);
+    env.events().publish(topics, bps);
+}
+
+pub fn emit_project_created(env: &Env, id: u64, creator: Address, token: Address, goal: i128) {
+    let topics = (PROJECT_CREATED, id, creator);
+    env.events().publish(topics, (token, goal));
+}
+
+pub fn emit_funds_released(env: &Env, id: u64, token: Address, amount: i128) {
+    let topics = (FUNDS_RELEASED, id, token);
+    env.events().publish(topics, amount);
 }
