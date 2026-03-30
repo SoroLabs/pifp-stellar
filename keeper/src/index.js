@@ -1,10 +1,45 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
+import * as Tracing from '@sentry/tracing';
 import { loadTaskRegistry, saveTaskRegistry } from './taskRegistry.js';
 import { startMonitoring } from './monitor.js';
 import healthRoutes from './routes/healthRoutes.js';
 
 dotenv.config();
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || '',
+  tracesSampleRate: 1.0,
+  environment: process.env.NODE_ENV || 'development',
+  beforeSend(event) {
+    if (event.request?.headers) {
+      const sensitiveHeaders = ['authorization', 'cookie', 'set-cookie', 'x-api-key'];
+      sensitiveHeaders.forEach((name) => {
+        if (event.request.headers[name]) {
+          event.request.headers[name] = '[Filtered]';
+        }
+      });
+    }
+
+    if (event.user) {
+      event.user.ip_address = '[Filtered]';
+      event.user.email = event.user.email ? '[Filtered]' : undefined;
+    }
+
+    return event;
+  },
+});
+
+process.on('unhandledRejection', (reason) => {
+  Sentry.captureException(reason);
+});
+
+process.on('uncaughtException', (error) => {
+  Sentry.captureException(error);
+  console.error('Uncaught exception:', error);
+  process.exit(1);
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -46,6 +81,7 @@ async function start() {
       console.log(`   Metrics: http://${HOST}:${PORT}/metrics`);
     });
   } catch (error) {
+    Sentry.captureException(error);
     console.error('❌ Failed to start keeper:', error);
     process.exit(1);
   }
