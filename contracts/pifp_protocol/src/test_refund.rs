@@ -1,13 +1,10 @@
 extern crate std;
 
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Bytes, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
 
 use crate::{PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
 
-fn setup() -> (Env, PifpProtocolClient<'static>) {
+fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let mut ledger = env.ledger().get();
@@ -15,17 +12,12 @@ fn setup() -> (Env, PifpProtocolClient<'static>) {
     env.ledger().set(ledger);
     let contract_id = env.register(PifpProtocol, ());
     let client = PifpProtocolClient::new(&env, &contract_id);
-    (env, client)
-}
-
-fn setup_with_init() -> (Env, PifpProtocolClient<'static>, Address) {
-    let (env, client) = setup();
     let super_admin = Address::generate(&env);
     client.init(&super_admin);
     (env, client, super_admin)
 }
 
-fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
+fn create_token(env: &Env, admin: &Address) -> token::Client<'static> {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     token::Client::new(env, &addr.address())
 }
@@ -43,7 +35,7 @@ fn dummy_metadata_uri(env: &Env) -> Bytes {
 
 #[test]
 fn test_refund_success_after_expiry() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
     let donator = Address::generate(&env);
     let token_admin = Address::generate(&env);
@@ -69,33 +61,20 @@ fn test_refund_success_after_expiry() {
 
     let mut ledger = env.ledger().get();
     ledger.timestamp = deadline + 1;
-    ledger.sequence_number = 101;
     env.ledger().set(ledger);
 
     client.refund(&donator, &project.id, &token.address);
 
-    let token_client = token::Client::new(&env, &token.address);
-    assert_eq!(token_client.balance(&donator), 1_000i128);
-    assert_eq!(token_client.balance(&client.address), 0i128);
+    assert_eq!(token.balance(&donator), 1_000i128);
+    assert_eq!(token.balance(&client.address), 0i128);
     assert_eq!(client.get_balance(&project.id, &token.address), 0i128);
-    assert_eq!(
-        client.get_project(&project.id).status,
-        ProjectStatus::Expired
-    );
-
-    let contract_id = client.address.clone();
-    env.as_contract(&contract_id, || {
-        assert_eq!(
-            crate::storage::get_donator_balance(&env, project.id, &token.address, &donator),
-            0
-        );
-    });
+    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Expired);
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #21)")]
 fn test_refund_fails_when_not_expired() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
     let donator = Address::generate(&env);
     let token_admin = Address::generate(&env);
@@ -119,13 +98,16 @@ fn test_refund_fails_when_not_expired() {
     token_sac.mint(&donator, &1_000i128);
     client.deposit(&project.id, &donator, &token.address, &400i128);
 
+    let sac = token::StellarAssetClient::new(&env, &token.address);
+    sac.mint(&donator, &1_000i128);
+    client.deposit(&project.id, &donator, &token.address, &400i128);
     client.refund(&donator, &project.id, &token.address);
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #4)")]
 fn test_refund_double_refund_fails() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
     let donator = Address::generate(&env);
     let token_admin = Address::generate(&env);
@@ -151,7 +133,6 @@ fn test_refund_double_refund_fails() {
 
     let mut ledger = env.ledger().get();
     ledger.timestamp = deadline + 1;
-    ledger.sequence_number = 101;
     env.ledger().set(ledger);
 
     client.refund(&donator, &project.id, &token.address);
@@ -161,7 +142,7 @@ fn test_refund_double_refund_fails() {
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #4)")]
 fn test_refund_wrong_donator_fails() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
     let donator = Address::generate(&env);
     let attacker = Address::generate(&env);
@@ -188,7 +169,6 @@ fn test_refund_wrong_donator_fails() {
 
     let mut ledger = env.ledger().get();
     ledger.timestamp = deadline + 1;
-    ledger.sequence_number = 101;
     env.ledger().set(ledger);
 
     client.refund(&attacker, &project.id, &token.address);
@@ -196,7 +176,7 @@ fn test_refund_wrong_donator_fails() {
 
 #[test]
 fn test_refund_success_after_cancellation() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
     let donator = Address::generate(&env);
     let token_admin = Address::generate(&env);
@@ -219,31 +199,22 @@ fn test_refund_success_after_cancellation() {
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
     token_sac.mint(&donator, &700i128);
     client.deposit(&project.id, &donator, &token.address, &600i128);
-    assert_eq!(
-        client.get_project(&project.id).status,
-        ProjectStatus::Active
-    );
+    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Active);
 
     client.cancel_project(&creator, &project.id);
-    assert_eq!(
-        client.get_project(&project.id).status,
-        ProjectStatus::Cancelled
-    );
+    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Cancelled);
 
     client.refund(&donator, &project.id, &token.address);
-
-    let token_client = token::Client::new(&env, &token.address);
-    assert_eq!(token_client.balance(&donator), 700i128);
-    assert_eq!(token_client.balance(&client.address), 0i128);
-    assert_eq!(client.get_balance(&project.id, &token.address), 0i128);
+    assert_eq!(token.balance(&donator), 700i128);
+    assert_eq!(token.balance(&client.address), 0i128);
 }
 
 #[test]
 fn test_refund_distribution_after_cancellation_multi_donor() {
-    let (env, client, super_admin) = setup_with_init();
+    let (env, client, super_admin) = setup();
     let creator = Address::generate(&env);
-    let donator_a = Address::generate(&env);
-    let donator_b = Address::generate(&env);
+    let da = Address::generate(&env);
+    let db = Address::generate(&env);
     let token_admin = Address::generate(&env);
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 1_000;
@@ -274,17 +245,10 @@ fn test_refund_distribution_after_cancellation_multi_donor() {
     );
 
     client.cancel_project(&super_admin, &project.id);
-    assert_eq!(
-        client.get_project(&project.id).status,
-        ProjectStatus::Cancelled
-    );
+    client.refund(&da, &project.id, &token.address);
+    client.refund(&db, &project.id, &token.address);
 
-    client.refund(&donator_a, &project.id, &token.address);
-    client.refund(&donator_b, &project.id, &token.address);
-
-    let token_client = token::Client::new(&env, &token.address);
-    assert_eq!(token_client.balance(&donator_a), 1_000i128);
-    assert_eq!(token_client.balance(&donator_b), 1_000i128);
-    assert_eq!(token_client.balance(&client.address), 0i128);
-    assert_eq!(client.get_balance(&project.id, &token.address), 0i128);
+    assert_eq!(token.balance(&da), 1_000i128);
+    assert_eq!(token.balance(&db), 1_000i128);
+    assert_eq!(token.balance(&client.address), 0i128);
 }

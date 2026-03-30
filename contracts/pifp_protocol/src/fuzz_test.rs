@@ -33,6 +33,29 @@ fn dummy_metadata_uri(env: &Env) -> Bytes {
     )
 }
 
+fn register<'a>(
+    env: &Env,
+    client: &PifpProtocolClient<'a>,
+    creator: &Address,
+    tokens: &SorobanVec<Address>,
+    goal: i128,
+    proof_hash: &BytesN<32>,
+    deadline: u64,
+) -> crate::types::Project {
+    let empty_oracles: SorobanVec<Address> = SorobanVec::new(env);
+    client.register_project(
+        creator,
+        tokens,
+        &goal,
+        proof_hash,
+        &dummy_metadata_uri(env),
+        &deadline,
+        &false,
+        &empty_oracles,
+        &0u32,
+    )
+}
+
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
 
 proptest! {

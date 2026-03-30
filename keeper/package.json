@@ -15,6 +15,8 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.4.5",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "@sentry/node": "^8.26.0",
+    "@sentry/tracing": "^7.57.0"
   }
 }

@@ -32,7 +32,8 @@ use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
 use crate::errors::Error;
 use crate::types::{
-    Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig, TokenBalance,
+    DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
+    ProjectState, ProtocolConfig, TokenBalance,
 };
 
 // ── TTL Constants ────────────────────────────────────────────────────
@@ -74,6 +75,8 @@ pub enum DataKey {
     ProtocolConfig,
     /// Whitelisted donator for a project (Persistent).
     Whitelist(u64, Address),
+    /// In-flight oracle vote agreement for a project (Temporary).
+    OracleAgreement(u64),
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -156,7 +159,7 @@ pub fn save_project(env: &Env, project: &Project) {
         deadline: project.deadline,
         is_private: project.is_private,
         metadata_uri: project.metadata_uri.clone(),
-        categories: project.categories,
+        milestones: project.milestones.clone(),
     };
 
     let state = ProjectState {
@@ -165,6 +168,7 @@ pub fn save_project(env: &Env, project: &Project) {
         paused: project.paused,
         refund_expiry: project.refund_expiry,
         last_proof_time: project.last_proof_time,
+        completed_milestones: project.completed_milestones.clone(),
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -303,6 +307,8 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         refund_expiry: state.refund_expiry,
         categories: config.categories,
         last_proof_time: state.last_proof_time,
+        milestones: config.milestones,
+        completed_milestones: state.completed_milestones,
     }
 }
 
@@ -315,8 +321,6 @@ pub fn load_project(env: &Env, id: u64) -> Project {
 pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
     let config = maybe_load_project_config(env, id)?;
 
-    // If config exists, state must exist. This maintains the invariant while avoiding
-    // a redundant .has() check before .get().
     let state_key = DataKey::ProjState(id);
     let state: ProjectState = env
         .storage()
@@ -339,6 +343,8 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         refund_expiry: state.refund_expiry,
         categories: config.categories,
         last_proof_time: state.last_proof_time,
+        milestones: config.milestones,
+        completed_milestones: state.completed_milestones,
     })
 }
 
@@ -467,4 +473,36 @@ pub fn add_to_whitelist(env: &Env, project_id: u64, address: &Address) {
 pub fn remove_from_whitelist(env: &Env, project_id: u64, address: &Address) {
     let key = DataKey::Whitelist(project_id, address.clone());
     env.storage().persistent().remove(&key);
+}
+
+// ── Oracle Agreement Helpers (Temporary Storage) ─────────────────────
+
+/// Approximate ledgers for 1 day — used as TTL for temporary oracle agreement.
+const TEMP_AGREEMENT_TTL: u32 = 17_280;
+
+/// Load the current `OracleAgreement` for a project, or return a zeroed default.
+pub fn load_oracle_agreement(env: &Env, project_id: u64) -> OracleAgreement {
+    let key = DataKey::OracleAgreement(project_id);
+    env.storage()
+        .temporary()
+        .get::<DataKey, OracleAgreement>(&key)
+        .unwrap_or(OracleAgreement {
+            votes: 0,
+            voter_count: 0,
+        })
+}
+
+/// Persist an updated `OracleAgreement` with a 1-day TTL.
+pub fn save_oracle_agreement(env: &Env, project_id: u64, agreement: &OracleAgreement) {
+    let key = DataKey::OracleAgreement(project_id);
+    env.storage().temporary().set(&key, agreement);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key, TEMP_AGREEMENT_TTL, TEMP_AGREEMENT_TTL);
+}
+
+/// Remove the `OracleAgreement` entry once the threshold is met.
+pub fn clear_oracle_agreement(env: &Env, project_id: u64) {
+    let key = DataKey::OracleAgreement(project_id);
+    env.storage().temporary().remove(&key);
 }
