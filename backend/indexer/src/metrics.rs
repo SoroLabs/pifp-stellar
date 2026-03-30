@@ -8,8 +8,8 @@
 
 use lazy_static::lazy_static;
 use prometheus::{
-    register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram,
-    HistogramOpts, Opts, TextEncoder,
+    register_counter, register_gauge, register_histogram, Counter, Gauge, Histogram, HistogramOpts,
+    Opts, TextEncoder,
 };
 
 lazy_static! {

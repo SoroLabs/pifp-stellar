@@ -126,7 +126,9 @@ pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
 /// Save the global protocol configuration.
 pub fn set_protocol_config(env: &Env, config: &ProtocolConfig) {
     bump_instance(env);
-    env.storage().instance().set(&DataKey::ProtocolConfig, config);
+    env.storage()
+        .instance()
+        .set(&DataKey::ProtocolConfig, config);
 }
 
 // ── Persistent Storage Helpers ───────────────────────────────────────
@@ -154,11 +156,13 @@ pub fn save_project(env: &Env, project: &Project) {
         deadline: project.deadline,
         is_private: project.is_private,
         metadata_uri: project.metadata_uri.clone(),
+        categories: project.categories,
     };
 
     let state = ProjectState {
         status: project.status.clone(),
         donation_count: project.donation_count,
+        paused: project.paused,
         refund_expiry: project.refund_expiry,
     };
 
@@ -294,7 +298,9 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         status: state.status,
         donation_count: state.donation_count,
         is_private: config.is_private,
+        paused: state.paused,
         refund_expiry: state.refund_expiry,
+        categories: config.categories,
     }
 }
 
@@ -305,20 +311,17 @@ pub fn load_project(env: &Env, id: u64) -> Project {
 /// TTL of both underlying entries when present.
 #[allow(dead_code)]
 pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
-    let config = match maybe_load_project_config(env, id) {
-        Some(c) => c,
-        None => return None,
-    };
     let config = maybe_load_project_config(env, id)?;
 
     // If config exists, state must exist. This maintains the invariant while avoiding
     // a redundant .has() check before .get().
+    let state_key = DataKey::ProjState(id);
     let state: ProjectState = env
         .storage()
         .persistent()
-        .get(&DataKey::ProjState(id))
+        .get(&state_key)
         .expect("project state missing");
-    bump_persistent(env, &DataKey::ProjState(id));
+    bump_persistent(env, &state_key);
     Some(Project {
         id: config.id,
         creator: config.creator,
@@ -330,7 +333,9 @@ pub fn maybe_load_project(env: &Env, id: u64) -> Option<Project> {
         status: state.status,
         donation_count: state.donation_count,
         is_private: config.is_private,
+        paused: state.paused,
         refund_expiry: state.refund_expiry,
+        categories: config.categories,
     })
 }
 

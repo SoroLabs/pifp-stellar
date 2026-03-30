@@ -62,6 +62,8 @@ pub struct ProjectConfig {
     pub deadline: u64,
     pub is_private: bool,
     pub metadata_uri: Bytes,
+    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
+    pub categories: u32,
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -73,6 +75,9 @@ pub struct ProjectState {
     pub status: ProjectStatus,
     /// Count of unique (donator, token) pairs that have deposited.
     pub donation_count: u32,
+    /// Emergency pause flag for this project. When true, deposits and
+    /// verification/releases are blocked until an admin unpauses it.
+    pub paused: bool,
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Set to `deadline + REFUND_WINDOW`
     /// when the project transitions to Expired, or `cancel_time + REFUND_WINDOW`
@@ -111,9 +116,13 @@ pub struct Project {
     pub donation_count: u32,
     /// Is this a private project (whitelist only)?
     pub is_private: bool,
+    /// Emergency pause flag for this project.
+    pub paused: bool,
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Zero while non-terminal.
     pub refund_expiry: u64,
+    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
+    pub categories: u32,
 }
 
 impl Project {

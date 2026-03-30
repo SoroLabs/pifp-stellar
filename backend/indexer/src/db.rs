@@ -177,9 +177,10 @@ pub async fn update_global_stats(pool: &SqlitePool, event: &PifpEvent) -> Result
             if let Some(amt_str) = &event.amount {
                 // We use big-integer addition in SQLite if possible, but SQLite doesn't support i128 natively.
                 // For this implementation, we'll load, add in Rust, and save back.
-                let current_tvl_str: (String,) = sqlx::query_as("SELECT total_tvl FROM project_stats WHERE id = 1")
-                    .fetch_one(&mut *tx)
-                    .await?;
+                let current_tvl_str: (String,) =
+                    sqlx::query_as("SELECT total_tvl FROM project_stats WHERE id = 1")
+                        .fetch_one(&mut *tx)
+                        .await?;
 
                 let current_tvl = current_tvl_str.0.parse::<i128>().unwrap_or(0);
                 let added_amt = amt_str.parse::<i128>().unwrap_or(0);

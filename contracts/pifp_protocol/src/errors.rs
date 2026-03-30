@@ -31,12 +31,16 @@
 //! | 21   | `ProjectNotExpired`      | Refund or expire attempted before the deadline has passed   |
 //! | 22   | `InvalidTransition`      | State-machine transition not allowed (e.g. expiring a Completed project) |
 //! | 23   | `TokenNotAccepted`       | Deposit attempted with a token not in the project's accepted list |
-//! | 24   | `RefundWindowActive`     | Creator tried to reclaim funds before the 6-month refund window expired |
-//! | 25   | `RefundWindowExpired`    | Donor tried to refund after the 6-month refund window expired |
-//! | 24   | `ProtocolNotInitialized` | Contract state has not been initialized                     |
-//! | 25   | `ReleaseAmountExceedsBalance` | The requested release amount exceeds the project's current on-chain balance |
-//! | 26   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length       |
-//! | 27   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap  |
+//! | 24   | `DeadlineTooLong`        | The new deadline exceeds the 1-year extension limit |
+//! | 25   | `InvalidFeeBasisPoints`  | Fee basis points exceed the maximum allowed (10%). |
+//! | 26   | `NotWhitelisted`         | Address is not on the project's whitelist. |
+//! | 27   | `RefundWindowActive`     | Creator tried to reclaim funds before the 6-month refund window expired |
+//! | 28   | `RefundWindowExpired`    | Donor tried to refund after the 6-month refund window expired |
+//! | 29   | `ProtocolNotInitialized` | Contract state has not been initialized |
+//! | 30   | `ReleaseAmountExceedsBalance` | The requested release amount exceeds the project's current on-chain balance |
+//! | 31   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length |
+//! | 32   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap |
+//! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |
 
 use soroban_sdk::contracterror;
 
@@ -125,21 +129,28 @@ pub enum Error {
     /// Address is not on the project's whitelist.
     NotWhitelisted = 26,
     /// The donor refund window is still active; creator cannot reclaim yet.
-    RefundWindowActive = 24,
+    RefundWindowActive = 27,
 
     /// The donor refund window has expired; donors can no longer claim refunds.
-    RefundWindowExpired = 25,
+    RefundWindowExpired = 28,
     /// A method that requires the protocol to be initialised was called before
     /// `initialize()` had been executed on this contract instance.
-    ProtocolNotInitialized = 24,
+    ProtocolNotInitialized = 28,
 
     /// The requested release amount exceeds the project's current on-chain balance.
-    ReleaseAmountExceedsBalance = 25,
+    ReleaseAmountExceedsBalance = 29,
+    ProtocolNotInitialized = 29,
+
+    /// The requested release amount exceeds the project's current on-chain balance.
+    ReleaseAmountExceedsBalance = 30,
 
     /// The supplied IPFS CID byte string was either empty or exceeded the
     /// maximum allowed length (`MAX_CID_LEN` = 64 bytes).
-    MetadataCidInvalid = 26,
+    MetadataCidInvalid = 31,
 
     /// The proposed fee in basis points exceeds the hard cap of 10 000 (= 100 %).
-    FeeBpsExceedsMaximum = 27,
+    FeeBpsExceedsMaximum = 32,
+
+    /// The target project is paused; deposits and releases are temporarily blocked.
+    ProjectPaused = 33,
 }
