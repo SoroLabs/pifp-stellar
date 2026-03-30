@@ -77,8 +77,6 @@ fn test_register_deadline_too_far_in_future_fails() {
         &ctx.dummy_metadata_uri(),
         &too_far_deadline,
         &false,
-        &empty_oracles,
-        &0u32,
     );
 }
 

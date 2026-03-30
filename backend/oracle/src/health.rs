@@ -21,9 +21,7 @@ struct HealthResponse {
 }
 
 #[derive(Clone)]
-pub struct ServerState {
-    pub start_time: std::time::Instant,
-}
+pub struct ServerState;
 
 async fn health(State(_state): State<Arc<ServerState>>) -> impl IntoResponse {
     Json(HealthResponse {
@@ -44,9 +42,7 @@ async fn metrics_handler() -> impl IntoResponse {
 
 /// Start the health and metrics HTTP server on the given port.
 pub async fn serve(port: u16) -> anyhow::Result<()> {
-    let state = Arc::new(ServerState {
-        start_time: std::time::Instant::now(),
-    });
+    let state = Arc::new(ServerState);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -68,9 +64,7 @@ mod tests {
     use tower::util::ServiceExt;
 
     fn test_app() -> Router {
-        let state = Arc::new(ServerState {
-            start_time: std::time::Instant::now(),
-        });
+        let state = Arc::new(ServerState);
         Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics_handler))

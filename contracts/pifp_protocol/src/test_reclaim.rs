@@ -27,8 +27,7 @@ fn test_reclaim_after_expiry_window() {
     ctx.jump_time(REFUND_WINDOW + 1);
 
     // Creator reclaims unclaimed funds
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 
     // Funds went to creator
     assert_eq!(token.balance(&ctx.manager), 500);
@@ -61,8 +60,7 @@ fn test_reclaim_after_cancellation_window() {
     // Jump past refund window
     ctx.jump_time(REFUND_WINDOW + 1);
 
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 
     assert_eq!(token.balance(&ctx.manager), 600);
     assert_eq!(ctx.client.get_balance(&project.id, &token.address), 0);
@@ -95,8 +93,7 @@ fn test_partial_refund_then_reclaim_remainder() {
     ctx.jump_time(REFUND_WINDOW + 1);
 
     // Creator reclaims the remaining 200
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
     assert_eq!(token.balance(&ctx.manager), 200);
     assert_eq!(ctx.client.get_balance(&project.id, &token.address), 0);
 }
@@ -104,7 +101,7 @@ fn test_partial_refund_then_reclaim_remainder() {
 // ── reclaim_expired_funds: failure paths ────────────────────────────
 
 #[test]
-#[should_panic(expected = "Error(Contract, #24)")]
+#[should_panic(expected = "Error(Contract, #27)")]
 fn test_reclaim_before_window_expires_fails() {
     let ctx = TestContext::new();
     let (project, token, sac) = ctx.setup_project(1000);
@@ -118,8 +115,7 @@ fn test_reclaim_before_window_expires_fails() {
     ctx.client.expire_project(&project.id);
 
     // Try to reclaim during the refund window — should fail
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 }
 
 #[test]
@@ -139,8 +135,7 @@ fn test_reclaim_by_non_creator_fails() {
 
     // Non-creator tries to reclaim — should fail
     let attacker = ctx.generate_address();
-    ctx.client
-        .reclaim_expired_funds(&attacker, &project.id);
+    ctx.client.reclaim_expired_funds(&attacker, &project.id);
 }
 
 #[test]
@@ -150,8 +145,7 @@ fn test_reclaim_on_funding_project_fails() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Project is still Funding — should fail
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 }
 
 #[test]
@@ -166,14 +160,13 @@ fn test_reclaim_on_completed_project_fails() {
 
     ctx.jump_time(REFUND_WINDOW + 1);
 
-    ctx.client
-        .reclaim_expired_funds(&ctx.manager, &project.id);
+    ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 }
 
 // ── refund window expiry: donor blocked after window ────────────────
 
 #[test]
-#[should_panic(expected = "Error(Contract, #25)")]
+#[should_panic(expected = "Error(Contract, #28)")]
 fn test_donor_refund_blocked_after_window_expires() {
     let ctx = TestContext::new();
     let (project, token, sac) = ctx.setup_project(1000);

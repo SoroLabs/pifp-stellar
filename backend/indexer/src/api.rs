@@ -8,16 +8,14 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use base64::Engine;
-use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
-use stellar_strkey::ed25519::PublicKey as StellarPublicKey;
 use tracing::info;
 
 use crate::cache::Cache;
 use crate::db;
 use crate::events::EventRecord;
+use crate::middleware::auth::verify_profile_signature;
 use crate::profiles::{self, ProfileUpdate};
 
 #[derive(Clone)]
@@ -382,7 +380,7 @@ pub async fn upsert_profile(
             .into_response();
     }
 
-    if !verify_profile_signature(&address, &payload.signature) {
+    if !verify_profile_signature(&address, &payload.signature).is_ok() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {
@@ -467,7 +465,7 @@ pub async fn delete_profile(
             .into_response();
     }
 
-    if !verify_profile_signature(&address, &payload.signature) {
+    if !verify_profile_signature(&address, &payload.signature).is_ok() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {

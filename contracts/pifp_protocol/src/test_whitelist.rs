@@ -1,87 +1,99 @@
-extern crate std;
-
-use crate::{test_utils::TestContext, Role};
+use crate::test_utils::{create_token, dummy_metadata_uri, dummy_proof, setup_test};
+use crate::Role;
+use soroban_sdk::{testutils::Address as _, token, Address, Vec};
 
 #[test]
 fn test_whitelist_funding_restricted() {
-    let ctx = TestContext::new();
-    let (token, _) = ctx.create_token();
-    let tokens = soroban_sdk::Vec::from_array(&ctx.env, [token.address.clone()]);
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
-    let project = ctx.client.register_project(
-        &ctx.manager,
-        &tokens,
-        &1000i128,
-        &ctx.dummy_proof(),
-        &ctx.dummy_metadata_uri(),
-        &(ctx.env.ledger().timestamp() + 86400),
+    let (env, client, admin) = setup_test();
+    let creator = Address::generate(&env);
+    let donor = Address::generate(&env);
+    let token = create_token(&env, &admin);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
+
+    client.grant_role(&admin, &creator, &Role::ProjectManager);
+
+    // Register a private project
+    let project = client.register_project(
+        &creator,
+        &accepted_tokens,
+        &1000,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &(env.ledger().timestamp() + 10000),
         &true, // is_private
-        &empty_oracles,
         &0u32,
     );
 
-    let donor = ctx.generate_address();
-    let sac = soroban_sdk::token::StellarAssetClient::new(&ctx.env, &token.address);
-    sac.mint(&donor, &500i128);
+    // Attempt deposit from non-whitelisted donor
+    token_sac.mint(&donor, &500);
+    let result = client.try_deposit(&project.id, &donor, &token.address, &500);
 
-    let result = ctx.client.try_deposit(&project.id, &donor, &token.address, &500i128);
     assert!(result.is_err());
 }
 
 #[test]
 fn test_whitelist_funding_allowed() {
-    let ctx = TestContext::new();
-    let (token, sac) = ctx.create_token();
-    let tokens = soroban_sdk::Vec::from_array(&ctx.env, [token.address.clone()]);
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
-    let project = ctx.client.register_project(
-        &ctx.manager,
-        &tokens,
-        &1000i128,
-        &ctx.dummy_proof(),
-        &ctx.dummy_metadata_uri(),
-        &(ctx.env.ledger().timestamp() + 86400),
+    let (env, client, admin) = setup_test();
+    let creator = Address::generate(&env);
+    let donor = Address::generate(&env);
+    let token = create_token(&env, &admin);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
+
+    client.grant_role(&admin, &creator, &Role::ProjectManager);
+
+    let project = client.register_project(
+        &creator,
+        &accepted_tokens,
+        &1000,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &(env.ledger().timestamp() + 10000),
         &true,
-        &empty_oracles,
         &0u32,
     );
 
-    let donor = ctx.generate_address();
-    ctx.client.add_to_whitelist(&ctx.manager, &project.id, &donor);
+    // Add donor to whitelist
+    client.add_to_whitelist(&creator, &project.id, &donor);
 
-    sac.mint(&donor, &500i128);
-    ctx.client.deposit(&project.id, &donor, &token.address, &500i128);
-    assert_eq!(ctx.client.get_balance(&project.id, &token.address), 500i128);
+    // Deposit should now work
+    token_sac.mint(&donor, &500);
+    client.deposit(&project.id, &donor, &token.address, &500);
+
+    let balance = client.get_balance(&project.id, &token.address);
+    assert_eq!(balance, 500);
 }
 
 #[test]
 fn test_whitelist_management_auth() {
-    let ctx = TestContext::new();
-    let (token, _) = ctx.create_token();
-    let tokens = soroban_sdk::Vec::from_array(&ctx.env, [token.address.clone()]);
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
-    let project = ctx.client.register_project(
-        &ctx.manager,
-        &tokens,
-        &1000i128,
-        &ctx.dummy_proof(),
-        &ctx.dummy_metadata_uri(),
-        &(ctx.env.ledger().timestamp() + 86400),
+    let (env, client, admin) = setup_test();
+    let creator = Address::generate(&env);
+    let stranger = Address::generate(&env);
+    let donor = Address::generate(&env);
+    let token = create_token(&env, &admin);
+    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
+
+    client.grant_role(&admin, &creator, &Role::ProjectManager);
+
+    let project = client.register_project(
+        &creator,
+        &accepted_tokens,
+        &1000,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &(env.ledger().timestamp() + 10000),
         &true,
-        &empty_oracles,
         &0u32,
     );
 
-    let stranger = ctx.generate_address();
-    let donor = ctx.generate_address();
-
-    // Stranger cannot add to whitelist.
-    let result = ctx.client.try_add_to_whitelist(&stranger, &project.id, &donor);
+    // Stranger cannot add to whitelist
+    let result = client.try_add_to_whitelist(&stranger, &project.id, &donor);
     assert!(result.is_err());
 
-    // Admin can add.
-    ctx.client.add_to_whitelist(&ctx.admin, &project.id, &donor);
+    // Admin CAN add to whitelist
+    client.add_to_whitelist(&admin, &project.id, &donor);
 
-    // Creator can remove.
-    ctx.client.remove_from_whitelist(&ctx.manager, &project.id, &donor);
+    // Creator can remove
+    client.remove_from_whitelist(&creator, &project.id, &donor);
 }

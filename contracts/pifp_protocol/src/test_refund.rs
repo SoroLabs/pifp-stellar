@@ -22,21 +22,15 @@ fn create_token(env: &Env, admin: &Address) -> token::Client<'static> {
     token::Client::new(env, &addr.address())
 }
 
-fn register_project(
-    env: &Env,
-    client: &PifpProtocolClient,
-    super_admin: &Address,
-    creator: &Address,
-    token: &token::Client,
-    deadline: u64,
-    goal: i128,
-) -> crate::types::Project {
-    client.grant_role(super_admin, creator, &Role::ProjectManager);
-    let tokens = soroban_sdk::vec![env, token.address.clone()];
-    let proof = soroban_sdk::BytesN::from_array(env, &[0xabu8; 32]);
-    let meta = soroban_sdk::Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
-    let empty_oracles: soroban_sdk::Vec<Address> = soroban_sdk::Vec::new(env);
-    client.register_project(creator, &tokens, &goal, &proof, &meta, &deadline, &false, &empty_oracles, &0u32)
+fn dummy_proof(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[0xabu8; 32])
+}
+
+fn dummy_metadata_uri(env: &Env) -> Bytes {
+    Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    )
 }
 
 #[test]
@@ -48,10 +42,20 @@ fn test_refund_success_after_expiry() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 100;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 500);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &500i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&donator, &1_000i128);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &1_000i128);
     client.deposit(&project.id, &donator, &token.address, &400i128);
 
     let mut ledger = env.ledger().get();
@@ -76,7 +80,21 @@ fn test_refund_fails_when_not_expired() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 1000;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 1000);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &1_000i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
+
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &1_000i128);
+    client.deposit(&project.id, &donator, &token.address, &400i128);
 
     let sac = token::StellarAssetClient::new(&env, &token.address);
     sac.mint(&donator, &1_000i128);
@@ -94,10 +112,20 @@ fn test_refund_double_refund_fails() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 100;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 1000);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &1_000i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&donator, &1_000i128);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &1_000i128);
     client.deposit(&project.id, &donator, &token.address, &400i128);
 
     let mut ledger = env.ledger().get();
@@ -119,10 +147,20 @@ fn test_refund_wrong_donator_fails() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 100;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 1000);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &1_000i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&donator, &1_000i128);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &1_000i128);
     client.deposit(&project.id, &donator, &token.address, &400i128);
 
     let mut ledger = env.ledger().get();
@@ -141,10 +179,20 @@ fn test_refund_success_after_cancellation() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 1_000;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 500);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &500i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&donator, &700i128);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator, &700i128);
     client.deposit(&project.id, &donator, &token.address, &600i128);
     assert_eq!(client.get_project(&project.id).status, ProjectStatus::Active);
 
@@ -166,14 +214,29 @@ fn test_refund_distribution_after_cancellation_multi_donor() {
     let token = create_token(&env, &token_admin);
     let deadline = env.ledger().timestamp() + 1_000;
 
-    let project = register_project(&env, &client, &super_admin, &creator, &token, deadline, 700);
+    client.grant_role(&super_admin, &creator, &Role::ProjectManager);
+    let tokens = soroban_sdk::vec![&env, token.address.clone()];
+    let project = client.register_project(
+        &creator,
+        &tokens,
+        &700i128,
+        &dummy_proof(&env),
+        &dummy_metadata_uri(&env),
+        &deadline,
+        &false,
+    );
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&da, &1_000i128);
-    sac.mint(&db, &1_000i128);
-    client.deposit(&project.id, &da, &token.address, &300i128);
-    client.deposit(&project.id, &db, &token.address, &500i128);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Active);
+    let token_sac = token::StellarAssetClient::new(&env, &token.address);
+    token_sac.mint(&donator_a, &1_000i128);
+    token_sac.mint(&donator_b, &1_000i128);
+
+    client.deposit(&project.id, &donator_a, &token.address, &300i128);
+    client.deposit(&project.id, &donator_b, &token.address, &500i128);
+    assert_eq!(client.get_balance(&project.id, &token.address), 800i128);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Active
+    );
 
     client.cancel_project(&super_admin, &project.id);
     client.refund(&da, &project.id, &token.address);

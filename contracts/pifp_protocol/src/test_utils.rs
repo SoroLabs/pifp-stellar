@@ -7,6 +7,29 @@ use soroban_sdk::{
 
 use crate::{types::Project, PifpProtocol, PifpProtocolClient, Role};
 
+pub fn setup_test() -> (Env, PifpProtocolClient<'static>, Address) {
+    let ctx = TestContext::new();
+    let env = ctx.env.clone();
+    let client = PifpProtocolClient::new(&env, &ctx.client.address);
+    (env, client, ctx.admin)
+}
+
+pub fn create_token<'a>(env: &Env, admin: &Address) -> token::Client<'a> {
+    let addr = env.register_stellar_asset_contract_v2(admin.clone());
+    token::Client::new(env, &addr.address())
+}
+
+pub fn dummy_metadata_uri(env: &Env) -> Bytes {
+    Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    )
+}
+
+pub fn dummy_proof(env: &Env) -> BytesN<32> {
+    BytesN::from_array(env, &[0xabu8; 32])
+}
+
 pub struct TestContext {
     pub env: Env,
     pub client: PifpProtocolClient<'static>,
@@ -53,16 +76,14 @@ impl TestContext {
     ) -> (Project, token::Client<'static>, token::StellarAssetClient<'static>) {
         let (token, sac) = self.create_token();
         let tokens = Vec::from_array(&self.env, [token.address.clone()]);
-        let project = self.register_project(&tokens, goal, false);
+        let project = self.register_project(&tokens, goal);
         (project, token, sac)
     }
 
-    /// Register a project using the legacy single-oracle path (empty oracle list).
-    pub fn register_project(&self, tokens: &Vec<Address>, goal: i128, is_private: bool) -> Project {
+    pub fn register_project(&self, tokens: &Vec<Address>, goal: i128) -> Project {
         let proof_hash = self.dummy_proof();
         let metadata_uri = self.dummy_metadata_uri();
         let deadline = self.env.ledger().timestamp() + 86400;
-        let empty_oracles: Vec<Address> = Vec::new(&self.env);
         self.client.register_project(
             &self.manager,
             tokens,
@@ -71,13 +92,14 @@ impl TestContext {
             &metadata_uri,
             &deadline,
             &is_private,
-            &empty_oracles,
-            &0u32,
         )
     }
 
     pub fn dummy_metadata_uri(&self) -> Bytes {
-        Bytes::from_slice(&self.env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
+        Bytes::from_slice(
+            &self.env,
+            b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+        )
     }
 
     pub fn dummy_proof(&self) -> BytesN<32> {

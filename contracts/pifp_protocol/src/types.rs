@@ -62,30 +62,8 @@ pub struct ProjectConfig {
     pub deadline: u64,
     pub is_private: bool,
     pub metadata_uri: Bytes,
-    /// Ordered list of authorized oracle addresses for M-of-N verification.
-    /// Index position maps directly to the bit position in `OracleAgreement.votes`.
-    /// Maximum 32 oracles (fits in a u32 BitSet).
-    pub authorized_oracles: Vec<Address>,
-    /// Minimum number of oracle votes required to release funds (the "M" in M-of-N).
-    pub threshold: u32,
-}
-
-/// Tracks in-flight oracle votes for a project using a BitSet.
-///
-/// Stored in `temporary` storage — it only needs to live until the threshold
-/// is met, at which point it is cleared and funds are released.
-///
-/// # BitSet layout
-/// Bit `i` of `votes` is set when the oracle at index `i` in
-/// `ProjectConfig.authorized_oracles` has submitted a valid vote.
-/// This prevents double-voting without any additional storage keys.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OracleAgreement {
-    /// BitSet: bit `i` is 1 if oracle at index `i` has voted.
-    pub votes: u32,
-    /// Count of unique oracles that have voted so far.
-    pub voter_count: u32,
+    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
+    pub categories: u32,
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -97,6 +75,9 @@ pub struct ProjectState {
     pub status: ProjectStatus,
     /// Count of unique (donator, token) pairs that have deposited.
     pub donation_count: u32,
+    /// Emergency pause flag for this project. When true, deposits and
+    /// verification/releases are blocked until an admin unpauses it.
+    pub paused: bool,
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Set to `deadline + REFUND_WINDOW`
     /// when the project transitions to Expired, or `cancel_time + REFUND_WINDOW`
@@ -135,13 +116,13 @@ pub struct Project {
     pub donation_count: u32,
     /// Is this a private project (whitelist only)?
     pub is_private: bool,
+    /// Emergency pause flag for this project.
+    pub paused: bool,
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Zero while non-terminal.
     pub refund_expiry: u64,
-    /// Ordered list of authorized oracle addresses for M-of-N verification.
-    pub authorized_oracles: soroban_sdk::Vec<Address>,
-    /// Minimum oracle votes required to release funds.
-    pub threshold: u32,
+    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
+    pub categories: u32,
 }
 
 impl Project {
