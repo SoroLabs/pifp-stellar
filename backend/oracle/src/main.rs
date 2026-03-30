@@ -3,6 +3,7 @@ mod config;
 mod errors;
 mod health;
 mod metrics;
+mod notifications;
 mod verifier;
 
 use std::sync::Arc;
@@ -28,13 +29,6 @@ struct ProofTask {
 #[command(name = "pifp-oracle")]
 #[command(about = "PIFP Oracle - Verify proofs and release funds")]
 struct Cli {
-    /// Project ID to verify
-    #[arg(long, required_unless_present = "serve")]
-    project_id: Option<u64>,
-
-    /// IPFS CID of the proof artifact
-    #[arg(long, required_unless_present = "serve")]
-    proof_cid: Option<String>,
     /// Project ID to verify (single mode)
     #[arg(long)]
     project_id: Option<u64>,
@@ -59,7 +53,6 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
@@ -67,7 +60,7 @@ async fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
-    let config = Config::from_env().map_err(|e| anyhow::anyhow!("{e}"))?;
+    let config = Arc::new(Config::from_env().map_err(|e| anyhow::anyhow!("{e}"))?);
 
     // Initialise Sentry if DSN is configured.
     let _sentry_guard = config.sentry_dsn.as_deref().map(|dsn| {
@@ -82,21 +75,12 @@ async fn main() -> Result<()> {
         ))
     });
 
-    let metrics = Arc::new(OracleMetrics::new());
-
     if cli.serve {
-        // Long-lived service mode: spawn health/metrics server and block.
         health::serve(config.metrics_port).await?;
         return Ok(());
     }
 
-    // One-shot verification mode.
-    let project_id = cli.project_id.expect("project-id required");
-    let proof_cid = cli.proof_cid.expect("proof-cid required");
-
-    let config = Arc::new(Config::from_env()?);
-
-    let tasks = build_task_list(&cli)?;
+    let tasks = build_task_list(&cli).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     if tasks.is_empty() {
         warn!("No proofs to process. Use --project-id/--proof-cid or --batch.");
@@ -104,49 +88,7 @@ async fn main() -> Result<()> {
     }
 
     info!(
-        "PIFP Oracle starting — project_id={}, proof_cid={}",
-        project_id, proof_cid
-    );
-
-    metrics.verifications_total.inc();
-
-    // Step 1: Fetch proof from IPFS and compute hash.
-    let proof_hash = {
-        let _timer = metrics.ipfs_fetch_duration_seconds.start_timer();
-        match verifier::fetch_and_hash_proof(&proof_cid, &config).await {
-            Ok(h) => h,
-            Err(e) => {
-                metrics.verification_errors_total.inc();
-                sentry::capture_message(&e.to_string(), sentry::Level::Error);
-                error!("IPFS fetch failed: {e}");
-                return Err(anyhow::anyhow!("{e}"));
-            }
-        }
-    };
-    info!("Proof hash: {}", hex::encode(proof_hash));
-
-    if cli.dry_run {
-        warn!("DRY RUN — transaction will not be submitted");
-        return Ok(());
-    }
-
-    // Step 2: Submit verify_and_release transaction.
-    let tx_hash = {
-        let _timer = metrics.chain_submit_duration_seconds.start_timer();
-        match chain::submit_verification(&config, project_id, proof_hash).await {
-            Ok(h) => h,
-            Err(e) => {
-                metrics.verification_errors_total.inc();
-                sentry::capture_message(&e.to_string(), sentry::Level::Error);
-                error!("Chain submission failed: {e}");
-                return Err(anyhow::anyhow!("{e}"));
-            }
-        }
-    };
-
-    info!("Verification submitted — tx={}", tx_hash);
-    Ok(())
-        "PIFP Oracle starting - processing {} proof(s) with max {} concurrent",
+        "PIFP Oracle starting — processing {} proof(s) with max {} concurrent",
         tasks.len(),
         MAX_CONCURRENT_PROOFS
     );
@@ -216,10 +158,7 @@ async fn process_batch(tasks: Vec<ProofTask>, config: Arc<Config>, dry_run: bool
         match handle.await {
             Ok(Ok((project_id, tx_hash))) => {
                 if let Some(hash) = tx_hash {
-                    info!(
-                        "project={} status=success tx_hash={}",
-                        project_id, hash
-                    );
+                    info!("project={} status=success tx_hash={}", project_id, hash);
                 } else {
                     info!("project={} status=dry_run_ok", project_id);
                 }
@@ -234,40 +173,88 @@ async fn process_batch(tasks: Vec<ProofTask>, config: Arc<Config>, dry_run: bool
     }
 }
 
+/// Process a single proof: fetch from IPFS, hash, optionally submit on-chain.
+///
+/// On any verification failure the Slack alert fires as a best-effort
+/// side-effect (3-second timeout, result discarded) before the original
+/// error is returned unchanged.
 async fn process_single_proof(
     task: ProofTask,
     config: Arc<Config>,
     dry_run: bool,
 ) -> std::result::Result<(u64, Option<String>), (u64, String)> {
     let project_id = task.project_id;
+    let project_id_str = project_id.to_string();
 
     info!(
-        "project={} cid={} status=fetching",
-        project_id, task.proof_cid
+        project_id = project_id,
+        cid = %task.proof_cid,
+        "fetching proof"
     );
 
-    let proof_hash = verifier::fetch_and_hash_proof(&task.proof_cid, &config)
-        .await
-        .map_err(|e| (project_id, e.to_string()))?;
+    // ── Step 1: fetch + hash ──────────────────────────────────────────────────
+    let proof_hash = match verifier::fetch_and_hash_proof(&task.proof_cid, &config).await {
+        Ok(h) => h,
+        Err(e) => {
+            let err_str = e.to_string();
+
+            tracing::error!(
+                project_id = %project_id_str,
+                proof_cid  = %task.proof_cid,
+                error      = %err_str,
+                "oracle proof verification failed"
+            );
+
+            // Best-effort Slack alert — 3s timeout, result discarded.
+            notifications::alert_verification_failure(
+                &project_id_str,
+                &task.proof_cid,
+                &err_str,
+            )
+            .await;
+
+            return Err((project_id, err_str));
+        }
+    };
 
     info!(
-        "project={} hash={} status=hashed",
-        project_id,
-        hex::encode(proof_hash)
+        project_id = project_id,
+        hash = %hex::encode(proof_hash),
+        "proof hashed"
     );
 
     if dry_run {
         warn!(
-            "project={} status=dry_run would submit verify_and_release with hash={}",
-            project_id,
-            hex::encode(proof_hash)
+            project_id = project_id,
+            hash = %hex::encode(proof_hash),
+            "dry_run — skipping chain submission"
         );
         return Ok((project_id, None));
     }
 
-    let tx_hash = chain::submit_verification(&config, project_id, proof_hash)
-        .await
-        .map_err(|e| (project_id, e.to_string()))?;
+    // ── Step 2: submit on-chain ───────────────────────────────────────────────
+    let tx_hash = match chain::submit_verification(&config, project_id, proof_hash).await {
+        Ok(h) => h,
+        Err(e) => {
+            let err_str = e.to_string();
+
+            tracing::error!(
+                project_id = %project_id_str,
+                proof_cid  = %task.proof_cid,
+                error      = %err_str,
+                "oracle proof verification failed"
+            );
+
+            notifications::alert_verification_failure(
+                &project_id_str,
+                &task.proof_cid,
+                &err_str,
+            )
+            .await;
+
+            return Err((project_id, err_str));
+        }
+    };
 
     Ok((project_id, Some(tx_hash)))
 }

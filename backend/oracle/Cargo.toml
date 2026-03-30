@@ -40,6 +40,9 @@ dotenvy = "0.15"
 sha2 = "0.10"
 hex = "0.4"
 
+# Timestamps
+chrono = { version = "0.4", features = ["serde"] }
+
 # Prometheus metrics
 prometheus = { version = "0.13", features = ["process"] }
 
