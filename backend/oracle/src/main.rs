@@ -9,9 +9,11 @@ mod verifier;
 use std::sync::Arc;
 
 use clap::Parser;
+use sentry::{self, protocol::Event};
+use sentry_tracing;
 use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 use crate::config::Config;
 use crate::errors::{OracleError, Result};
@@ -51,12 +53,24 @@ struct Cli {
     serve: bool,
 }
 
+fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
+    event.request = None;
+    event.user = None;
+    event.extra = None;
+    event.tags = event
+        .tags
+        .map(|mut t| {
+            t.retain(|k, _| {
+                let key = k.to_ascii_lowercase();
+                !key.contains("auth") && !key.contains("token") && !key.contains("password")
+            });
+            t
+        });
+    event
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     let _ = dotenvy::dotenv();
 
     let cli = Cli::parse();
@@ -70,11 +84,23 @@ async fn main() -> anyhow::Result<()> {
             sentry::ClientOptions {
                 release: sentry::release_name!(),
                 traces_sample_rate: 1.0,
+                before_send: Some(std::sync::Arc::new(|event: Event<'static>| {
+                    Some(redact_sensitive_data(event))
+                })),
                 ..Default::default()
             },
         ))
     });
 
+    sentry::integrations::panic::register_panic_handler();
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry_tracing::layer())
+        .init();
+
+    let metrics = Arc::new(OracleMetrics::new());
     if cli.serve {
         health::serve(config.metrics_port).await?;
         return Ok(());

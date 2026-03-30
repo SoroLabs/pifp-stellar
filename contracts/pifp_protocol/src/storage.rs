@@ -159,7 +159,7 @@ pub fn save_project(env: &Env, project: &Project) {
         deadline: project.deadline,
         is_private: project.is_private,
         metadata_uri: project.metadata_uri.clone(),
-        categories: project.categories,
+        milestones: project.milestones.clone(), // Updated
     };
 
     let state = ProjectState {
@@ -167,6 +167,7 @@ pub fn save_project(env: &Env, project: &Project) {
         donation_count: project.donation_count,
         paused: project.paused,
         refund_expiry: project.refund_expiry,
+        completed_milestones: project.completed_milestones.clone(), // Updated
     };
 
     env.storage().persistent().set(&config_key, &config);
@@ -303,7 +304,8 @@ pub fn load_project(env: &Env, id: u64) -> Project {
         is_private: config.is_private,
         paused: state.paused,
         refund_expiry: state.refund_expiry,
-        categories: config.categories,
+        milestones: config.milestones,                 // Updated
+        completed_milestones: state.completed_milestones, // Updated
     }
 }
 

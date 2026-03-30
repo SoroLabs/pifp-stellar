@@ -1,14 +1,48 @@
 //! On-chain event definitions and emission helpers for the PIFP protocol.
 
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 use crate::types::ProtocolConfig;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
+
+const PROJECT_CREATED: Symbol = symbol_short!("created");
+const FUNDS_RELEASED: Symbol = symbol_short!("released");
+const MILESTONE_VERIFIED: Symbol = symbol_short!("m_verify");
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FundsReleased {
+pub struct ProjectCreated {
     pub project_id: u64,
+    pub creator: Address,
     pub token: Address,
+    pub goal: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectFunded {
+    pub project_id: u64,
+    pub donator: Address,
     pub amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectActive {
+    pub project_id: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectVerified {
+    pub project_id: u64,
+    pub oracle: Address,
+    pub proof_hash: BytesN<32>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectExpired {
+    pub project_id: u64,
+    pub deadline: u64,
 }
 
 #[contracttype]
@@ -80,7 +114,6 @@ pub struct WhitelistRemoved {
     pub address: Address,
 }
 
-/// Emitted each time an oracle casts a vote via `verify_and_release`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectCancelled {
@@ -106,13 +139,12 @@ pub struct ProjectUnpaused {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FundsReleased {
     pub project_id: u64,
-    pub oracle: Address,
-    /// Bit index of this oracle in the project's authorized list.
-    pub oracle_index: u32,
-    /// Running count of unique votes after this one.
-    pub voter_count: u32,
-    /// Threshold required to release funds.
-    pub threshold: u32,
+    pub token: Address,
+    pub amount: i128,
+    pub oracle: Option<Address>,
+    pub oracle_index: Option<u32>,
+    pub voter_count: Option<u32>,
+    pub threshold: Option<u32>,
 }
 
 #[contracttype]
@@ -126,21 +158,7 @@ pub struct OracleAdded {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct OracleRemoved {
     pub project_id: u64,
-    pub creator: Address,
-    pub token: Address,
-    pub amount: i128,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProtocolPaused {
-    pub admin: Address,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProtocolUnpaused {
-    pub admin: Address,
+    pub oracle: Address,
 }
 
 // ── Emission helpers ──────────────────────────────────────────────────────────
@@ -218,12 +236,25 @@ pub fn emit_project_unpaused(env: &Env, project_id: u64, admin: Address) {
     env.events().publish(topics, data);
 }
 
-pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i128) {
+pub fn emit_funds_released(
+    env: &Env,
+    project_id: u64,
+    token: Address,
+    amount: i128,
+    oracle: Option<Address>,
+    oracle_index: Option<u32>,
+    voter_count: Option<u32>,
+    threshold: Option<u32>,
+) {
     let topics = (symbol_short!("fund_rel"), project_id);
     let data = FundsReleased {
         project_id,
-        token: token.clone(),
+        token,
         amount,
+        oracle,
+        oracle_index,
+        voter_count,
+        threshold,
     };
     env.events().publish(topics, data);
 }
@@ -247,10 +278,11 @@ pub fn emit_protocol_config_updated(env: &Env, old_config: Option<ProtocolConfig
     let topics = (symbol_short!("cfg_upd"),);
     let data = ProtocolConfigUpdated {
         old_fee_recipient: old_config.as_ref().map(|cfg| cfg.fee_recipient.clone()),
-        old_fee_bps: old_config.map_or(0, |cfg| cfg.fee_bps),
+        old_fee_bps: old_config.as_ref().map_or(0, |cfg| cfg.fee_bps),
         new_fee_recipient: new_config.fee_recipient.clone(),
         new_fee_bps: new_config.fee_bps,
-    });
+    };
+    env.events().publish(topics, data);
 }
 
 pub fn emit_fee_deducted(
@@ -314,5 +346,27 @@ pub fn emit_protocol_paused(env: &Env, admin: Address) {
 pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     let topics = (symbol_short!("prot_unp"),);
     let data = ProtocolUnpaused { admin };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_milestone_verified(
+    env: &Env,
+    project_id: u64,
+    milestone_index: u32,
+    bps: u32,
+) {
+    let topics = (MILESTONE_VERIFIED, project_id, milestone_index);
+    env.events().publish(topics, bps);
+}
+
+pub fn emit_oracle_added(env: &Env, project_id: u64, oracle: Address) {
+    let topics = (symbol_short!("ora_add"), project_id);
+    let data = OracleAdded { project_id, oracle };
+    env.events().publish(topics, data);
+}
+
+pub fn emit_oracle_removed(env: &Env, project_id: u64, oracle: Address) {
+    let topics = (symbol_short!("ora_rem"), project_id);
+    let data = OracleRemoved { project_id, oracle };
     env.events().publish(topics, data);
 }

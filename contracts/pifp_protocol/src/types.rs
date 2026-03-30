@@ -47,10 +47,14 @@ pub enum ProjectStatus {
     Cancelled,
 }
 
-/// Immutable project configuration, written once at registration.
-///
-/// Stored separately from mutable state to reduce write costs on deposits
-/// and verification (only ~20 bytes for state vs ~150 bytes for the full struct).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Milestone {
+    pub label: BytesN<32>,      // Unique identifier for the milestone
+    pub amount_bps: u32,        // Basis points of the total project funds to release (e.g., 2500 = 25%)
+    pub proof_hash: BytesN<32>, // Specific proof hash required for this milestone
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProjectConfig {
@@ -62,8 +66,7 @@ pub struct ProjectConfig {
     pub deadline: u64,
     pub is_private: bool,
     pub metadata_uri: Bytes,
-    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
-    pub categories: u32,
+    pub milestones: Vec<Milestone>, // Added: Milestone definitions
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -83,6 +86,7 @@ pub struct ProjectState {
     /// when the project transitions to Expired, or `cancel_time + REFUND_WINDOW`
     /// when cancelled.  Zero while the project is still in a non-terminal state.
     pub refund_expiry: u64,
+    pub completed_milestones: Vec<bool>, // Added: Tracking status per milestone index
 }
 
 /// Full on-chain representation of a funding project.
@@ -92,7 +96,7 @@ pub struct ProjectState {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
-    /// Auto-incremented unique ID.
+     /// Auto-incremented unique ID.
     pub id: u64,
     /// Address that registered and will receive released funds.
     pub creator: Address,
@@ -121,8 +125,8 @@ pub struct Project {
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Zero while non-terminal.
     pub refund_expiry: u64,
-    /// Bitset of [`crate::categories::Category`] flags (OR-ed bitmasks).
-    pub categories: u32,
+    pub milestones: Vec<Milestone>,           
+    pub completed_milestones: Vec<bool>,      
 }
 
 impl Project {
@@ -160,4 +164,13 @@ pub struct ProtocolConfig {
     pub fee_recipient: Address,
     /// Platform fee in basis points (1 BPS = 0.01%).
     pub fee_bps: u32,
+}
+
+/// A single entry in a `batch_deposit` call.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DepositRequest {
+    pub project_id: u64,
+    pub token: Address,
+    pub amount: i128,
 }
