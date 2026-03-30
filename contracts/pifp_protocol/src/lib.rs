@@ -25,7 +25,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec};
+use soroban_sdk::{
+    contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec,
+};
 
 /// Refund window: 6 months (in seconds) after a project enters a terminal
 /// refundable state (Expired or Cancelled).  Donors must claim refunds within
@@ -39,6 +41,7 @@ pub mod errors;
 pub mod events;
 pub mod invariants_checker;
 pub mod rbac;
+pub mod categories;
 mod storage;
 mod types;
 
@@ -50,6 +53,8 @@ mod rbac_test;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
+mod test_deadline;
+#[cfg(test)]
 mod test_donation_count;
 #[cfg(test)]
 mod test_errors;
@@ -58,40 +63,26 @@ mod test_events;
 #[cfg(test)]
 mod test_expire;
 #[cfg(test)]
-mod test_refund;
-#[cfg(test)]
-mod test_reclaim;
-#[cfg(test)]
-mod test_deadline;
-#[cfg(test)]
-mod test_deadline;
-#[cfg(test)]
-mod test_deadline;
-#[cfg(test)]
-mod test_errors;
+mod test_project_pause;
 #[cfg(test)]
 mod test_protocol_config;
 #[cfg(test)]
-mod test_whitelist;
+mod test_reclaim;
+#[cfg(test)]
+mod test_refund;
+#[cfg(test)]
 mod test_utils;
+#[cfg(test)]
+mod test_whitelist;
 
+use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    drain_token_balance, get_all_balances, get_and_increment_project_id, load_project,
-    load_project_pair, maybe_load_project, save_project, save_project_config, save_project_state,
     drain_token_balance, get_all_balances, get_and_increment_project_id, get_protocol_config,
-    load_project, load_project_pair, maybe_load_project, save_project, save_project_config,
-    save_project_state, set_protocol_config,
-};
-pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
-
-
-    add_to_whitelist, drain_token_balance, get_all_balances, get_and_increment_project_id,
-    get_protocol_config, is_whitelisted, load_project, load_project_pair, maybe_load_project,
-    remove_from_whitelist, save_project, save_project_config, save_project_state,
-    set_protocol_config,
+    is_whitelisted, load_project, load_project_pair, maybe_load_project, save_project,
+    save_project_config, save_project_state, set_protocol_config,
 };
 pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
 
@@ -189,6 +180,7 @@ impl PifpProtocol {
     /// Register a new funding project.
     ///
     /// `creator` must hold the `ProjectManager`, `Admin`, or `SuperAdmin` role.
+    #[allow(clippy::too_many_arguments)]
     pub fn register_project(
         env: Env,
         creator: Address,
@@ -261,6 +253,7 @@ impl PifpProtocol {
             status: ProjectStatus::Funding,
             donation_count: 0,
             is_private,
+            paused: false,
             refund_expiry: 0,
             milestones,
             completed_milestones,
@@ -364,7 +357,7 @@ impl PifpProtocol {
         }
 
         let now = env.ledger().timestamp();
-        
+
         // Ensure the project hasn't already expired by current time.
         if now >= config.deadline {
             panic_with_error!(&env, Error::ProjectExpired);
@@ -395,7 +388,7 @@ impl PifpProtocol {
     pub fn add_to_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
         caller.require_auth();
         let config = storage::load_project_config(&env, project_id);
-        
+
         // Auth check: creator or Admin/SuperAdmin
         if caller != config.creator {
             rbac::require_admin_or_above(&env, &caller);
@@ -411,7 +404,7 @@ impl PifpProtocol {
     pub fn remove_from_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
         caller.require_auth();
         let config = storage::load_project_config(&env, project_id);
-        
+
         // Auth check: creator or Admin/SuperAdmin
         if caller != config.creator {
             rbac::require_admin_or_above(&env, &caller);
@@ -466,6 +459,7 @@ impl PifpProtocol {
         // atomically. This is the optimized retrieval pattern; it also returns
         // the state needed for the subsequent checks.
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         // Check expiration
         if env.ledger().timestamp() >= config.deadline {
@@ -478,10 +472,8 @@ impl PifpProtocol {
         }
 
         // Whitelist check
-        if config.is_private {
-            if !is_whitelisted(&env, project_id, &donator) {
-                panic_with_error!(&env, Error::NotWhitelisted);
-            }
+        if config.is_private && !is_whitelisted(&env, project_id, &donator) {
+            panic_with_error!(&env, Error::NotWhitelisted);
         }
 
         // Basic status check: must be Funding or Active.
@@ -554,6 +546,7 @@ impl PifpProtocol {
         rbac::require_can_cancel_project(&env, &caller);
 
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         if env.ledger().timestamp() >= config.deadline
             && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
@@ -642,7 +635,7 @@ impl PifpProtocol {
     /// - `fee_bps` must be less than or equal to 1000 (10%).
     pub fn update_protocol_config(env: Env, caller: Address, fee_recipient: Address, fee_bps: u32) {
         caller.require_auth();
-        rbac::require_super_admin(&env, &caller);
+        rbac::require_role(&env, &caller, &Role::SuperAdmin);
 
         if fee_bps > 1000 {
             panic_with_error!(&env, Error::InvalidFeeBasisPoints);
@@ -682,6 +675,7 @@ impl PifpProtocol {
 
         // Optimised dual-read helper
         let (config, mut state) = load_project_pair(&env, project_id);
+        Self::require_project_not_paused(&env, &state);
 
         if env.ledger().timestamp() >= config.deadline
             && matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active)
@@ -853,6 +847,12 @@ impl PifpProtocol {
     fn require_not_paused(env: &Env) {
         if storage::is_paused(env) {
             panic_with_error!(env, Error::ProtocolPaused);
+        }
+    }
+
+    fn require_project_not_paused(env: &Env, state: &ProjectState) {
+        if state.paused {
+            panic_with_error!(env, Error::ProjectPaused);
         }
     }
 }

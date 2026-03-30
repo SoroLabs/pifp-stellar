@@ -6,11 +6,13 @@ use std::time::Duration;
 
 use reqwest::Client;
 use sqlx::SqlitePool;
+use tokio::time::Instant;
 use tracing::{error, info};
 
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::db;
+use crate::metrics;
 use crate::rpc;
 use crate::webhook;
 
@@ -89,6 +91,7 @@ async fn poll_once(
     start_ledger: u32,
     cursor: Option<&str>,
 ) -> crate::errors::Result<(u32, Option<String>)> {
+    // Fetch events from the Stellar RPC — latency is recorded inside fetch_events.
     let (raw_events, next_cursor, latest_ledger) = rpc::fetch_events(
         client,
         &config.rpc_url,
@@ -99,6 +102,14 @@ async fn poll_once(
     )
     .await?;
 
+    // Count every event the network returned, regardless of dedup.
+    if !raw_events.is_empty() {
+        metrics::TOTAL_EVENTS_INDEXED.inc_by(raw_events.len() as f64);
+    }
+
+    // Time only the decode + DB write phase (block processing proper).
+    let block_start = Instant::now();
+
     if !raw_events.is_empty() {
         let decoded = rpc::decode_events(&raw_events, &config.contract_ids);
         let inserted_events = db::insert_events_with_new(pool, &decoded).await?;
@@ -108,13 +119,11 @@ async fn poll_once(
             raw_events.len(),
             inserted
         );
+
         if inserted > 0 {
             if let Some(cache) = cache {
                 cache.invalidate_all().await;
             }
-        }
-
-        if inserted > 0 {
             for event in inserted_events {
                 let dispatch_ctx = webhook::DispatchContext {
                     pool: pool.clone(),
@@ -126,6 +135,9 @@ async fn poll_once(
             }
         }
     }
+
+    // Record block processing time (decode + store), excluding RPC wait and sleep.
+    metrics::BLOCK_PROCESSING_TIME.set(block_start.elapsed().as_secs_f64());
 
     // Advance the ledger cursor:
     // - If there is a next_cursor string, keep the same start_ledger so the next

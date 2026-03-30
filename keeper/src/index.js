@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import { loadTaskRegistry, saveTaskRegistry } from './taskRegistry.js';
 import { startMonitoring } from './monitor.js';
+import healthRoutes from './routes/healthRoutes.js';
 
 dotenv.config();
 
@@ -9,16 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Global middleware
 app.use(express.json());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
-  });
-});
+// Monitoring & Health Endpoints
+app.use('/health', healthRoutes);
 
 // Metrics endpoint
 app.get('/metrics', (req, res) => {

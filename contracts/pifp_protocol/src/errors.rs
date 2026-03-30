@@ -31,12 +31,16 @@
 //! | 21   | `ProjectNotExpired`      | Refund or expire attempted before the deadline has passed   |
 //! | 22   | `InvalidTransition`      | State-machine transition not allowed (e.g. expiring a Completed project) |
 //! | 23   | `TokenNotAccepted`       | Deposit attempted with a token not in the project's accepted list |
-//! | 24   | `RefundWindowActive`     | Creator tried to reclaim funds before the 6-month refund window expired |
-//! | 25   | `RefundWindowExpired`    | Donor tried to refund after the 6-month refund window expired |
-//! | 24   | `ProtocolNotInitialized` | Contract state has not been initialized                     |
-//! | 25   | `ReleaseAmountExceedsBalance` | The requested release amount exceeds the project's current on-chain balance |
-//! | 26   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length       |
-//! | 27   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap  |
+//! | 24   | `DeadlineTooLong`        | The new deadline exceeds the 1-year extension limit |
+//! | 25   | `InvalidFeeBasisPoints`  | Fee basis points exceed the maximum allowed (10%). |
+//! | 26   | `NotWhitelisted`         | Address is not on the project's whitelist. |
+//! | 27   | `RefundWindowActive`     | Creator tried to reclaim funds before the 6-month refund window expired |
+//! | 28   | `RefundWindowExpired`    | Donor tried to refund after the 6-month refund window expired |
+//! | 29   | `ProtocolNotInitialized` | Contract state has not been initialized |
+//! | 30   | `ReleaseAmountExceedsBalance` | The requested release amount exceeds the project's current on-chain balance |
+//! | 31   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length |
+//! | 32   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap |
+//! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |
 
 use soroban_sdk::contracterror;
 

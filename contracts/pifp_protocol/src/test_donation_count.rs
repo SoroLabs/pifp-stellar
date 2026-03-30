@@ -1,7 +1,6 @@
 extern crate std;
 
 use crate::test_utils::TestContext;
-use soroban_sdk::Bytes;
 
 #[test]
 fn test_donation_count_initialized_to_zero() {
@@ -77,6 +76,7 @@ fn test_donation_count_increments_for_same_donor_different_tokens() {
         &ctx.dummy_proof(),
         &metadata_uri,
         &(ctx.env.ledger().timestamp() + 86400),
+        &false,
     );
 
     let donator = ctx.generate_address();
@@ -107,6 +107,7 @@ fn test_donation_count_complex_scenario() {
         &ctx.dummy_proof(),
         &metadata_uri,
         &(ctx.env.ledger().timestamp() + 86400),
+        &false,
     );
 
     let donator1 = ctx.generate_address();
