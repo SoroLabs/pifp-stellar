@@ -1,0 +1,11 @@
+[default]
+exclude-files = [
+  "*/tests/*",
+  "*/test_*",
+  "*_test.rs",
+  "*/proptest-regressions/*",
+]
+exclude = [
+  "soroban_sdk",
+  "soroban_env_host",
+]

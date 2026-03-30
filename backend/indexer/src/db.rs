@@ -515,6 +515,8 @@ pub struct ProjectRecord {
     pub primary_token: String,
     pub created_ledger: i64,
     pub created_at: i64,
+    pub title: String,
+    pub description: String,
 }
 
 /// List projects with filtering and pagination.
@@ -544,6 +546,59 @@ pub async fn list_projects(
     q = q.bind(limit).bind(offset);
 
     let rows = q.fetch_all(pool).await?;
+    Ok(rows)
+}
+
+/// Full-text search over project title and description.
+///
+/// Uses SQLite FTS5 with bm25() ranking (title weighted 10x over description).
+/// An empty or blank query returns an empty result set rather than an error.
+///
+/// PostgreSQL equivalent would use `websearch_to_tsquery` + `ts_rank`.
+pub async fn search_projects(
+    pool: &SqlitePool,
+    query: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ProjectRecord>> {
+    let q = query.trim();
+    if q.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Sanitize: strip FTS5 special chars that would cause a parse error.
+    let safe_q = q.replace(['"', '\'', '*', '^', '(', ')', '-'], " ");
+    let safe_q = safe_q.trim();
+    if safe_q.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Build a prefix-match query: each whitespace-separated token becomes "token*"
+    let fts_query = safe_q
+        .split_whitespace()
+        .map(|t| format!("{t}*"))
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // bm25 weights: column 0 (title) = -10.0, column 1 (description) = -1.0
+    // Lower bm25 score = better match; ORDER BY ASC puts best matches first.
+    let rows = sqlx::query_as::<_, ProjectRecord>(
+        r#"
+        SELECT p.project_id, p.creator, p.status, p.goal, p.primary_token,
+               p.created_ledger, p.created_at, p.title, p.description
+        FROM   projects_fts f
+        JOIN   projects p ON p.rowid = f.rowid
+        WHERE  projects_fts MATCH ?1
+        ORDER  BY bm25(projects_fts, 10.0, 1.0) ASC
+        LIMIT  ?2 OFFSET ?3
+        "#,
+    )
+    .bind(&fts_query)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
     Ok(rows)
 }
 
@@ -754,6 +809,35 @@ mod tests {
 
         sqlx::query(
             "CREATE TABLE unique_donors (address TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
+        ).execute(&pool).await.unwrap();
+
+        // FTS5 virtual table + triggers (mirrors migration 007)
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS projects (
+                project_id TEXT PRIMARY KEY,
+                creator TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'Funding',
+                goal TEXT NOT NULL DEFAULT '0',
+                primary_token TEXT NOT NULL DEFAULT '',
+                created_ledger INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT ''
+            );",
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
+                title, description, content='projects', content_rowid='rowid'
+            );",
+        ).execute(&pool).await.unwrap();
+
+        sqlx::query(
+            "CREATE TRIGGER IF NOT EXISTS projects_fts_insert
+                AFTER INSERT ON projects BEGIN
+                    INSERT INTO projects_fts (rowid, title, description)
+                    VALUES (new.rowid, new.title, new.description);
+                END;",
         ).execute(&pool).await.unwrap();
 
         pool
@@ -1085,5 +1169,63 @@ mod tests {
         update_global_stats(&pool, &ev_verified).await.unwrap();
         let stats = get_global_stats(&pool).await.unwrap();
         assert_eq!(stats.completed_projects, 1);
+    }
+
+    // ── FTS search tests ──────────────────────────────────────────────
+
+    async fn insert_project(pool: &SqlitePool, id: &str, title: &str, description: &str) {
+        sqlx::query(
+            "INSERT INTO projects (project_id, creator, goal, primary_token, created_ledger, title, description)
+             VALUES (?1, 'creator', '1000', 'token', 1, ?2, ?3)",
+        )
+        .bind(id)
+        .bind(title)
+        .bind(description)
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_search_returns_matching_project() {
+        let pool = setup_test_db().await;
+        insert_project(&pool, "1", "Solar Power Initiative", "Bringing solar energy to rural areas").await;
+        insert_project(&pool, "2", "Wind Turbine Project", "Harnessing wind energy for clean power").await;
+
+        let results = search_projects(&pool, "Solar", 20, 0).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].project_id, "1");
+    }
+
+    #[tokio::test]
+    async fn test_search_empty_query_returns_empty() {
+        let pool = setup_test_db().await;
+        insert_project(&pool, "1", "Solar Power Initiative", "Solar energy project").await;
+
+        let results = search_projects(&pool, "", 20, 0).await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_no_match_returns_empty() {
+        let pool = setup_test_db().await;
+        insert_project(&pool, "1", "Solar Power Initiative", "Solar energy project").await;
+        insert_project(&pool, "2", "Wind Turbine Project", "Wind energy project").await;
+
+        let results = search_projects(&pool, "blockchain", 20, 0).await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_title_ranked_above_description() {
+        let pool = setup_test_db().await;
+        // "solar" only in description
+        insert_project(&pool, "1", "Wind Project", "Uses solar panels as backup").await;
+        // "solar" in title — should rank higher
+        insert_project(&pool, "2", "Solar Power Initiative", "Clean energy for all").await;
+
+        let results = search_projects(&pool, "solar", 20, 0).await.unwrap();
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].project_id, "2"); // title match ranks first
     }
 }
