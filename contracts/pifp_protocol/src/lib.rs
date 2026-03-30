@@ -25,8 +25,8 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec};
-
+use soroban_sdk::{contract, contractimpl, contracterror, panic_with_error, token, Address, Bytes, BytesN, Env, Vec};
+pub mod events;
 /// Refund window: 6 months (in seconds) after a project enters a terminal
 /// refundable state (Expired or Cancelled).  Donors must claim refunds within
 /// this window; after it passes, the creator may reclaim unclaimed funds.
@@ -74,6 +74,28 @@ mod test_protocol_config;
 #[cfg(test)]
 mod test_whitelist;
 mod test_utils;
+
+pub use rbac::Role;
+use storage::{
+    get_and_increment_project_id, load_project, load_project_pair, save_project, save_project_state,
+};
+pub use types::{Project, ProjectStatus};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    ProjectNotFound = 1,
+    MilestoneNotFound = 2,
+    MilestoneAlreadyReleased = 3,
+    InsufficientBalance = 4,
+    InvalidMilestones = 5,
+    NotAuthorized = 6,
+    GoalMismatch = 7,
+    AlreadyInitialized = 8,
+    RoleNotFound = 9,
+    TooManyTokens = 10,
+}
 
 pub use errors::Error;
 pub use events::emit_funds_released;
@@ -205,7 +227,11 @@ impl PifpProtocol {
         rbac::require_can_register(&env, &creator);
 
         if accepted_tokens.is_empty() {
+<<<<<<< HEAD
+            panic_with_error!(&env, Error::InvalidMilestones);
+=======
             panic_with_error!(&env, Error::EmptyAcceptedTokens);
+>>>>>>> d8d80ed363eeba4adc4829c1cbbcadae612cfc92
         }
         if accepted_tokens.len() > 10 {
             panic_with_error!(&env, Error::TooManyTokens);
@@ -420,6 +446,8 @@ impl PifpProtocol {
             panic_with_error!(&env, Error::TokenNotAccepted);
         }
 
+<<<<<<< HEAD
+=======
         // Check if this is a new unique (donator, token) pair.
         // A donator balance of 0 implicitly proves they have not donated yet, saving a storage key entirely.
         let current_donor_balance =
@@ -433,6 +461,7 @@ impl PifpProtocol {
             save_project_state(&env, project_id, &state);
         }
 
+>>>>>>> d8d80ed363eeba4adc4829c1cbbcadae612cfc92
         // Transfer tokens from donator to contract.
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(&donator, env.current_contract_address(), &amount);
@@ -592,7 +621,10 @@ impl PifpProtocol {
         project_id: u64,
         submitted_proof_hash: BytesN<32>,
     ) {
+<<<<<<< HEAD
+=======
         Self::require_not_paused(&env);
+>>>>>>> d8d80ed363eeba4adc4829c1cbbcadae612cfc92
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
@@ -613,8 +645,12 @@ impl PifpProtocol {
         match state.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
+<<<<<<< HEAD
+            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectNotFound),
+=======
             ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectExpired),
             ProjectStatus::Cancelled => panic_with_error!(&env, Error::InvalidTransition),
+>>>>>>> d8d80ed363eeba4adc4829c1cbbcadae612cfc92
         }
 
         // Mocked ZK verification: compare submitted hash to stored hash.
@@ -681,6 +717,8 @@ impl PifpProtocol {
         // Standardized event emission
         events::emit_project_verified(&env, project_id, oracle.clone(), submitted_proof_hash);
     }
+<<<<<<< HEAD
+=======
 
     /// Mark a project as expired if its deadline has passed.
     ///
@@ -772,4 +810,5 @@ impl PifpProtocol {
             panic_with_error!(env, Error::ProtocolPaused);
         }
     }
+>>>>>>> d8d80ed363eeba4adc4829c1cbbcadae612cfc92
 }
