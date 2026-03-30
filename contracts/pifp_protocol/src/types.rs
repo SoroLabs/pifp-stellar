@@ -161,3 +161,12 @@ pub struct ProtocolConfig {
     /// Platform fee in basis points (1 BPS = 0.01%).
     pub fee_bps: u32,
 }
+
+/// A single entry in a `batch_deposit` call.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DepositRequest {
+    pub project_id: u64,
+    pub token: Address,
+    pub amount: i128,
+}

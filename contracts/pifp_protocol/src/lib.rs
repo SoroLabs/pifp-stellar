@@ -74,6 +74,8 @@ mod test_refund;
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
+#[cfg(test)]
+mod test_batch_deposit;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
@@ -84,7 +86,7 @@ use storage::{
     is_whitelisted, load_project, load_project_pair, maybe_load_project, save_project,
     save_project_config, save_project_state, set_protocol_config,
 };
-pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
+pub use types::{DepositRequest, Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
 
 #[contract]
 pub struct PifpProtocol;
@@ -483,6 +485,26 @@ impl PifpProtocol {
 
         // Standardized event emission
         events::emit_project_funded(&env, project_id, donator, amount);
+    }
+
+    /// Deposit into multiple projects atomically in a single transaction.
+    ///
+    /// `deposits` is a list of `DepositRequest` entries, each specifying a
+    /// `project_id`, `token`, and `amount`.  All deposits succeed or the
+    /// entire transaction reverts — Soroban's host guarantees atomicity.
+    ///
+    /// - `donator` must authorize once; all individual deposit rules apply per entry.
+    pub fn batch_deposit(
+        env: Env,
+        donator: Address,
+        deposits: Vec<DepositRequest>,
+    ) {
+        Self::require_not_paused(&env);
+        donator.require_auth();
+
+        for req in deposits.iter() {
+            Self::deposit(env.clone(), req.project_id, donator.clone(), req.token, req.amount);
+        }
     }
 
     /// Mark an active project as cancelled.
