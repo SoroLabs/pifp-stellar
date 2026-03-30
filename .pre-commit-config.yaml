@@ -6,6 +6,27 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-toml
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        name: cargo fmt (backend)
+        args: ["--manifest-path", "backend/indexer/Cargo.toml", "--", "--check"]
+        stages: [commit, manual]
+      - id: fmt
+        name: cargo fmt (oracle)
+        args: ["--manifest-path", "backend/oracle/Cargo.toml", "--", "--check"]
+        stages: [commit, manual]
+      - id: clippy
+        name: cargo clippy (backend)
+        args: ["--manifest-path", "backend/indexer/Cargo.toml", "--", "-D", "warnings"]
+        stages: [commit, manual]
+      - id: clippy
+        name: cargo clippy (oracle)
+        args: ["--manifest-path", "backend/oracle/Cargo.toml", "--", "-D", "warnings"]
+        stages: [commit, manual]
+
   - repo: local
     hooks:
       - id: rust-quality-gate
