@@ -1,6 +1,70 @@
 #![allow(deprecated)]
 
-use crate::types::ProtocolConfig;
+use soroban_sdk::{contractevent, contracttype, symbol_short, Address, BytesN, Env};
+
+const PROJECT_CREATED: Symbol = symbol_short!("created");
+const FUNDS_RELEASED: Symbol = symbol_short!("released");
+const MILESTONE_VERIFIED: Symbol = symbol_short!("m_verify");
+
+#[contractevent]
+// ── Event Data Structs ──────────────────────────────────────────────
+//
+// Each event uses a dedicated struct so that indexers can decode every
+// field by name rather than relying on positional tuple elements.
+// Topic layout: (event_symbol, project_id) for project-scoped events,
+// (event_symbol, caller) for protocol-level events.
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectCreated {
+    pub project_id: u64,
+    pub creator: Address,
+    pub token: Address,
+    pub goal: i128,
+}
+
+#[contractevent]
+pub struct ProjectFunded {
+    pub project_id: u64,
+    pub donator: Address,
+    pub amount: i128,
+}
+
+#[contractevent]
+pub struct ProjectActive {
+    pub project_id: u64,
+}
+
+#[contractevent]
+pub struct ProjectVerified {
+    pub project_id: u64,
+    pub oracle: Address,
+    pub proof_hash: BytesN<32>,
+}
+
+#[contractevent]
+pub struct ProjectExpired {
+    pub project_id: u64,
+    pub deadline: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeadlineExtended {
+    pub project_id: u64,
+    pub old_deadline: u64,
+    pub new_deadline: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProtocolConfigUpdated {
+    pub old_fee_recipient: Option<Address>,
+    pub old_fee_bps: u32,
+    pub new_fee_recipient: Address,
+    pub new_fee_bps: u32,
+}
+
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env};
 
 #[contracttype]
@@ -321,4 +385,25 @@ pub fn emit_protocol_unpaused(env: &Env, admin: Address) {
     let topics = (symbol_short!("prot_unp"),);
     let data = ProtocolUnpaused { admin };
     env.events().publish(topics, data);
+}
+
+/// Emitted when a specific milestone is verified and its portion of funds is released.
+pub fn emit_milestone_verified(
+    env: &Env,
+    project_id: u64,
+    milestone_index: u32,
+    bps: u32,
+) {
+    let topics = (MILESTONE_VERIFIED, project_id, milestone_index);
+    env.events().publish(topics, bps);
+}
+
+pub fn emit_project_created(env: &Env, id: u64, creator: Address, token: Address, goal: i128) {
+    let topics = (PROJECT_CREATED, id, creator);
+    env.events().publish(topics, (token, goal));
+}
+
+pub fn emit_funds_released(env: &Env, id: u64, token: Address, amount: i128) {
+    let topics = (FUNDS_RELEASED, id, token);
+    env.events().publish(topics, amount);
 }

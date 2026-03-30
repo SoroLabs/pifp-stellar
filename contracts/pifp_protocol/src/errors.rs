@@ -1,7 +1,7 @@
 //! # Error Catalogue
 //!
 //! Every error the PIFP protocol contract can return is defined here as a
-//! [`contracterror`] enum.  Soroban surfaces these to callers as
+//! [`contracterror`] enum. Soroban surfaces these to callers as
 //! `Error(Contract, #N)` where `N` is the discriminant value.
 //!
 //! ## Error codes at a glance
@@ -46,9 +46,8 @@ use soroban_sdk::contracterror;
 
 /// All contract-level errors returned by the PIFP protocol.
 ///
-/// Each variant is assigned a fixed `u32` discriminant that appears on-chain as
-/// `Error(Contract, #N)`.  **Never reorder or reassign existing codes** — doing
-/// so would break off-chain error-handling logic.
+/// Each variant is assigned a fixed `u32` discriminant. 
+/// **Never reorder or reassign existing codes** once deployed to Mainnet.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -56,16 +55,16 @@ pub enum Error {
     /// The requested project ID does not exist in storage.
     ProjectNotFound = 1,
 
-    /// Reserved — will be used when milestone-level operations are added.
+    /// The requested milestone index is out of bounds.
     MilestoneNotFound = 2,
 
-    /// `verify_and_release` was called on a project that is already `Completed`.
+    /// `verify_and_release` was called on a milestone that is already completed.
     MilestoneAlreadyReleased = 3,
 
     /// The donator has no refundable balance for the requested token.
     InsufficientBalance = 4,
 
-    /// Reserved — will be used for milestone-count validation.
+    /// Milestone validation failed (e.g., total BPS != 10,000).
     InvalidMilestones = 5,
 
     /// The caller does not hold the RBAC role required for this operation.
@@ -122,35 +121,30 @@ pub enum Error {
     /// The deposit token is not in the project's `accepted_tokens` list.
     TokenNotAccepted = 23,
 
-    /// The new deadline exceeds the 1-year extension limit.
+    /// The new deadline exceeds the extension limits.
     DeadlineTooLong = 24,
-    /// Fee basis points exceed the maximum allowed (10%).
+
+    /// Fee basis points exceed the maximum allowed (100% or 10,000 BPS).
     InvalidFeeBasisPoints = 25,
+
     /// Address is not on the project's whitelist.
     NotWhitelisted = 26,
+
     /// The donor refund window is still active; creator cannot reclaim yet.
     RefundWindowActive = 27,
 
     /// The donor refund window has expired; donors can no longer claim refunds.
     RefundWindowExpired = 28,
-    /// A method that requires the protocol to be initialised was called before
-    /// `initialize()` had been executed on this contract instance.
-    ProtocolNotInitialized = 28,
 
-    /// The requested release amount exceeds the project's current on-chain balance.
-    ReleaseAmountExceedsBalance = 29,
+    /// Contract state has not been initialized.
     ProtocolNotInitialized = 29,
 
     /// The requested release amount exceeds the project's current on-chain balance.
     ReleaseAmountExceedsBalance = 30,
 
-    /// The supplied IPFS CID byte string was either empty or exceeded the
-    /// maximum allowed length (`MAX_CID_LEN` = 64 bytes).
+    /// The supplied IPFS CID byte string was either empty or exceeded MAX_METADATA_URI_LEN.
     MetadataCidInvalid = 31,
 
-    /// The proposed fee in basis points exceeds the hard cap of 10 000 (= 100 %).
+    /// The proposed fee in basis points exceeds the hard cap of 10,000.
     FeeBpsExceedsMaximum = 32,
-
-    /// The target project is paused; deposits and releases are temporarily blocked.
-    ProjectPaused = 33,
 }
