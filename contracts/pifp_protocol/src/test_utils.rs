@@ -20,7 +20,6 @@ impl TestContext {
         let env = Env::default();
         env.mock_all_auths();
 
-        // Initialize ledger while preserving host's default protocol version
         let mut ledger = env.ledger().get();
         ledger.timestamp = 100_000;
         ledger.sequence_number = 100;
@@ -37,19 +36,11 @@ impl TestContext {
         client.grant_role(&admin, &oracle, &Role::Oracle);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
 
-        Self {
-            env,
-            client,
-            admin,
-            oracle,
-            manager,
-        }
+        Self { env, client, admin, oracle, manager }
     }
 
     pub fn create_token(&self) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
-        let addr = self
-            .env
-            .register_stellar_asset_contract_v2(self.admin.clone());
+        let addr = self.env.register_stellar_asset_contract_v2(self.admin.clone());
         (
             token::Client::new(&self.env, &addr.address()),
             token::StellarAssetClient::new(&self.env, &addr.address()),
@@ -59,23 +50,19 @@ impl TestContext {
     pub fn setup_project(
         &self,
         goal: i128,
-    ) -> (
-        Project,
-        token::Client<'static>,
-        token::StellarAssetClient<'static>,
-    ) {
+    ) -> (Project, token::Client<'static>, token::StellarAssetClient<'static>) {
         let (token, sac) = self.create_token();
         let tokens = Vec::from_array(&self.env, [token.address.clone()]);
         let project = self.register_project(&tokens, goal, false);
         (project, token, sac)
     }
 
+    /// Register a project using the legacy single-oracle path (empty oracle list).
     pub fn register_project(&self, tokens: &Vec<Address>, goal: i128, is_private: bool) -> Project {
         let proof_hash = self.dummy_proof();
         let metadata_uri = self.dummy_metadata_uri();
         let deadline = self.env.ledger().timestamp() + 86400;
-        self.client
-            .register_project(&self.manager, tokens, &goal, &proof_hash, &deadline, &is_private)
+        let empty_oracles: Vec<Address> = Vec::new(&self.env);
         self.client.register_project(
             &self.manager,
             tokens,
@@ -83,6 +70,9 @@ impl TestContext {
             &proof_hash,
             &metadata_uri,
             &deadline,
+            &is_private,
+            &empty_oracles,
+            &0u32,
         )
     }
 

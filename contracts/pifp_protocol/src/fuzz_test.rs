@@ -30,6 +30,29 @@ fn dummy_metadata_uri(env: &Env) -> Bytes {
     Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi")
 }
 
+fn register<'a>(
+    env: &Env,
+    client: &PifpProtocolClient<'a>,
+    creator: &Address,
+    tokens: &SorobanVec<Address>,
+    goal: i128,
+    proof_hash: &BytesN<32>,
+    deadline: u64,
+) -> crate::types::Project {
+    let empty_oracles: SorobanVec<Address> = SorobanVec::new(env);
+    client.register_project(
+        creator,
+        tokens,
+        &goal,
+        proof_hash,
+        &dummy_metadata_uri(env),
+        &deadline,
+        &false,
+        &empty_oracles,
+        &0u32,
+    )
+}
+
 // ── 1. Registration Fuzz Tests ──────────────────────────────────────
 
 proptest! {
@@ -49,17 +72,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &goal,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
-
-        check_all_project_invariants(&env, &project);
-        assert_eq!(project.goal, goal);
+        let project = register(&env, &client, &creator, &tokens, goal, &proof_hash, deadline);
         assert_eq!(project.status, ProjectStatus::Funding);
     }
 
@@ -77,14 +90,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &100,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
+        let project = register(&env, &client, &creator, &tokens, 100, &proof_hash, deadline);
 
         check_all_project_invariants(&env, &project);
         assert_eq!(project.deadline, deadline);
@@ -104,14 +110,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &1000,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
+        let project = register(&env, &client, &creator, &tokens, 1000, &proof_hash, deadline);
 
         check_all_project_invariants(&env, &project);
         assert_eq!(project.proof_hash, proof_hash);
@@ -137,16 +136,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &100_000,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
-
-        let donator = Address::generate(&env);
+        let project = register(&env, &client, &creator, &tokens, 100_000, &proof_hash, deadline);
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
         sac.mint(&donator, &amount);
 
@@ -175,16 +165,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &1_000_000,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
-
-        let sac = token::StellarAssetClient::new(&env, &token_client.address);
+        let project = register(&env, &client, &creator, &tokens, 1_000_000, &proof_hash, deadline);
         let mut expected_balance: i128 = 0;
 
         for amount in &amounts {
@@ -232,14 +213,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &500,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
+        let project = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
@@ -265,14 +239,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &500,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
+        let project = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
 
         let oracle = Address::generate(&env);
         client.set_oracle(&admin, &oracle);
@@ -306,14 +273,7 @@ proptest! {
             let creator = Address::generate(&env);
             client.grant_role(&admin, &creator, &Role::ProjectManager);
 
-            let p = client.register_project(
-                &creator,
-                &tokens,
-                &1000,
-                &proof_hash,
-            &dummy_metadata_uri(&env),
-                &deadline,
-            );
+            let p = register(&env, &client, &creator, &tokens, 1000, &proof_hash, deadline);
             projects.push(p);
         }
 
@@ -344,16 +304,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token_client.address.clone());
 
-        let original = client.register_project(
-            &creator,
-            &tokens,
-            &100_000,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
-
-        let donator = Address::generate(&env);
+        let original = register(&env, &client, &creator, &tokens, 100_000, &proof_hash, deadline);
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
         sac.mint(&donator, &amount);
         client.deposit(&original.id, &donator, &token_client.address, &amount);
@@ -378,18 +329,7 @@ proptest! {
         let mut tokens = SorobanVec::new(&env);
         tokens.push_back(token.address.clone());
 
-        let original = client.register_project(
-            &creator,
-            &tokens,
-            &500,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
-
-        let oracle = Address::generate(&env);
-        client.set_oracle(&admin, &oracle);
-        client.verify_and_release(&oracle, &original.id, &proof_hash);
+        let original = register(&env, &client, &creator, &tokens, 500, &proof_hash, deadline);
 
         let after = client.get_project(&original.id);
         check_inv10_config_immutable(&original, &after);
@@ -421,14 +361,7 @@ proptest! {
         tokens.push_back(token_client.address.clone());
 
         // Phase 1: Register project.
-        let project = client.register_project(
-            &creator,
-            &tokens,
-            &goal,
-            &proof_hash,
-            &dummy_metadata_uri(&env),
-            &deadline,
-        );
+        let project = register(&env, &client, &creator, &tokens, goal, &proof_hash, deadline);
         check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);
 

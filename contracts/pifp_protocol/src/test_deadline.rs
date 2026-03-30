@@ -1,169 +1,82 @@
-#![cfg(test)]
+extern crate std;
 
-use crate::test_utils::{create_token, setup_test};
-use crate::{Error, ProjectStatus, Role};
-use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Vec};
+use crate::{test_utils::TestContext, Role};
+use soroban_sdk::Vec;
+
+fn register(ctx: &TestContext, deadline: u64) -> crate::types::Project {
+    let (token, _) = ctx.create_token();
+    let tokens = Vec::from_array(&ctx.env, [token.address.clone()]);
+    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
+    ctx.client.register_project(
+        &ctx.manager,
+        &tokens,
+        &1000i128,
+        &ctx.dummy_proof(),
+        &ctx.dummy_metadata_uri(),
+        &deadline,
+        &false,
+        &empty_oracles,
+        &0u32,
+    )
+}
 
 #[test]
 fn test_extend_deadline_success() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    // Register project manager
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let now = 1000;
-    env.ledger().set_timestamp(now);
-    let deadline = now + 10000;
-    
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &deadline,
-        &deadline, &false,
-    );
-    
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
     let new_deadline = deadline + 5000;
-    client.extend_deadline(&creator, &project.id, &new_deadline);
-    
-    let updated_project = client.get_project(&project.id);
-    assert_eq!(updated_project.deadline, new_deadline);
+    ctx.client.extend_deadline(&ctx.manager, &project.id, &new_deadline);
+    assert_eq!(ctx.client.get_project(&project.id).deadline, new_deadline);
 }
 
 #[test]
 fn test_extend_deadline_by_admin() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let now = 1000;
-    env.ledger().set_timestamp(now);
-    let deadline = now + 10000;
-    
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &deadline,
-        &deadline, &false,
-    );
-    
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
     let new_deadline = deadline + 5000;
-    // Admin can also extend
-    client.extend_deadline(&admin, &project.id, &new_deadline);
-    
-    let updated_project = client.get_project(&project.id);
-    assert_eq!(updated_project.deadline, new_deadline);
+    ctx.client.extend_deadline(&ctx.admin, &project.id, &new_deadline);
+    assert_eq!(ctx.client.get_project(&project.id).deadline, new_deadline);
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #6)")]
 fn test_extend_deadline_unauthorized() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let stranger = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &(env.ledger().timestamp() + 10000),
-        &(env.ledger().timestamp() + 10000), &false,
-    );
-    
-    client.extend_deadline(&stranger, &project.id, &(env.ledger().timestamp() + 15000));
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
+    let stranger = ctx.generate_address();
+    ctx.client.extend_deadline(&stranger, &project.id, &(deadline + 5000));
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #13)")]
 fn test_extend_deadline_backwards() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let deadline = env.ledger().timestamp() + 10000;
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &deadline,
-        &deadline, &false,
-    );
-    
-    // New deadline same as or earlier than current is Error::InvalidDeadline (13)
-    client.extend_deadline(&creator, &project.id, &deadline);
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
+    // Same deadline — not strictly later, should fail with InvalidDeadline.
+    ctx.client.extend_deadline(&ctx.manager, &project.id, &deadline);
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #14)")]
 fn test_extend_deadline_expired() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let now = 1000;
-    env.ledger().set_timestamp(now);
-    let deadline = now + 10000;
-    
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &deadline,
-        &deadline, &false,
-    );
-    
-    // Fast forward past deadline
-    env.ledger().set_timestamp(deadline + 1);
-    
-    client.extend_deadline(&creator, &project.id, &(deadline + 5000));
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
+    ctx.jump_time(10001);
+    ctx.client.extend_deadline(&ctx.manager, &project.id, &(deadline + 5000));
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #24)")]
 fn test_extend_deadline_too_long() {
-    let (env, client, admin) = setup_test();
-    let creator = Address::generate(&env);
-    let token = create_token(&env, &admin);
-    let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
-    
-    client.grant_role(&admin, &creator, &Role::ProjectManager);
-    
-    let now = 1000;
-    env.ledger().set_timestamp(now);
-    let deadline = now + 10000;
-    
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &[0u8; 32].into(),
-        &deadline,
-        &deadline, &false,
-    );
-    
-    // 1 year + 1 second
-    let too_late = now + 31_536_000 + 1;
-    client.extend_deadline(&creator, &project.id, &too_late);
+    let ctx = TestContext::new();
+    let deadline = ctx.env.ledger().timestamp() + 10000;
+    let project = register(&ctx, deadline);
+    // 1 year + 1 second from now
+    let too_late = ctx.env.ledger().timestamp() + 31_536_000 + 1;
+    ctx.client.extend_deadline(&ctx.manager, &project.id, &too_late);
 }

@@ -142,4 +142,13 @@ pub enum Error {
 
     /// The proposed fee in basis points exceeds the hard cap of 10 000 (= 100 %).
     FeeBpsExceedsMaximum = 27,
+
+    /// The calling oracle is not in the project's `authorized_oracles` list.
+    UnauthorizedOracle = 28,
+
+    /// The oracle threshold has already been met; funds have been released.
+    ThresholdAlreadyMet = 29,
+
+    /// The `authorized_oracles` list is empty or threshold is zero/exceeds oracle count.
+    InvalidOracleConfig = 30,
 }

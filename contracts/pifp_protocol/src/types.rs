@@ -62,6 +62,30 @@ pub struct ProjectConfig {
     pub deadline: u64,
     pub is_private: bool,
     pub metadata_uri: Bytes,
+    /// Ordered list of authorized oracle addresses for M-of-N verification.
+    /// Index position maps directly to the bit position in `OracleAgreement.votes`.
+    /// Maximum 32 oracles (fits in a u32 BitSet).
+    pub authorized_oracles: Vec<Address>,
+    /// Minimum number of oracle votes required to release funds (the "M" in M-of-N).
+    pub threshold: u32,
+}
+
+/// Tracks in-flight oracle votes for a project using a BitSet.
+///
+/// Stored in `temporary` storage — it only needs to live until the threshold
+/// is met, at which point it is cleared and funds are released.
+///
+/// # BitSet layout
+/// Bit `i` of `votes` is set when the oracle at index `i` in
+/// `ProjectConfig.authorized_oracles` has submitted a valid vote.
+/// This prevents double-voting without any additional storage keys.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct OracleAgreement {
+    /// BitSet: bit `i` is 1 if oracle at index `i` has voted.
+    pub votes: u32,
+    /// Count of unique oracles that have voted so far.
+    pub voter_count: u32,
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -114,6 +138,10 @@ pub struct Project {
     /// Ledger timestamp after which donors can no longer refund and the
     /// creator may reclaim unclaimed funds.  Zero while non-terminal.
     pub refund_expiry: u64,
+    /// Ordered list of authorized oracle addresses for M-of-N verification.
+    pub authorized_oracles: soroban_sdk::Vec<Address>,
+    /// Minimum oracle votes required to release funds.
+    pub threshold: u32,
 }
 
 impl Project {

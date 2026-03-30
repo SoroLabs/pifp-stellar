@@ -251,6 +251,12 @@ pub fn require_oracle(env: &Env, address: &Address) {
     require_role(env, address, &Role::Oracle);
 }
 
+/// Assert that `address` holds the SuperAdmin role.
+#[inline]
+pub fn require_super_admin(env: &Env, address: &Address) {
+    require_role(env, address, &Role::SuperAdmin);
+}
+
 /// Assert that `address` may register and manage projects.
 /// ProjectManager, Admin, and SuperAdmin may all register projects.
 #[inline]
