@@ -28,27 +28,64 @@ use axum::{
     Router,
 };
 use reqwest::Client;
+use sentry::{self, protocol::Event};
+use sentry_tracing;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 use cache::Cache;
 use config::Config;
 use indexer::IndexerState;
 
+fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
+    event.request = None;
+    event.user = None;
+    event.extra = None;
+    event.tags = event
+        .tags
+        .map(|mut t| {
+            t.retain(|k, _| {
+                let key = k.to_ascii_lowercase();
+                !key.contains("auth") && !key.contains("token") && !key.contains("password")
+            });
+            t
+        });
+    event
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialise structured logging (RUST_LOG controls verbosity).
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .init();
-
     // Load optional .env file (ignored if missing).
     let _ = dotenvy::dotenv();
 
     // Load config from environment.
     let config = Config::from_env().map_err(|e| anyhow::anyhow!("{e}"))?;
+
+    // Initialise Sentry if configured.
+    let _sentry_guard = config.sentry_dsn.as_deref().map(|dsn| {
+        tracing::info!("Sentry error tracking enabled");
+        sentry::init((
+            dsn,
+            sentry::ClientOptions {
+                release: sentry::release_name!(),
+                traces_sample_rate: 1.0,
+                before_send: Some(std::sync::Arc::new(|event: Event<'static>| {
+                    Some(redact_sensitive_data(event))
+                })),
+                ..Default::default()
+            },
+        ))
+    });
+
+    sentry::integrations::panic::register_panic_handler();
+
+    tracing_subscriber::registry()
+        .with(EnvFilter::from_default_env())
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry_tracing::layer())
+        .init();
 
     // Set up the SQLite connection pool and run migrations.
     let pool = db::init_pool(&config.database_url).await?;

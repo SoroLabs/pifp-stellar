@@ -31,6 +31,8 @@ pub struct Config {
     pub cache_ttl_top_projects_secs: u64,
     /// TTL for active projects count cache entries (seconds)
     pub cache_ttl_active_projects_count_secs: u64,
+    /// Optional Sentry DSN for error tracking
+    pub sentry_dsn: Option<String>,
 }
 
 impl Config {
@@ -89,6 +91,7 @@ impl Config {
                 .map_err(|_| {
                     IndexerError::Config("Invalid CACHE_TTL_ACTIVE_PROJECTS_COUNT_SECS".to_string())
                 })?,
+            sentry_dsn: env_var("SENTRY_DSN").ok(),
         })
     }
 }
