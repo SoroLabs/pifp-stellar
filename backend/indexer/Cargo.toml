@@ -34,6 +34,9 @@ sha2 = "0.10"
 async-trait = "0.1"
 prometheus = { version = "0.13", features = ["process"] }
 lazy_static = "1"
+governor = { version = "0.10", features = ["dashmap"] }
+dashmap = "6"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+axum-test = "17"
