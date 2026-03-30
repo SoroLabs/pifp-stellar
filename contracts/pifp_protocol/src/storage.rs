@@ -74,6 +74,9 @@ pub enum DataKey {
     ProtocolConfig,
     /// Whitelisted donator for a project (Persistent).
     Whitelist(u64, Address),
+    /// Re-entrancy guard flag (Instance). Set to `true` while a sensitive
+    /// operation is in progress; cleared on completion.
+    IsLocked,
 }
 
 // ── Instance Storage Helpers ─────────────────────────────────────────
@@ -464,4 +467,19 @@ pub fn add_to_whitelist(env: &Env, project_id: u64, address: &Address) {
 pub fn remove_from_whitelist(env: &Env, project_id: u64, address: &Address) {
     let key = DataKey::Whitelist(project_id, address.clone());
     env.storage().persistent().remove(&key);
+}
+
+// ── Re-entrancy Guard ────────────────────────────────────────────────
+
+/// Return `true` if the re-entrancy lock is currently held.
+pub fn is_locked(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::IsLocked)
+        .unwrap_or(false)
+}
+
+/// Acquire the re-entrancy lock.
+pub fn set_locked(env: &Env, locked: bool) {
+    env.storage().instance().set(&DataKey::IsLocked, &locked);
 }

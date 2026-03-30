@@ -41,6 +41,7 @@
 //! | 31   | `MetadataCidInvalid`     | IPFS CID byte string was empty or exceeded max length |
 //! | 32   | `FeeBpsExceedsMaximum`   | Configured fee in basis points exceeds the 10_000 hard cap |
 //! | 33   | `ProjectPaused`          | Mutating project action attempted while the project is paused |
+//! | 34   | `ReentrancyDetected`     | A re-entrant call was detected; the contract is already executing |
 
 use soroban_sdk::contracterror;
 
@@ -133,12 +134,9 @@ pub enum Error {
 
     /// The donor refund window has expired; donors can no longer claim refunds.
     RefundWindowExpired = 28,
+
     /// A method that requires the protocol to be initialised was called before
     /// `initialize()` had been executed on this contract instance.
-    ProtocolNotInitialized = 28,
-
-    /// The requested release amount exceeds the project's current on-chain balance.
-    ReleaseAmountExceedsBalance = 29,
     ProtocolNotInitialized = 29,
 
     /// The requested release amount exceeds the project's current on-chain balance.
@@ -153,4 +151,8 @@ pub enum Error {
 
     /// The target project is paused; deposits and releases are temporarily blocked.
     ProjectPaused = 33,
+
+    /// A re-entrant call was detected; the contract is already executing a
+    /// sensitive operation. The transaction is rolled back immediately.
+    ReentrancyDetected = 34,
 }

@@ -74,6 +74,8 @@ mod test_refund;
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
+#[cfg(test)]
+mod test_reentrancy;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
@@ -83,8 +85,7 @@ use storage::{
     drain_token_balance, get_all_balances, get_and_increment_project_id, get_protocol_config,
     is_whitelisted, load_project, load_project_pair, maybe_load_project, save_project,
     save_project_config, save_project_state, set_protocol_config,
-};
-pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
+};pub use types::{Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig};
 
 #[contract]
 pub struct PifpProtocol;
@@ -459,7 +460,10 @@ impl PifpProtocol {
 
         // Transfer tokens from donator to contract.
         let token_client = token::Client::new(&env, &token);
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
         token_client.transfer(&donator, env.current_contract_address(), &amount);
+        invariants_checker::release_lock(&env);
 
         // Update the per-token balance.
         let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);
@@ -563,7 +567,10 @@ impl PifpProtocol {
 
         let contract_address = env.current_contract_address();
         let token_client = token::Client::new(&env, &token);
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
         token_client.transfer(&contract_address, &donator, &refund_amount);
+        invariants_checker::release_lock(&env);
 
         events::emit_refunded(&env, project_id, donator, refund_amount);
     }
@@ -656,6 +663,9 @@ impl PifpProtocol {
         let contract_address = env.current_contract_address();
         let protocol_config = get_protocol_config(&env);
 
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
+
         for token in config.accepted_tokens.iter() {
             // Drain the token balance (gets balance and zeros it).
             let mut balance = drain_token_balance(&env, project_id, &token);
@@ -700,6 +710,8 @@ impl PifpProtocol {
                 }
             }
         }
+
+        invariants_checker::release_lock(&env);
 
         // Save the updated state (now marked as Completed).
         save_project_state(&env, project_id, &state);
@@ -772,6 +784,8 @@ impl PifpProtocol {
 
         // Drain remaining balances for each accepted token.
         let contract_address = env.current_contract_address();
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
         for token in config.accepted_tokens.iter() {
             let balance = drain_token_balance(&env, project_id, &token);
             if balance > 0 {
@@ -787,6 +801,7 @@ impl PifpProtocol {
                 );
             }
         }
+        invariants_checker::release_lock(&env);
     }
 
     // ─────────────────────────────────────────────────────────
