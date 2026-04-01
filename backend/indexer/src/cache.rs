@@ -17,7 +17,7 @@ impl Cache {
     }
 
     async fn get_conn(&self) -> redis::RedisResult<redis::aio::MultiplexedConnection> {
-        self.client.get_multiplexed_tokio_connection().await
+        self.client.get_multiplexed_async_connection().await
     }
 
     pub async fn get_version(&self) -> u64 {

@@ -15,8 +15,8 @@ use tracing::info;
 use crate::cache::Cache;
 use crate::db;
 use crate::events::EventRecord;
-use crate::middleware::auth::verify_profile_signature;
-use crate::profiles::{self, ProfileUpdate};
+use crate::middleware::auth;
+use crate::profiles;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -69,9 +69,6 @@ pub struct SearchQuery {
     pub limit: Option<i64>,
     pub page: Option<i64>,
 }
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
-}
 
 #[derive(Deserialize)]
 pub struct HistoryQuery {
@@ -112,7 +109,7 @@ pub struct ProfileRequest {
     pub address: String,
     pub signature: String,
     #[serde(flatten)]
-    pub update: ProfileUpdate,
+    pub update: profiles::ProfileUpdate,
 }
 
 #[derive(Deserialize)]
@@ -420,7 +417,7 @@ pub async fn upsert_profile(
             .into_response();
     }
 
-    if !verify_profile_signature(&address, &payload.signature).is_ok() {
+    if !auth::verify_profile_signature(&address, &payload.signature).is_ok() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {
@@ -505,7 +502,7 @@ pub async fn delete_profile(
             .into_response();
     }
 
-    if !verify_profile_signature(&address, &payload.signature).is_ok() {
+    if !auth::verify_profile_signature(&address, &payload.signature).is_ok() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {

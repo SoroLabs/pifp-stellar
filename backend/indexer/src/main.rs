@@ -4,18 +4,19 @@
 //! PIFP contract events and persists them to SQLite.  Simultaneously
 //! exposes a small Axum REST API for frontend / admin consumption.
 
-mod api;
-mod cache;
-mod config;
-mod db;
-mod errors;
-mod events;
-mod indexer;
-mod middleware;
-mod profiles;
-mod metrics;
-mod rpc;
-mod webhook;
+pub(crate) mod api;
+pub(crate) mod cache;
+pub(crate) mod config;
+pub(crate) mod db;
+pub(crate) mod errors;
+pub(crate) mod events;
+pub(crate) mod indexer;
+pub(crate) mod middleware;
+pub(crate) mod profiles;
+pub(crate) mod metrics;
+pub(crate) mod rate_limit;
+pub(crate) mod rpc;
+pub(crate) mod webhook;
 
 #[cfg(test)]
 mod auth_test;
@@ -42,16 +43,11 @@ use rpc::ProviderManager;
 fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
     event.request = None;
     event.user = None;
-    event.extra = None;
-    event.tags = event
-        .tags
-        .map(|mut t| {
-            t.retain(|k, _| {
-                let key = k.to_ascii_lowercase();
-                !key.contains("auth") && !key.contains("token") && !key.contains("password")
-            });
-            t
-        });
+    event.extra.clear();
+    event.tags.retain(|k, _| {
+        let key = k.to_ascii_lowercase();
+        !key.contains("auth") && !key.contains("token") && !key.contains("password")
+    });
     event
 }
 
@@ -79,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
         ))
     });
 
-    sentry::integrations::panic::register_panic_handler();
+    // sentry::integrations::panic::register_panic_handler();
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())

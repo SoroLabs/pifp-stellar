@@ -1292,6 +1292,8 @@ mod tests {
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].project_id, "p2");
         assert_eq!(rows[1].project_id, "p1");
+    }
+
     // ── FTS search tests ──────────────────────────────────────────────
 
     async fn insert_project(pool: &SqlitePool, id: &str, title: &str, description: &str) {
