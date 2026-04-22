@@ -79,7 +79,7 @@ mod test_reentrancy;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
-pub use events::emit_funds_released;
+pub use events::{emit_contract_upgraded, emit_funds_released};
 pub use rbac::Role;
 use storage::{
     clear_oracle_agreement, drain_token_balance, get_all_balances, get_and_increment_project_id,
@@ -150,6 +150,13 @@ impl PifpProtocol {
 
     pub fn is_paused(env: Env) -> bool {
         storage::is_paused(&env)
+    }
+
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        caller.require_auth();
+        rbac::require_role(&env, &caller, &Role::SuperAdmin);
+        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        events::emit_contract_upgraded(&env, new_wasm_hash, caller);
     }
 
     // ─────────────────────────────────────────────────────────
