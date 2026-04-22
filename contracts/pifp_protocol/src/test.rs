@@ -14,6 +14,7 @@ fn test_init_sets_super_admin() {
 #[should_panic]
 fn test_init_twice_panics() {
     let ctx = TestContext::new();
+    ctx.mock_auth(&ctx.admin, "init", (&ctx.admin,));
     ctx.client.init(&ctx.admin);
 }
 
@@ -76,6 +77,7 @@ fn test_register_past_deadline_fails() {
 fn test_deposit_zero_amount_fails() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
+    ctx.mock_deposit_auth(&ctx.manager, project.id, &token.address, 0i128);
     ctx.client.deposit(&project.id, &ctx.manager, &token.address, &0i128);
 }
 
@@ -85,6 +87,7 @@ fn test_deposit_after_deadline_fails() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
     ctx.jump_time(project.deadline + 1);
+    ctx.mock_deposit_auth(&ctx.admin, project.id, &token.address, 100i128);
     ctx.client.deposit(&project.id, &ctx.admin, &token.address, &100i128);
 }
 
@@ -92,8 +95,10 @@ fn test_deposit_after_deadline_fails() {
 fn test_admin_can_pause_and_unpause() {
     let ctx = TestContext::new();
     assert!(!ctx.client.is_paused());
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
     assert!(ctx.client.is_paused());
+    ctx.mock_auth(&ctx.admin, "unpause", (&ctx.admin,));
     ctx.client.unpause(&ctx.admin);
     assert!(!ctx.client.is_paused());
 }
@@ -126,6 +131,7 @@ fn test_project_exists_and_maybe_load_helpers() {
 fn test_non_admin_cannot_pause() {
     let ctx = TestContext::new();
     let rando = ctx.generate_address();
+    ctx.mock_auth(&rando, "pause", (&rando,));
     ctx.client.pause(&rando);
 }
 
@@ -133,6 +139,7 @@ fn test_non_admin_cannot_pause() {
 #[should_panic(expected = "HostError: Error(Contract, #19)")]
 fn test_registration_fails_when_paused() {
     let ctx = TestContext::new();
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     ctx.register_project(&tokens, 1000, false);
@@ -143,7 +150,10 @@ fn test_registration_fails_when_paused() {
 fn test_deposit_fails_when_paused() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
+    ctx.mock_deposit_auth(&ctx.manager, project.id, &token.address, 100i128);
     ctx.client.deposit(&project.id, &ctx.manager, &token.address, &100i128);
 }
 
@@ -151,6 +161,7 @@ fn test_deposit_fails_when_paused() {
 fn test_queries_work_when_paused() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
     let loaded = ctx.client.get_project(&project.id);
     assert_eq!(loaded.id, project.id);

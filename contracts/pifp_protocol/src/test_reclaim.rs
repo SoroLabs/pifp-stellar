@@ -12,6 +12,7 @@ fn test_reclaim_after_expiry_window() {
     // Donor deposits
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 
@@ -27,6 +28,7 @@ fn test_reclaim_after_expiry_window() {
     ctx.jump_time(REFUND_WINDOW + 1);
 
     // Creator reclaims unclaimed funds
+    ctx.mock_auth(&ctx.manager, "reclaim_expired_funds", (&ctx.manager, project.id));
     ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 
     // Funds went to creator
@@ -51,6 +53,7 @@ fn test_reclaim_after_cancellation_window() {
     );
 
     // Cancel the project
+    ctx.mock_auth(&ctx.manager, "cancel_project", (&ctx.manager, project.id));
     ctx.client.cancel_project(&ctx.manager, &project.id);
 
     let cancelled = ctx.client.get_project(&project.id);
@@ -76,8 +79,10 @@ fn test_partial_refund_then_reclaim_remainder() {
     sac.mint(&donator_a, &300);
     sac.mint(&donator_b, &200);
 
+    ctx.mock_deposit_auth(&donator_a, project.id, &token.address, 300i128);
     ctx.client
         .deposit(&project.id, &donator_a, &token.address, &300);
+    ctx.mock_deposit_auth(&donator_b, project.id, &token.address, 200i128);
     ctx.client
         .deposit(&project.id, &donator_b, &token.address, &200);
 
@@ -86,6 +91,7 @@ fn test_partial_refund_then_reclaim_remainder() {
     ctx.client.expire_project(&project.id);
 
     // donator_a claims refund within the window
+    ctx.mock_auth(&donator_a, "refund", (&donator_a, project.id, &token.address));
     ctx.client.refund(&donator_a, &project.id, &token.address);
     assert_eq!(token.balance(&donator_a), 300);
 
@@ -108,6 +114,7 @@ fn test_reclaim_before_window_expires_fails() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 
@@ -126,6 +133,7 @@ fn test_reclaim_by_non_creator_fails() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 
@@ -135,6 +143,7 @@ fn test_reclaim_by_non_creator_fails() {
 
     // Non-creator tries to reclaim — should fail
     let attacker = ctx.generate_address();
+    ctx.mock_auth(&attacker, "reclaim_expired_funds", (&attacker, project.id));
     ctx.client.reclaim_expired_funds(&attacker, &project.id);
 }
 
@@ -155,6 +164,7 @@ fn test_reclaim_on_completed_project_fails() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Verify and release — project becomes Completed
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
     ctx.jump_time(86_400); // grace period
@@ -175,6 +185,7 @@ fn test_donor_refund_blocked_after_window_expires() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 
@@ -185,6 +196,7 @@ fn test_donor_refund_blocked_after_window_expires() {
     ctx.jump_time(REFUND_WINDOW + 1);
 
     // Donor tries to refund after window — should fail
+    ctx.mock_auth(&donator, "refund", (&donator, project.id, &token.address));
     ctx.client.refund(&donator, &project.id, &token.address);
 }
 
@@ -195,6 +207,7 @@ fn test_donor_refund_allowed_within_window() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 
