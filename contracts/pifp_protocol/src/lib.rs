@@ -82,9 +82,9 @@ pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    clear_oracle_agreement, drain_token_balance, get_and_increment_project_id,
-    get_protocol_config, is_whitelisted, load_project_pair, save_project, save_project_config,
-    save_project_state, set_protocol_config,
+    clear_oracle_agreement, drain_token_balance, get_and_increment_project_id, get_protocol_config,
+    is_whitelisted, load_project_pair, save_project, save_project_config, save_project_state,
+    set_protocol_config,
 };
 pub use types::{
     DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
