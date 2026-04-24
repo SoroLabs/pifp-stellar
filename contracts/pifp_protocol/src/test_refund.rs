@@ -1,8 +1,11 @@
 extern crate std;
 
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Bytes, BytesN, Env, Vec,
+};
 
-use crate::{PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
+use crate::{types, PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
 
 fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
     let env = Env::default();
@@ -52,6 +55,17 @@ fn test_refund_success_after_expiry() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -68,7 +82,10 @@ fn test_refund_success_after_expiry() {
     assert_eq!(token.balance(&donator), 1_000i128);
     assert_eq!(token.balance(&client.address), 0i128);
     assert_eq!(client.get_balance(&project.id, &token.address), 0i128);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Expired);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Expired
+    );
 }
 
 #[test]
@@ -91,6 +108,17 @@ fn test_refund_fails_when_not_expired() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -98,9 +126,6 @@ fn test_refund_fails_when_not_expired() {
     token_sac.mint(&donator, &1_000i128);
     client.deposit(&project.id, &donator, &token.address, &400i128);
 
-    let sac = token::StellarAssetClient::new(&env, &token.address);
-    sac.mint(&donator, &1_000i128);
-    client.deposit(&project.id, &donator, &token.address, &400i128);
     client.refund(&donator, &project.id, &token.address);
 }
 
@@ -124,6 +149,17 @@ fn test_refund_double_refund_fails() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -160,6 +196,17 @@ fn test_refund_wrong_donator_fails() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -193,16 +240,33 @@ fn test_refund_success_after_cancellation() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
     token_sac.mint(&donator, &700i128);
     client.deposit(&project.id, &donator, &token.address, &600i128);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Active);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Active
+    );
 
     client.cancel_project(&creator, &project.id);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Cancelled);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Cancelled
+    );
 
     client.refund(&donator, &project.id, &token.address);
     assert_eq!(token.balance(&donator), 700i128);
@@ -229,15 +293,26 @@ fn test_refund_distribution_after_cancellation_multi_donor() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
     let token_sac = token::StellarAssetClient::new(&env, &token.address);
-    token_sac.mint(&donator_a, &1_000i128);
-    token_sac.mint(&donator_b, &1_000i128);
+    token_sac.mint(&da, &1_000i128);
+    token_sac.mint(&db, &1_000i128);
 
-    client.deposit(&project.id, &donator_a, &token.address, &300i128);
-    client.deposit(&project.id, &donator_b, &token.address, &500i128);
+    client.deposit(&project.id, &da, &token.address, &300i128);
+    client.deposit(&project.id, &db, &token.address, &500i128);
     assert_eq!(client.get_balance(&project.id, &token.address), 800i128);
     assert_eq!(
         client.get_project(&project.id).status,

@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use tract_onnx::prelude::*;
-use tracing::{info, warn, error};
 use crate::rpc::RawEvent;
+use std::sync::Arc;
+use tracing::{error, info, warn};
+use tract_onnx::prelude::*;
 
 pub struct MLPipeline {
     model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
@@ -41,7 +41,7 @@ impl MLPipeline {
         // let tensor = tract_ndarray::Array2::<f32>::from_shape_vec((1, 100), features).unwrap();
         // let result = self.model.as_ref().unwrap().run(tvec!(tensor.into())).unwrap();
         // ... parse result ...
-        
+
         0.05
     }
 
@@ -55,7 +55,11 @@ pub async fn process_events(pipeline: Arc<MLPipeline>, events: &[RawEvent]) -> b
     for event in events {
         let score = pipeline.score_event(event);
         if score > 0.99 {
-            error!("ANOMALY DETECTED: Score {} for tx {}", score, event.tx_hash.as_deref().unwrap_or("unknown"));
+            error!(
+                "ANOMALY DETECTED: Score {} for tx {}",
+                score,
+                event.tx_hash.as_deref().unwrap_or("unknown")
+            );
             return true; // Pause recommended
         }
     }

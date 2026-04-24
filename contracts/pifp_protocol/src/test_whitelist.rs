@@ -22,6 +22,17 @@ fn test_whitelist_funding_restricted() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &true, // is_private
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -51,6 +62,17 @@ fn test_whitelist_funding_allowed() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &true,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -84,6 +106,17 @@ fn test_whitelist_management_auth() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &true,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 

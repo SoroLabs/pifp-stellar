@@ -45,11 +45,19 @@ impl Ctx {
         client.grant_role(&admin, &oracle, &Role::Oracle);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
 
-        Self { env, client, admin, oracle, manager }
+        Self {
+            env,
+            client,
+            admin,
+            oracle,
+            manager,
+        }
     }
 
     fn create_token(&self) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
-        let addr = self.env.register_stellar_asset_contract_v2(self.admin.clone());
+        let addr = self
+            .env
+            .register_stellar_asset_contract_v2(self.admin.clone());
         (
             token::Client::new(&self.env, &addr.address()),
             token::StellarAssetClient::new(&self.env, &addr.address()),
@@ -78,6 +86,17 @@ impl Ctx {
             &self.dummy_uri(),
             &deadline,
             &false,
+            &{
+                let mut ms = soroban_sdk::Vec::new(&self.env);
+                ms.push_back(crate::types::Milestone {
+                    label: soroban_sdk::BytesN::from_array(&self.env, &[0u8; 32]),
+                    amount_bps: 10000,
+                    proof_hash: self.dummy_proof().clone(),
+                });
+                ms
+            },
+            &0u32,
+            &soroban_sdk::Vec::new(&self.env),
             &0u32,
         );
         p.id
@@ -101,7 +120,7 @@ impl Ctx {
 // ── deposit blocked when locked ───────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_deposit_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
@@ -112,38 +131,42 @@ fn test_deposit_blocked_when_locked() {
     // Simulate re-entrant state.
     ctx.force_lock();
 
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &500i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &500i128);
 }
 
 // ── verify_and_release blocked when locked ────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_verify_and_release_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &1_000);
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &1_000i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &1_000i128);
 
     // Simulate re-entrant state.
     ctx.force_lock();
 
-    ctx.client.verify_and_release(&ctx.oracle, &project_id, &ctx.dummy_proof());
+    ctx.client
+        .verify_and_release(&ctx.oracle, &project_id, &ctx.dummy_proof());
 }
 
 // ── refund blocked when locked ────────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_refund_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &200);
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &200i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &200i128);
 
     // Expire the project so refund is valid.
     ctx.jump_time(86_401);
@@ -164,7 +187,8 @@ fn test_lock_released_after_successful_deposit() {
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &500);
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &500i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &500i128);
 
     // Lock must be cleared after the call completes.
     let contract_id = ctx.client.address.clone();

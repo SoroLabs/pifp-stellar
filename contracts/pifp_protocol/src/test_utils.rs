@@ -5,7 +5,10 @@ use soroban_sdk::{
     token, Address, Bytes, BytesN, Env, Vec,
 };
 
-use crate::{types::{Project, Milestone}, PifpProtocol, PifpProtocolClient, Role};
+use crate::{
+    types::{Milestone, Project},
+    PifpProtocol, PifpProtocolClient, Role,
+};
 
 pub fn setup_test() -> (Env, PifpProtocolClient<'static>, Address) {
     let ctx = TestContext::new();
@@ -59,11 +62,19 @@ impl TestContext {
         client.grant_role(&admin, &oracle, &Role::Oracle);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
 
-        Self { env, client, admin, oracle, manager }
+        Self {
+            env,
+            client,
+            admin,
+            oracle,
+            manager,
+        }
     }
 
     pub fn create_token(&self) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
-        let addr = self.env.register_stellar_asset_contract_v2(self.admin.clone());
+        let addr = self
+            .env
+            .register_stellar_asset_contract_v2(self.admin.clone());
         (
             token::Client::new(&self.env, &addr.address()),
             token::StellarAssetClient::new(&self.env, &addr.address()),
@@ -73,7 +84,11 @@ impl TestContext {
     pub fn setup_project(
         &self,
         goal: i128,
-    ) -> (Project, token::Client<'static>, token::StellarAssetClient<'static>) {
+    ) -> (
+        Project,
+        token::Client<'static>,
+        token::StellarAssetClient<'static>,
+    ) {
         let (token, sac) = self.create_token();
         let tokens = Vec::from_array(&self.env, [token.address.clone()]);
         let project = self.register_project(&tokens, goal, false);
@@ -84,7 +99,7 @@ impl TestContext {
         let proof_hash = self.dummy_proof();
         let metadata_uri = self.dummy_metadata_uri();
         let deadline = self.env.ledger().timestamp() + 86400;
-        
+
         let mut milestones = Vec::new(&self.env);
         milestones.push_back(Milestone {
             label: BytesN::from_array(&self.env, &[0u8; 32]),
@@ -101,9 +116,9 @@ impl TestContext {
             &deadline,
             &is_private,
             &milestones,
-            &0u32, // categories
+            &0u32,                // categories
             &Vec::new(&self.env), // authorized_oracles
-            &0u32, // threshold
+            &0u32,                // threshold
         )
     }
 

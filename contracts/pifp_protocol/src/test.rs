@@ -58,7 +58,7 @@ fn test_register_past_deadline_fails() {
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     ctx.jump_time(200_000);
     let past_deadline = 150_000u64;
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
+    let _empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
     ctx.client.register_project(
         &ctx.manager,
         &tokens,
@@ -67,6 +67,17 @@ fn test_register_past_deadline_fails() {
         &ctx.dummy_metadata_uri(),
         &past_deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
 }
@@ -76,7 +87,8 @@ fn test_register_past_deadline_fails() {
 fn test_deposit_zero_amount_fails() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
-    ctx.client.deposit(&project.id, &ctx.manager, &token.address, &0i128);
+    ctx.client
+        .deposit(&project.id, &ctx.manager, &token.address, &0i128);
 }
 
 #[test]
@@ -85,7 +97,8 @@ fn test_deposit_after_deadline_fails() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
     ctx.jump_time(project.deadline + 1);
-    ctx.client.deposit(&project.id, &ctx.admin, &token.address, &100i128);
+    ctx.client
+        .deposit(&project.id, &ctx.admin, &token.address, &100i128);
 }
 
 #[test]
@@ -144,7 +157,8 @@ fn test_deposit_fails_when_paused() {
     let ctx = TestContext::new();
     let (project, token, _) = ctx.setup_project(1000);
     ctx.client.pause(&ctx.admin);
-    ctx.client.deposit(&project.id, &ctx.manager, &token.address, &100i128);
+    ctx.client
+        .deposit(&project.id, &ctx.manager, &token.address, &100i128);
 }
 
 #[test]

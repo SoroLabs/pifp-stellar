@@ -1,6 +1,6 @@
 extern crate std;
 
-use soroban_sdk::{vec, BytesN, Vec, Address};
+use soroban_sdk::{vec, BytesN, Vec};
 
 use crate::test_utils::TestContext;
 
@@ -16,7 +16,8 @@ fn test_project_funded_event() {
     let (project, token, sac) = ctx.setup_project(10000);
     let donator = ctx.generate_address();
     sac.mint(&donator, &1000i128);
-    ctx.client.deposit(&project.id, &donator, &token.address, &1000i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &1000i128);
 }
 
 #[test]
@@ -24,8 +25,7 @@ fn test_project_verified_event() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let proof = ctx.dummy_proof();
-    ctx.client
-        .verify_proof(&ctx.oracle, &project.id, &proof);
+    ctx.client.verify_proof(&ctx.oracle, &project.id, &proof);
 }
 
 #[test]
@@ -35,11 +35,11 @@ fn test_get_project_balances() {
     let (token_b, sac_b) = ctx.create_token();
     let env = &ctx.env;
     let tokens = vec![env, token_a.address.clone(), token_b.address.clone()];
-    
+
     let proof_hash = ctx.dummy_proof();
     let metadata_uri = ctx.dummy_metadata_uri();
     let deadline = env.ledger().timestamp() + 86400;
-    
+
     let mut milestones = Vec::new(env);
     milestones.push_back(crate::types::Milestone {
         label: BytesN::from_array(env, &[0u8; 32]),
@@ -55,17 +55,27 @@ fn test_get_project_balances() {
         &metadata_uri,
         &deadline,
         &false,
-        &milestones,
+        &{
+            let mut ms = soroban_sdk::Vec::new(env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
         &0u32,
-        &Vec::new(env),
+        &soroban_sdk::Vec::new(env),
         &0u32,
     );
 
     let donator = ctx.generate_address();
     sac_a.mint(&donator, &2_500i128);
     sac_b.mint(&donator, &7_000i128);
-    ctx.client.deposit(&project.id, &donator, &token_a.address, &2_500i128);
-    ctx.client.deposit(&project.id, &donator, &token_b.address, &7_000i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token_a.address, &2_500i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token_b.address, &7_000i128);
 
     let balances = ctx.client.get_project_balances(&project.id);
     assert_eq!(balances.project_id, project.id);
@@ -88,7 +98,7 @@ fn test_funds_released_to_creator() {
     // Verify
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
-        
+
     // Claim after grace period
     ctx.jump_time(86_400); // grace period
     ctx.client.claim_funds(&project.id);
@@ -106,7 +116,8 @@ fn test_refunded_event() {
     let (project, token, sac) = ctx.setup_project(1000);
     let donator = ctx.generate_address();
     sac.mint(&donator, &400i128);
-    ctx.client.deposit(&project.id, &donator, &token.address, &400i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &400i128);
     ctx.jump_time(86_401);
     ctx.client.refund(&donator, &project.id, &token.address);
 }

@@ -39,7 +39,7 @@ fn test_verify_already_completed_project() {
     ctx.jump_time(86_400); // grace period
     ctx.client.claim_funds(&project.id);
 
-    // Second verification must fail with MilestoneAlreadyReleased or similar.
+    // Second verification must fail with MilestoneAlreadyReleased (Error #3).
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
@@ -78,7 +78,7 @@ fn test_register_deadline_too_far_in_future_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     let too_far_deadline = ctx.env.ledger().timestamp() + 200_000_000;
-    
+
     let proof_hash = ctx.dummy_proof();
     let metadata_uri = ctx.dummy_metadata_uri();
     let mut milestones = Vec::new(&ctx.env);
@@ -96,9 +96,17 @@ fn test_register_deadline_too_far_in_future_fails() {
         &metadata_uri,
         &too_far_deadline,
         &false,
-        &milestones,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
         &0u32,
-        &Vec::new(&ctx.env),
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
 }
@@ -162,7 +170,8 @@ fn test_deposit_unaccepted_token_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let rogue_token = ctx.generate_address();
-    ctx.client.deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
+    ctx.client
+        .deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
 }
 
 #[test]
@@ -172,9 +181,11 @@ fn test_admin_cannot_cancel_project() {
     let (project, token, sac) = ctx.setup_project(500);
     let donator = ctx.generate_address();
     let other_admin = ctx.generate_address();
-    ctx.client.grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
+    ctx.client
+        .grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
     sac.mint(&donator, &600i128);
-    ctx.client.deposit(&project.id, &donator, &token.address, &600i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &600i128);
     ctx.client.cancel_project(&other_admin, &project.id);
 }
 

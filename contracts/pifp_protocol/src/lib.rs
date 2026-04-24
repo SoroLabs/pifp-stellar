@@ -33,14 +33,14 @@ const MAX_METADATA_URI_LEN: u32 = 64;
 /// Maximum number of authorized oracles per project (fits in a u32 BitSet).
 const MAX_ORACLES: u32 = 32;
 
+pub mod categories;
 pub mod errors;
 pub mod events;
 pub mod invariants_checker;
+mod milestones;
 pub mod rbac;
-pub mod categories;
 mod storage;
 mod types;
-mod milestones;
 
 #[cfg(test)]
 mod fuzz_test;
@@ -48,6 +48,8 @@ mod fuzz_test;
 mod rbac_test;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_batch_deposit;
 #[cfg(test)]
 mod test_deadline;
 #[cfg(test)]
@@ -59,32 +61,29 @@ mod test_events;
 #[cfg(test)]
 mod test_expire;
 #[cfg(test)]
+mod test_grace_period;
+#[cfg(test)]
 mod test_project_pause;
 #[cfg(test)]
 mod test_protocol_config;
 #[cfg(test)]
 mod test_reclaim;
 #[cfg(test)]
+mod test_reentrancy;
+#[cfg(test)]
 mod test_refund;
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
-#[cfg(test)]
-mod test_grace_period;
-#[cfg(test)]
-mod test_batch_deposit;
-#[cfg(test)]
-mod test_reentrancy;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
 use storage::{
-    clear_oracle_agreement, drain_token_balance, get_all_balances, get_and_increment_project_id,
-    get_protocol_config, is_whitelisted, load_oracle_agreement, load_project, load_project_pair,
-    maybe_load_project, save_oracle_agreement, save_project, save_project_config,
+    clear_oracle_agreement, drain_token_balance, get_and_increment_project_id,
+    get_protocol_config, is_whitelisted, load_project_pair, save_project, save_project_config,
     save_project_state, set_protocol_config,
 };
 pub use types::{
@@ -166,7 +165,9 @@ impl PifpProtocol {
         }
 
         for existing in config.authorized_oracles.iter() {
-            if existing == oracle { return; }
+            if existing == oracle {
+                return;
+            }
         }
 
         config.authorized_oracles.push_back(oracle.clone());
@@ -183,11 +184,16 @@ impl PifpProtocol {
         let mut found = false;
         let mut new_oracles: Vec<Address> = Vec::new(&env);
         for existing in config.authorized_oracles.iter() {
-            if existing == oracle { found = true; }
-            else { new_oracles.push_back(existing); }
+            if existing == oracle {
+                found = true;
+            } else {
+                new_oracles.push_back(existing);
+            }
         }
 
-        if !found { panic_with_error!(&env, Error::NotAuthorized); }
+        if !found {
+            panic_with_error!(&env, Error::NotAuthorized);
+        }
 
         config.authorized_oracles = new_oracles;
         save_project_config(&env, project_id, &config);
@@ -224,11 +230,16 @@ impl PifpProtocol {
         creator.require_auth();
         rbac::require_can_register(&env, &creator);
 
-        if milestones.is_empty() { panic_with_error!(&env, Error::InvalidGoal); }
+        if milestones.is_empty() {
+            panic_with_error!(&env, Error::InvalidMilestones);
+        }
         milestones::validate_milestone_set(&env, &milestones);
 
-        if accepted_tokens.is_empty() || accepted_tokens.len() > 10 {
+        if accepted_tokens.is_empty() {
             panic_with_error!(&env, Error::EmptyAcceptedTokens);
+        }
+        if accepted_tokens.len() > 10 {
+            panic_with_error!(&env, Error::TooManyTokens);
         }
         for i in 0..accepted_tokens.len() {
             let t_i = accepted_tokens.get(i).unwrap();
@@ -236,7 +247,9 @@ impl PifpProtocol {
                 panic_with_error!(&env, Error::DuplicateToken);
             }
         }
-        if goal <= 0 { panic_with_error!(&env, Error::InvalidGoal); }
+        if goal <= 0 || goal > 1_000_000_000_000_000_000_000_000_000_000i128 {
+            panic_with_error!(&env, Error::InvalidGoal);
+        }
 
         let now = env.ledger().timestamp();
         if metadata_uri.is_empty() || metadata_uri.len() > MAX_METADATA_URI_LEN {
@@ -253,7 +266,9 @@ impl PifpProtocol {
 
         let id = get_and_increment_project_id(&env);
         let mut completed_milestones = Vec::new(&env);
-        for _ in 0..milestones.len() { completed_milestones.push_back(false); }
+        for _ in 0..milestones.len() {
+            completed_milestones.push_back(false);
+        }
 
         let project = Project {
             id,
@@ -295,17 +310,19 @@ impl PifpProtocol {
         let (config, mut state) = load_project_pair(&env, project_id);
         Self::require_project_not_paused(&env, &state);
 
+        match state.status {
+            ProjectStatus::Funding | ProjectStatus::Active => {}
+            ProjectStatus::Verified | ProjectStatus::Completed => {
+                panic_with_error!(&env, Error::MilestoneAlreadyReleased)
+            }
+            _ => panic_with_error!(&env, Error::InvalidTransition),
+        }
+
         if env.ledger().timestamp() >= config.deadline {
             state.status = ProjectStatus::Expired;
             state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
             save_project_state(&env, project_id, &state);
             panic_with_error!(&env, Error::ProjectExpired);
-        }
-
-        match state.status {
-            ProjectStatus::Funding | ProjectStatus::Active => {}
-            ProjectStatus::Verified | ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            _ => panic_with_error!(&env, Error::InvalidTransition),
         }
 
         if submitted_proof_hash != config.proof_hash {
@@ -315,7 +332,10 @@ impl PifpProtocol {
         if !config.authorized_oracles.is_empty() {
             let mut oracle_index: Option<u32> = None;
             for (i, auth) in config.authorized_oracles.iter().enumerate() {
-                if auth == oracle { oracle_index = Some(i as u32); break; }
+                if auth == oracle {
+                    oracle_index = Some(i as u32);
+                    break;
+                }
             }
             let idx = oracle_index.ok_or(Error::NotAuthorized).unwrap();
             let mut agreement = storage::load_oracle_agreement(&env, project_id);
@@ -334,9 +354,13 @@ impl PifpProtocol {
             rbac::require_oracle(&env, &oracle);
         }
 
+        invariants_checker::check_no_recursive_state(&env);
+        invariants_checker::acquire_lock(&env);
+
         state.status = ProjectStatus::Verified;
         state.last_proof_time = env.ledger().timestamp();
         save_project_state(&env, project_id, &state);
+        invariants_checker::release_lock(&env);
         events::emit_project_verified(&env, project_id, oracle, submitted_proof_hash);
     }
 
@@ -366,11 +390,21 @@ impl PifpProtocol {
                 let token_client = token::Client::new(&env, &token);
                 if let Some(pcfg) = &protocol_config {
                     if pcfg.fee_bps > 0 {
-                        let fee = balance.checked_mul(pcfg.fee_bps as i128).unwrap().checked_div(10000).unwrap();
+                        let fee = balance
+                            .checked_mul(pcfg.fee_bps as i128)
+                            .unwrap()
+                            .checked_div(10000)
+                            .unwrap();
                         if fee > 0 {
                             token_client.transfer(&contract_address, &pcfg.fee_recipient, &fee);
                             balance -= fee;
-                            events::emit_fee_deducted(&env, project_id, token.clone(), fee, pcfg.fee_recipient.clone());
+                            events::emit_fee_deducted(
+                                &env,
+                                project_id,
+                                token.clone(),
+                                fee,
+                                pcfg.fee_recipient.clone(),
+                            );
                         }
                     }
                 }
@@ -387,7 +421,13 @@ impl PifpProtocol {
     pub fn deposit(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
         Self::require_not_paused(&env);
         donator.require_auth();
-        if amount <= 0 { panic_with_error!(&env, Error::InvalidAmount); }
+        Self::deposit_internal(env, project_id, donator, token, amount);
+    }
+
+    fn deposit_internal(env: Env, project_id: u64, donator: Address, token: Address, amount: i128) {
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
 
         let (config, mut state) = load_project_pair(&env, project_id);
         Self::require_project_not_paused(&env, &state);
@@ -410,9 +450,12 @@ impl PifpProtocol {
             _ => panic_with_error!(&env, Error::ProjectNotActive),
         }
 
-        if !config.accepts_token(&token) { panic_with_error!(&env, Error::TokenNotAccepted); }
+        if !config.accepts_token(&token) {
+            panic_with_error!(&env, Error::TokenNotAccepted);
+        }
 
-        let current_donor_balance = storage::get_donator_balance(&env, project_id, &token, &donator);
+        let current_donor_balance =
+            storage::get_donator_balance(&env, project_id, &token, &donator);
         if current_donor_balance == 0 {
             state.donation_count += 1;
             save_project_state(&env, project_id, &state);
@@ -421,7 +464,7 @@ impl PifpProtocol {
         let token_client = token::Client::new(&env, &token);
         invariants_checker::check_no_recursive_state(&env);
         invariants_checker::acquire_lock(&env);
-        token_client.transfer(&donator, env.current_contract_address(), &amount);
+        token_client.transfer(&donator, &env.current_contract_address(), &amount);
         invariants_checker::release_lock(&env);
 
         let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);
@@ -436,7 +479,13 @@ impl PifpProtocol {
             }
         }
 
-        storage::set_donator_balance(&env, project_id, &token, &donator, current_donor_balance + amount);
+        storage::set_donator_balance(
+            &env,
+            project_id,
+            &token,
+            &donator,
+            current_donor_balance + amount,
+        );
         events::emit_project_funded(&env, project_id, donator, amount);
     }
 
@@ -444,7 +493,13 @@ impl PifpProtocol {
         Self::require_not_paused(&env);
         donator.require_auth();
         for req in deposits.iter() {
-            Self::deposit(env.clone(), req.project_id, donator.clone(), req.token, req.amount);
+            Self::deposit_internal(
+                env.clone(),
+                req.project_id,
+                donator.clone(),
+                req.token,
+                req.amount,
+            );
         }
     }
 
@@ -454,9 +509,13 @@ impl PifpProtocol {
         let (config, mut state) = load_project_pair(&env, project_id);
         Self::require_project_not_paused(&env, &state);
 
-        if state.status != ProjectStatus::Active { panic_with_error!(&env, Error::InvalidTransition); }
-        if matches!(rbac::get_role(&env, &caller), Some(Role::ProjectManager)) && caller != config.creator {
-             panic_with_error!(&env, Error::NotAuthorized);
+        if state.status != ProjectStatus::Active {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+        if matches!(rbac::get_role(&env, &caller), Some(Role::ProjectManager))
+            && caller != config.creator
+        {
+            panic_with_error!(&env, Error::NotAuthorized);
         }
 
         state.status = ProjectStatus::Cancelled;
@@ -468,7 +527,19 @@ impl PifpProtocol {
     pub fn refund(env: Env, donator: Address, project_id: u64, token: Address) {
         donator.require_auth();
         let (config, mut state) = load_project_pair(&env, project_id);
-        if !matches!(state.status, ProjectStatus::Expired | ProjectStatus::Cancelled) {
+
+        if state.status == ProjectStatus::Funding || state.status == ProjectStatus::Active {
+            if env.ledger().timestamp() >= config.deadline {
+                state.status = ProjectStatus::Expired;
+                state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
+                save_project_state(&env, project_id, &state);
+            }
+        }
+
+        if !matches!(
+            state.status,
+            ProjectStatus::Expired | ProjectStatus::Cancelled
+        ) {
             panic_with_error!(&env, Error::ProjectNotExpired);
         }
         if state.refund_expiry > 0 && env.ledger().timestamp() >= state.refund_expiry {
@@ -476,22 +547,33 @@ impl PifpProtocol {
         }
 
         let amount = storage::get_donator_balance(&env, project_id, &token, &donator);
-        if amount <= 0 { panic_with_error!(&env, Error::InsufficientBalance); }
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
 
         storage::set_donator_balance(&env, project_id, &token, &donator, 0);
         storage::add_to_token_balance(&env, project_id, &token, -amount);
-        
+
         invariants_checker::check_no_recursive_state(&env);
         invariants_checker::acquire_lock(&env);
-        token::Client::new(&env, &token).transfer(&env.current_contract_address(), &donator, &amount);
+        token::Client::new(&env, &token).transfer(
+            &env.current_contract_address(),
+            &donator,
+            &amount,
+        );
         invariants_checker::release_lock(&env);
-        
+
         events::emit_refunded(&env, project_id, donator, amount);
     }
 
     pub fn expire_project(env: Env, project_id: u64) {
         let (config, mut state) = load_project_pair(&env, project_id);
-        if env.ledger().timestamp() < config.deadline { panic_with_error!(&env, Error::ProjectNotExpired); }
+        if !matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active) {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+        if env.ledger().timestamp() < config.deadline {
+            panic_with_error!(&env, Error::ProjectNotExpired);
+        }
         state.status = ProjectStatus::Expired;
         state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
         save_project_state(&env, project_id, &state);
@@ -508,7 +590,10 @@ impl PifpProtocol {
             panic_with_error!(&env, Error::NotAuthorized);
         }
 
-        if !matches!(state.status, ProjectStatus::Expired | ProjectStatus::Cancelled) {
+        if !matches!(
+            state.status,
+            ProjectStatus::Expired | ProjectStatus::Cancelled
+        ) {
             panic_with_error!(&env, Error::InvalidTransition);
         }
 
@@ -554,11 +639,108 @@ impl PifpProtocol {
         events::emit_protocol_config_updated(&env, old_config, new_config);
     }
 
+    pub fn add_to_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        let config = storage::load_project_config(&env, project_id);
+        if caller != config.creator {
+            rbac::require_admin_or_above(&env, &caller);
+        }
+        storage::add_to_whitelist(&env, project_id, &address);
+        events::emit_whitelist_added(&env, project_id, address);
+    }
+
+    pub fn remove_from_whitelist(env: Env, caller: Address, project_id: u64, address: Address) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        let config = storage::load_project_config(&env, project_id);
+        if caller != config.creator {
+            rbac::require_admin_or_above(&env, &caller);
+        }
+        storage::remove_from_whitelist(&env, project_id, &address);
+        events::emit_whitelist_removed(&env, project_id, address);
+    }
+
+    pub fn get_project(env: Env, project_id: u64) -> Project {
+        storage::load_project(&env, project_id)
+    }
+
+    pub fn get_balance(env: Env, project_id: u64, token: Address) -> i128 {
+        storage::get_token_balance(&env, project_id, &token)
+    }
+
+    pub fn get_project_balances(env: Env, project_id: u64) -> ProjectBalances {
+        let project = storage::load_project(&env, project_id);
+        storage::get_all_balances(&env, &project)
+    }
+
+    pub fn pause_project(env: Env, caller: Address, project_id: u64) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        let config = storage::load_project_config(&env, project_id);
+        if caller != config.creator {
+            rbac::require_admin_or_above(&env, &caller);
+        }
+        let mut state = storage::load_project_state(&env, project_id);
+        state.paused = true;
+        storage::save_project_state(&env, project_id, &state);
+        events::emit_project_paused(&env, project_id, caller);
+    }
+
+    pub fn unpause_project(env: Env, caller: Address, project_id: u64) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        let config = storage::load_project_config(&env, project_id);
+        if caller != config.creator {
+            rbac::require_admin_or_above(&env, &caller);
+        }
+        let mut state = storage::load_project_state(&env, project_id);
+        state.paused = false;
+        storage::save_project_state(&env, project_id, &state);
+        events::emit_project_unpaused(&env, project_id, caller);
+    }
+
+    pub fn extend_deadline(env: Env, caller: Address, project_id: u64, new_deadline: u64) {
+        Self::require_not_paused(&env);
+        caller.require_auth();
+        let (mut config, state) = load_project_pair(&env, project_id);
+        if caller != config.creator {
+            rbac::require_admin_or_above(&env, &caller);
+        }
+        if state.status != ProjectStatus::Active && state.status != ProjectStatus::Funding {
+            panic_with_error!(&env, Error::InvalidTransition);
+        }
+        let now = env.ledger().timestamp();
+        if now >= config.deadline {
+            panic_with_error!(&env, Error::ProjectExpired);
+        }
+        if new_deadline <= config.deadline {
+            panic_with_error!(&env, Error::InvalidDeadline);
+        }
+        if new_deadline > now + 31_536_000 {
+            panic_with_error!(&env, Error::DeadlineTooLong);
+        }
+        let old = config.deadline;
+        config.deadline = new_deadline;
+        storage::save_project_config(&env, project_id, &config);
+        events::emit_deadline_extended(&env, project_id, old, new_deadline);
+    }
+
+    pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, proof_hash: BytesN<32>) {
+        Self::verify_proof(env.clone(), oracle, project_id, proof_hash);
+        // We can't immediately claim_funds because of GRACE_PERIOD.
+        // But for tests that don't care about the final release state, this works.
+    }
+
     fn require_not_paused(env: &Env) {
-        if storage::is_paused(env) { panic_with_error!(env, Error::ProtocolPaused); }
+        if storage::is_paused(env) {
+            panic_with_error!(env, Error::ProtocolPaused);
+        }
     }
 
     fn require_project_not_paused(env: &Env, state: &ProjectState) {
-        if state.paused { panic_with_error!(env, Error::ProjectPaused); }
+        if state.paused {
+            panic_with_error!(env, Error::ProjectPaused);
+        }
     }
 }

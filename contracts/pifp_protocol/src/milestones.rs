@@ -1,10 +1,10 @@
-use soroban_sdk::{BytesN, Env, Vec};
 use crate::errors::Error;
 use crate::types::Milestone;
+use soroban_sdk::{BytesN, Env, Vec};
 
 /// Validates that a milestone can be released and updates the completion tracker.
 pub fn verify_milestone(
-    env: &Env,
+    _env: &Env,
     milestones: &Vec<Milestone>,
     completed_tracker: &mut Vec<bool>,
     milestone_index: u32,

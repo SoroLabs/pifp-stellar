@@ -28,7 +28,10 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
     (env, client, admin, oracle, manager)
 }
 
-fn create_token(env: &Env, admin: &Address) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
+fn create_token(
+    env: &Env,
+    admin: &Address,
+) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         token::Client::new(env, &addr.address()),
@@ -36,12 +39,43 @@ fn create_token(env: &Env, admin: &Address) -> (token::Client<'static>, token::S
     )
 }
 
-fn register(env: &Env, client: &PifpProtocolClient, manager: &Address, token_addr: &Address, goal: i128) -> u64 {
+fn register(
+    env: &Env,
+    client: &PifpProtocolClient,
+    manager: &Address,
+    token_addr: &Address,
+    goal: i128,
+) -> u64 {
     let tokens = soroban_sdk::vec![env, token_addr.clone()];
     let deadline = env.ledger().timestamp() + 86_400;
     let proof = BytesN::from_array(env, &[0xabu8; 32]);
-    let uri = Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
-    client.register_project(manager, &tokens, &goal, &proof, &uri, &deadline, &false, &0u32).id
+    let uri = Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    );
+    client
+        .register_project(
+            manager,
+            &tokens,
+            &goal,
+            &proof,
+            &uri,
+            &deadline,
+            &false,
+            &{
+                let mut ms = soroban_sdk::Vec::new(env);
+                ms.push_back(crate::types::Milestone {
+                    label: soroban_sdk::BytesN::from_array(env, &[0u8; 32]),
+                    amount_bps: 10000,
+                    proof_hash: proof.clone(),
+                });
+                ms
+            },
+            &0u32,
+            &soroban_sdk::Vec::new(env),
+            &0u32,
+        )
+        .id
 }
 
 #[test]
@@ -60,8 +94,16 @@ fn test_batch_deposit_funds_multiple_projects() {
 
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
-        DepositRequest { project_id: pid2, token: tok2.address.clone(), amount: 800 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
+        DepositRequest {
+            project_id: pid2,
+            token: tok2.address.clone(),
+            amount: 800
+        },
     ];
 
     client.batch_deposit(&donator, &deposits);
@@ -87,8 +129,16 @@ fn test_batch_deposit_reverts_on_invalid_amount() {
     // Second entry has amount=0 — should panic and revert the whole tx.
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
-        DepositRequest { project_id: pid2, token: tok2.address.clone(), amount: 0 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
+        DepositRequest {
+            project_id: pid2,
+            token: tok2.address.clone(),
+            amount: 0
+        },
     ];
 
     client.batch_deposit(&donator, &deposits);
@@ -107,7 +157,11 @@ fn test_batch_deposit_blocked_when_paused() {
 
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
     ];
     client.batch_deposit(&donator, &deposits);
 }

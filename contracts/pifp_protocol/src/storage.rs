@@ -32,7 +32,7 @@ use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
 use crate::errors::Error;
 use crate::types::{
-    DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
+    OracleAgreement, Project, ProjectBalances, ProjectConfig,
     ProjectState, ProtocolConfig, TokenBalance,
 };
 

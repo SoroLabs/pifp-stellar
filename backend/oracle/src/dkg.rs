@@ -1,7 +1,6 @@
+use k256::{ProjectivePoint, Scalar};
 use std::collections::HashMap;
-use k256::{Scalar, ProjectivePoint, elliptic_curve::group::GroupEncoding};
-use serde::{Deserialize, Serialize};
-use tracing::{info, error};
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub enum DkgMessage {
@@ -37,7 +36,9 @@ impl DkgProtocol {
         info!("Node {} starting DKG Round 1", self.node_id);
         // Placeholder for generating polynomial and commitments (Feldman VSS)
         self.commitments = vec![ProjectivePoint::GENERATOR; self.threshold as usize];
-        DkgMessage::Round1 { commitments: self.commitments.clone() }
+        DkgMessage::Round1 {
+            commitments: self.commitments.clone(),
+        }
     }
 
     pub fn handle_round1(&mut self, from: u32, commitments: Vec<ProjectivePoint>) {

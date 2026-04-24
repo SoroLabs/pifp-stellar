@@ -1,6 +1,9 @@
 use crate::test_utils::{create_token, dummy_metadata_uri, dummy_proof, setup_test};
 use crate::Role;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Vec,
+};
 
 #[test]
 fn test_update_protocol_config_success() {
@@ -60,6 +63,17 @@ fn test_verify_and_release_with_fees() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -112,6 +126,17 @@ fn test_verify_and_release_zero_fee() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 

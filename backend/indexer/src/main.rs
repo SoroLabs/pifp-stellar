@@ -11,10 +11,10 @@ pub(crate) mod db;
 pub(crate) mod errors;
 pub(crate) mod events;
 pub(crate) mod indexer;
-pub(crate) mod ml_pipeline;
-pub(crate) mod middleware;
-pub(crate) mod profiles;
 pub(crate) mod metrics;
+pub(crate) mod middleware;
+pub(crate) mod ml_pipeline;
+pub(crate) mod profiles;
 pub(crate) mod rate_limit;
 pub(crate) mod rpc;
 pub(crate) mod webhook;
@@ -42,8 +42,8 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 use cache::Cache;
 use config::Config;
 use indexer::IndexerState;
-use rpc::ProviderManager;
 use rate_limit::{AdaptiveStore, RateLimitLayer, RateLimiterStore};
+use rpc::ProviderManager;
 
 fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
     event.request = None;
@@ -90,9 +90,7 @@ async fn main() -> anyhow::Result<()> {
     let pool = db::init_pool(&config.database_url).await?;
 
     // HTTP client shared between the indexer and (future) outbound calls.
-    let client = Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
     let cache = config
         .redis_url
@@ -109,8 +107,12 @@ async fn main() -> anyhow::Result<()> {
         });
 
     // ─── Adaptive Rate Limiter Store ──────────────────────
-    let rate_limit_store = Arc::new(AdaptiveStore::new(config.api_rate_limit.unwrap_or(rate_limit::DEFAULT_REQUESTS_PER_MINUTE)));
-    
+    let rate_limit_store = Arc::new(AdaptiveStore::new(
+        config
+            .api_rate_limit
+            .unwrap_or(rate_limit::DEFAULT_REQUESTS_PER_MINUTE),
+    ));
+
     // ─── System Metrics Monitor ───────────────────────────
     let rate_limit_store_clone = Arc::clone(&rate_limit_store);
     tokio::spawn(async move {
@@ -118,12 +120,12 @@ async fn main() -> anyhow::Result<()> {
         loop {
             sys.refresh_cpu_all();
             sys.refresh_memory();
-            
+
             let cpu_usage = sys.global_cpu_usage() as f64 / 100.0;
             let mem_usage = sys.used_memory() as f64 / sys.total_memory() as f64;
-            
+
             rate_limit_store_clone.update_metrics(cpu_usage, mem_usage);
-            
+
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     });
@@ -202,14 +204,14 @@ async fn main() -> anyhow::Result<()> {
 
     // ─── Optimized TCP Acceptor ───────────────────────────
     let listener = TcpListener::bind(&addr).await?;
-    
+
     // Using a custom loop for zero-copy handoffs if needed in the future,
     // for now axum::serve with a standard listener is highly concurrent.
     // Issue #269 asks for zero-copy socket handoffs, which usually means
     // using something like `tokio-util`'s `Framed` or direct syscalls.
     // Standard `axum::serve` uses `tokio::net::TcpListener` which is already
     // quite efficient. For true zero-copy we'd need a more complex setup.
-    
+
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<std::net::SocketAddr>(),

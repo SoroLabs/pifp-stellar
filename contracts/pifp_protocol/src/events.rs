@@ -1,7 +1,7 @@
 //! On-chain event definitions and emission helpers for the PIFP protocol.
 
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 use crate::types::ProtocolConfig;
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 
 const PROJECT_CREATED: Symbol = symbol_short!("created");
 const FUNDS_RELEASED: Symbol = symbol_short!("released");
@@ -249,12 +249,7 @@ pub fn emit_project_unpaused(env: &Env, project_id: u64, admin: Address) {
     env.events().publish(topics, data);
 }
 
-pub fn emit_funds_released(
-    env: &Env,
-    project_id: u64,
-    token: Address,
-    amount: i128,
-) {
+pub fn emit_funds_released(env: &Env, project_id: u64, token: Address, amount: i128) {
     let topics = (symbol_short!("fnd_rel"), project_id);
     let data = FundsReleased {
         project_id,
@@ -276,10 +271,21 @@ pub fn emit_refunded(env: &Env, project_id: u64, donator: Address, amount: i128)
 
 pub fn emit_deadline_extended(env: &Env, project_id: u64, old_deadline: u64, new_deadline: u64) {
     let topics = (symbol_short!("ext_dead"), project_id);
-    env.events().publish(topics, DeadlineExtended { project_id, old_deadline, new_deadline });
+    env.events().publish(
+        topics,
+        DeadlineExtended {
+            project_id,
+            old_deadline,
+            new_deadline,
+        },
+    );
 }
 
-pub fn emit_protocol_config_updated(env: &Env, old_config: Option<ProtocolConfig>, new_config: ProtocolConfig) {
+pub fn emit_protocol_config_updated(
+    env: &Env,
+    old_config: Option<ProtocolConfig>,
+    new_config: ProtocolConfig,
+) {
     let topics = (symbol_short!("cfg_upd"),);
     let data = ProtocolConfigUpdated {
         old_fee_recipient: old_config.as_ref().map(|cfg| cfg.fee_recipient.clone()),
@@ -394,12 +400,7 @@ pub fn emit_oracle_removed(env: &Env, project_id: u64, oracle: Address) {
     env.events().publish(topics, data);
 }
 
-pub fn emit_milestone_verified(
-    env: &Env,
-    project_id: u64,
-    milestone_index: u32,
-    bps: u32,
-) {
+pub fn emit_milestone_verified(env: &Env, project_id: u64, milestone_index: u32, bps: u32) {
     let topics = (MILESTONE_VERIFIED, project_id, milestone_index);
     env.events().publish(topics, bps);
 }

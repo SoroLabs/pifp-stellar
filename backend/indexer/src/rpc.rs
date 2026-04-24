@@ -110,7 +110,10 @@ impl ProviderManager {
     pub fn new(primary: String, fallbacks: Vec<String>, cooldown_secs: u64) -> Self {
         let mut providers: Vec<ProviderState> = std::iter::once(primary)
             .chain(fallbacks)
-            .map(|url| ProviderState { url, failed_at: None })
+            .map(|url| ProviderState {
+                url,
+                failed_at: None,
+            })
             .collect();
         // Deduplicate while preserving order.
         let mut seen = std::collections::HashSet::new();

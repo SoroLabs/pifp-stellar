@@ -27,6 +27,17 @@ fn test_extend_deadline_success() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -58,6 +69,17 @@ fn test_extend_deadline_by_admin() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -87,6 +109,17 @@ fn test_extend_deadline_unauthorized() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -112,6 +145,17 @@ fn test_extend_deadline_backwards() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -141,6 +185,17 @@ fn test_extend_deadline_expired() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 
@@ -172,6 +227,17 @@ fn test_extend_deadline_too_long() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env).clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 

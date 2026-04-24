@@ -835,7 +835,10 @@ mod tests {
                 title TEXT NOT NULL DEFAULT '',
                 description TEXT NOT NULL DEFAULT ''
             );",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         sqlx::query("CREATE INDEX idx_projects_status ON projects (status);")
             .execute(&pool)
@@ -869,7 +872,10 @@ mod tests {
             "CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
                 title, description, content='projects', content_rowid='rowid'
             );",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         sqlx::query(
             "CREATE TRIGGER IF NOT EXISTS projects_fts_insert
@@ -877,7 +883,10 @@ mod tests {
                     INSERT INTO projects_fts (rowid, title, description)
                     VALUES (new.rowid, new.title, new.description);
                 END;",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         pool
     }
@@ -1306,8 +1315,20 @@ mod tests {
     #[tokio::test]
     async fn test_search_returns_matching_project() {
         let pool = setup_test_db().await;
-        insert_project(&pool, "1", "Solar Power Initiative", "Bringing solar energy to rural areas").await;
-        insert_project(&pool, "2", "Wind Turbine Project", "Harnessing wind energy for clean power").await;
+        insert_project(
+            &pool,
+            "1",
+            "Solar Power Initiative",
+            "Bringing solar energy to rural areas",
+        )
+        .await;
+        insert_project(
+            &pool,
+            "2",
+            "Wind Turbine Project",
+            "Harnessing wind energy for clean power",
+        )
+        .await;
 
         let results = search_projects(&pool, "Solar", 20, 0).await.unwrap();
         assert_eq!(results.len(), 1);

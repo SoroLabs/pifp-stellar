@@ -1,5 +1,5 @@
-use tracing::info;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BidShare {
@@ -25,13 +25,15 @@ impl MpcAuction {
             return None;
         }
 
-        info!("Evaluating MPC Blind Auction winner among {} bids", self.shares.len());
-        
+        info!(
+            "Evaluating MPC Blind Auction winner among {} bids",
+            self.shares.len()
+        );
+
         // In a real MPC (e.g., using Garbled Circuits or Secret Sharing),
         // we'd perform secure comparisons without revealing masked_value.
         // This mock just finds the max.
-        let winner = self.shares.iter()
-            .max_by_key(|s| s.masked_value)?;
+        let winner = self.shares.iter().max_by_key(|s| s.masked_value)?;
 
         Some((winner.bidder.clone(), winner.masked_value))
     }

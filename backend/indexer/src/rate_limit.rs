@@ -19,7 +19,10 @@ use std::{
     future::Future,
     net::IpAddr,
     pin::Pin,
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     task::{Context, Poll},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -54,20 +57,23 @@ struct TokenBucket {
 
 pub struct AdaptiveStore {
     buckets: DashMap<IpAddr, TokenBucket>,
-    base_rate: f64, // tokens per second
+    base_rate: f64,          // tokens per second
     current_rate: AtomicU64, // fixed-point
     target_cpu: f64,
     pid_kp: f64,
     pid_ki: f64,
     pid_kd: f64,
-    integral: AtomicU64, // fixed-point
+    integral: AtomicU64,   // fixed-point
     last_error: AtomicU64, // fixed-point
 }
 
 impl AdaptiveStore {
     pub fn new(requests_per_minute: u32) -> Self {
         let base_rate = requests_per_minute as f64 / 60.0;
-        let _now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let _now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         Self {
             buckets: DashMap::new(),
             base_rate,
@@ -88,7 +94,10 @@ impl AdaptiveStore {
 
 impl RateLimiterStore for AdaptiveStore {
     fn check(&self, key: IpAddr) -> Result<u32, u64> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         let rate = self.get_current_rate();
 
         let entry = self.buckets.entry(key).or_insert_with(|| TokenBucket {
@@ -97,21 +106,23 @@ impl RateLimiterStore for AdaptiveStore {
         });
 
         let bucket = entry.value();
-        
-        let result = bucket.tokens.fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
-            let last = bucket.last_refill.load(Ordering::Acquire);
-            let elapsed_ms = now.saturating_sub(last);
-            let refill = (elapsed_ms as f64 * rate).round() as u64; // rate is per sec, elapsed is ms
-            
-            let next_tokens = (current + refill).min((rate * 60.0 * 1000.0).round() as u64);
-            if next_tokens >= 1000 {
-                // If we use tokens, we update the timestamp to now.
-                // In fetch_update closure we can't easily update another atomic.
-                Some(next_tokens - 1000)
-            } else {
-                None
-            }
-        });
+
+        let result = bucket
+            .tokens
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                let last = bucket.last_refill.load(Ordering::Acquire);
+                let elapsed_ms = now.saturating_sub(last);
+                let refill = (elapsed_ms as f64 * rate).round() as u64; // rate is per sec, elapsed is ms
+
+                let next_tokens = (current + refill).min((rate * 60.0 * 1000.0).round() as u64);
+                if next_tokens >= 1000 {
+                    // If we use tokens, we update the timestamp to now.
+                    // In fetch_update closure we can't easily update another atomic.
+                    Some(next_tokens - 1000)
+                } else {
+                    None
+                }
+            });
 
         match result {
             Ok(_) => {
@@ -133,12 +144,16 @@ impl RateLimiterStore for AdaptiveStore {
         let integral = (prev_integral + error).clamp(-1.0, 1.0);
         let derivative = error - prev_error;
 
-        let adjustment = (self.pid_kp * error) + (self.pid_ki * integral) + (self.pid_kd * derivative);
+        let adjustment =
+            (self.pid_kp * error) + (self.pid_ki * integral) + (self.pid_kd * derivative);
         let new_rate = (self.base_rate * (1.0 + adjustment)).max(1.0 / 60.0); // Min 1 req/min
 
-        self.current_rate.store(new_rate.to_bits(), Ordering::Relaxed);
-        self.integral.store((integral * 1000.0) as u64, Ordering::Relaxed);
-        self.last_error.store((error * 1000.0) as u64, Ordering::Relaxed);
+        self.current_rate
+            .store(new_rate.to_bits(), Ordering::Relaxed);
+        self.integral
+            .store((integral * 1000.0) as u64, Ordering::Relaxed);
+        self.last_error
+            .store((error * 1000.0) as u64, Ordering::Relaxed);
     }
 
     fn get_quota(&self) -> u32 {
@@ -195,11 +210,17 @@ where
     type Error = S::Error;
     type Future = BoxFuture<Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), <S as Service<Request<Body>>>::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), <S as Service<Request<Body>>>::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> BoxFuture<Result<Response<Body>, <S as Service<Request<Body>>>::Error>> {
+    fn call(
+        &mut self,
+        req: Request<Body>,
+    ) -> BoxFuture<Result<Response<Body>, <S as Service<Request<Body>>>::Error>> {
         let store = Arc::clone(&self.store);
         let client_ip = extract_ip(&req);
         let mut inner = self.inner.clone();
@@ -211,7 +232,10 @@ where
                     let mut resp = inner.call(req).await?;
                     let h = resp.headers_mut();
                     h.insert("x-ratelimit-limit", quota.to_string().parse().unwrap());
-                    h.insert("x-ratelimit-remaining", remaining.to_string().parse().unwrap());
+                    h.insert(
+                        "x-ratelimit-remaining",
+                        remaining.to_string().parse().unwrap(),
+                    );
                     h.insert("x-ratelimit-reset", "60".parse().unwrap());
                     Ok(resp)
                 }
@@ -248,10 +272,7 @@ fn extract_ip(req: &Request<Body>) -> IpAddr {
         }
     }
 
-    if let Some(ConnectInfo(addr)) = req
-        .extensions()
-        .get::<ConnectInfo<std::net::SocketAddr>>()
-    {
+    if let Some(ConnectInfo(addr)) = req.extensions().get::<ConnectInfo<std::net::SocketAddr>>() {
         return addr.ip();
     }
 

@@ -53,7 +53,7 @@ pub enum ProjectStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Milestone {
     pub label: BytesN<32>,      // Unique identifier for the milestone
-    pub amount_bps: u32,        // Basis points of the total project funds to release (e.g., 2500 = 25%)
+    pub amount_bps: u32, // Basis points of the total project funds to release (e.g., 2500 = 25%)
     pub proof_hash: BytesN<32>, // Specific proof hash required for this milestone
 }
 
@@ -68,7 +68,21 @@ pub struct ProjectConfig {
     pub deadline: u64,
     pub is_private: bool,
     pub metadata_uri: Bytes,
-    pub milestones: Vec<Milestone>, // Added: Milestone definitions
+    pub milestones: Vec<Milestone>,
+    pub categories: u32,
+    pub authorized_oracles: Vec<Address>,
+    pub threshold: u32,
+}
+
+impl ProjectConfig {
+    pub fn accepts_token(&self, token: &Address) -> bool {
+        for t in self.accepted_tokens.iter() {
+            if &t == token {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// Mutable project state, updated on deposits and verification.
@@ -102,7 +116,7 @@ pub struct ProjectState {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Project {
-     /// Auto-incremented unique ID.
+    /// Auto-incremented unique ID.
     pub id: u64,
     /// Address that registered and will receive released funds.
     pub creator: Address,
@@ -136,8 +150,10 @@ pub struct Project {
     /// Ledger timestamp when the oracle verified the proof.  Zero until
     /// `verify_proof` is called.
     pub last_proof_time: u64,
-    pub milestones: Vec<Milestone>,           
+    pub milestones: Vec<Milestone>,
     pub completed_milestones: Vec<bool>,
+    pub authorized_oracles: Vec<Address>,
+    pub threshold: u32,
 }
 
 impl Project {
@@ -167,6 +183,14 @@ pub struct ProjectBalances {
     pub project_id: u64,
     pub balances: Vec<TokenBalance>,
 }
+
+#[contracttype]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct OracleAgreement {
+    pub votes: u32,
+    pub voter_count: u32,
+}
+
 /// Global protocol configuration managed by the SuperAdmin.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -83,6 +83,17 @@ fn test_project_manager_can_register() {
         &metadata_uri,
         &(ctx.env.ledger().timestamp() + 86400),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
     assert_eq!(project.creator, ctx.manager);
