@@ -11,21 +11,6 @@ jobs:
     name: Database Migration & Rollback
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: pifp_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - uses: actions/checkout@v4
 
@@ -33,33 +18,23 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features postgres,sqlite
+        run: cargo install sqlx-cli --no-default-features --features sqlite
 
       - name: Setup Test Environment
         run: |
-          echo "DATABASE_URL=postgres://user:password@localhost:5432/pifp_test" >> $GITHUB_ENV
+          echo "DATABASE_URL=sqlite://pifp_test.db" >> $GITHUB_ENV
+          touch pifp_test.db
           
       - name: Run Up Migrations
         working-directory: backend/indexer
         run: |
-          mkdir -p pg_migrations
-          for f in migrations/*.sql; do
-            filename=$(basename "$f")
-            cat "$f" | \
-            sed 's/INTEGER PRIMARY KEY AUTOINCREMENT/SERIAL PRIMARY KEY/g' | \
-            sed "s/strftime('%s', 'now')/EXTRACT(EPOCH FROM NOW())::BIGINT/g" | \
-            sed 's/INSERT OR IGNORE/INSERT/g' | \
-            sed 's/INTEGER PRIMARY KEY CHECK (id = 1)/INTEGER PRIMARY KEY/g' | \
-            sed 's/DATETIME/TIMESTAMP/g' \
-            > "pg_migrations/$filename"
-          done
-          sqlx migrate run --source pg_migrations --database-url ${{ env.DATABASE_URL }}
+          sqlx migrate run --database-url ${{ env.DATABASE_URL }}
 
       - name: Test Migration Rollback
         working-directory: backend/indexer
         run: |
           # Revert all migrations (9 currently)
           for i in {1..9}; do
-            sqlx migrate revert --source pg_migrations --database-url ${{ env.DATABASE_URL }}
+            sqlx migrate revert --database-url ${{ env.DATABASE_URL }}
           done
-          sqlx migrate run --source pg_migrations --database-url ${{ env.DATABASE_URL }}
+          sqlx migrate run --database-url ${{ env.DATABASE_URL }}
