@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use tract_onnx::prelude::*;
-use tracing::{info, warn, error};
 use crate::rpc::RawEvent;
+use std::sync::Arc;
+use tracing::{error, info, warn};
+use tract_onnx::prelude::*;
 
 type ModelPlan = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 
@@ -20,7 +20,6 @@ impl MLPipeline {
                 .into_runnable()?;
             Some(model)
         } else {
-
             warn!("No ML model path provided; running in mock mode");
             None
         };

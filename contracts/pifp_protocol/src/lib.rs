@@ -435,7 +435,8 @@ impl PifpProtocol {
 
         if env.ledger().timestamp() >= config.deadline {
             if (state.status == ProjectStatus::Funding || state.status == ProjectStatus::Active)
-                && env.ledger().timestamp() >= config.deadline {
+                && env.ledger().timestamp() >= config.deadline
+            {
                 state.status = ProjectStatus::Expired;
                 state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
                 save_project_state(&env, project_id, &state);

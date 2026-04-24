@@ -21,6 +21,7 @@ jobs:
         run: cargo install sqlx-cli --no-default-features --features sqlite
 
       - name: Setup Test Environment
+        working-directory: backend/indexer
         run: |
           echo "DATABASE_URL=sqlite://pifp_test.db" >> $GITHUB_ENV
           touch pifp_test.db
