@@ -69,6 +69,8 @@ pub struct RawEvent {
     pub topic: Vec<String>,
     /// XDR-encoded event value / data
     pub value: Value,
+    /// Optional transaction XDR for ML inference
+    pub xdr: Option<String>,
     #[serde(rename = "contractId")]
     pub contract_id: Option<String>,
     #[serde(rename = "txHash")]
@@ -588,6 +590,7 @@ mod tests {
                 r#"{"type":"u64","value":"42"}"#.to_string(),
             ],
             value: serde_json::json!({ "donator": "GABC123", "amount": "5000" }),
+            xdr: None,
             contract_id: Some("CONTRACT1".to_string()),
             tx_hash: Some("TX1".to_string()),
             id: None,
@@ -616,6 +619,7 @@ mod tests {
                 r#"{"type":"symbol","value":"admin"}"#.to_string(),
             ],
             value: serde_json::json!("GCALLER"),
+            xdr: None,
             contract_id: Some("CONTRACT1".to_string()),
             tx_hash: Some("TX2".to_string()),
             id: None,
@@ -639,6 +643,7 @@ mod tests {
                 r#"{"type":"u64","value":"42"}"#.to_string(),
             ],
             value: serde_json::json!(["GDONATOR", "750"]),
+            xdr: None,
             contract_id: Some("CONTRACT1".to_string()),
             tx_hash: Some("TX3".to_string()),
             id: None,
@@ -687,6 +692,7 @@ mod tests {
                 r#"{"type":"u64","value":"42"}"#.to_string(),
             ],
             value: serde_json::json!({ "donator": "GABC123", "amount": "5000" }),
+            xdr: None,
             contract_id: Some("OTHER_CONTRACT".to_string()),
             tx_hash: Some("TX1".to_string()),
             id: None,
@@ -719,6 +725,7 @@ mod tests {
                     format!(r#"{{"type":"u64","value":"{}"}}"#, i % 500),
                 ],
                 value: serde_json::json!({ "donator": "GABC123", "amount": "5" }),
+                xdr: None,
                 contract_id: Some(contract.to_string()),
                 tx_hash: None,
                 id: None,

@@ -39,6 +39,9 @@ dotenvy = "0.15"
 # Crypto
 sha2 = "0.11"
 hex = "0.4"
+k256 = { version = "0.13", features = ["arithmetic", "ecdsa", "serde"] }
+threshold_crypto = "0.4"
+libp2p = { version = "0.54", features = ["tcp", "tls", "dns", "noise", "yamux", "kad", "macros", "tokio"] }
 
 # Timestamps
 chrono = { version = "0.4", features = ["serde"] }
