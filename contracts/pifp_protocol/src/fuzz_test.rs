@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables)]
 extern crate std;
 use std::vec::Vec;
 

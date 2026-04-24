@@ -31,7 +31,6 @@ use axum::{
 };
 use reqwest::Client;
 use sentry::{self, protocol::Event};
-use sentry_tracing;
 use sysinfo::System;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;

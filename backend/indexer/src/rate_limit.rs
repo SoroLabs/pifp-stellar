@@ -173,6 +173,7 @@ impl RateLimitLayer {
         Self { store }
     }
 
+    #[allow(dead_code)]
     pub fn adaptive(requests_per_minute: u32) -> Self {
         let store = Arc::new(AdaptiveStore::new(requests_per_minute));
         Self::new(store)

@@ -2,12 +2,14 @@ use k256::{ProjectivePoint, Scalar};
 use std::collections::HashMap;
 use tracing::{error, info};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum DkgMessage {
     Round1 { commitments: Vec<ProjectivePoint> },
     Round2 { shares: HashMap<u32, Scalar> },
 }
 
+#[allow(dead_code)]
 pub struct DkgProtocol {
     node_id: u32,
     threshold: u32,
@@ -18,6 +20,7 @@ pub struct DkgProtocol {
     received_commitments: HashMap<u32, Vec<ProjectivePoint>>,
 }
 
+#[allow(dead_code)]
 impl DkgProtocol {
     pub fn new(node_id: u32, threshold: u32, total_nodes: u32) -> Self {
         // In a real implementation, we'd generate a random polynomial here

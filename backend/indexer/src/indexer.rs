@@ -88,6 +88,7 @@ pub async fn run(state: Arc<IndexerState>) {
 /// Perform a single poll iteration.
 ///
 /// Returns `(next_start_ledger, next_cursor)`.
+#[allow(clippy::too_many_arguments)]
 async fn poll_once(
     pool: &SqlitePool,
     client: &Client,
@@ -109,12 +110,10 @@ async fn poll_once(
     .await?;
 
     // ─── ML Anomaly Detection ─────────────────────────────
-    if !raw_events.is_empty() {
-        if ml_pipeline::process_events(ml_pipeline, &raw_events).await {
-            warn!("Anomaly detected! Pausing indexer for safety.");
-            tokio::time::sleep(Duration::from_secs(60)).await;
-            return Ok((start_ledger, cursor.map(String::from)));
-        }
+    if !raw_events.is_empty() && ml_pipeline::process_events(ml_pipeline, &raw_events).await {
+        warn!("Anomaly detected! Pausing indexer for safety.");
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        return Ok((start_ledger, cursor.map(String::from)));
     }
 
     // Count every event the network returned, regardless of dedup.

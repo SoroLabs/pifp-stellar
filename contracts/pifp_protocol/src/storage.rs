@@ -1,3 +1,4 @@
+#![allow(dead_code, unused)]
 //! # Storage
 //!
 //! Provides typed helpers over Soroban's two storage tiers used by PIFP:

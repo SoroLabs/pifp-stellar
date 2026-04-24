@@ -1,16 +1,19 @@
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
+#[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BidShare {
     pub bidder: String,
     pub masked_value: u64,
 }
 
+#[allow(dead_code)]
 pub struct MpcAuction {
     shares: Vec<BidShare>,
 }
 
+#[allow(dead_code)]
 impl MpcAuction {
     pub fn new() -> Self {
         Self { shares: Vec::new() }

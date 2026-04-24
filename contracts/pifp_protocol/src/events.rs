@@ -1,3 +1,4 @@
+#![allow(deprecated, dead_code)]
 //! On-chain event definitions and emission helpers for the PIFP protocol.
 
 use crate::types::ProtocolConfig;

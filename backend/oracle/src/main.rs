@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 use clap::Parser;
 use sentry::{self, protocol::Event};
-use sentry_tracing;
 use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
 use tracing_subscriber::{prelude::*, EnvFilter};

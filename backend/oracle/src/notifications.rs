@@ -17,6 +17,7 @@ use tracing::warn;
 /// Slack's incoming webhook API accepts a JSON body with at minimum a `text`
 /// field.  We keep the payload simple and human-readable so it renders well
 /// in both the Slack UI and any log aggregator that captures the raw JSON.
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 struct SlackMessage {
     text: String,
@@ -47,6 +48,7 @@ struct SlackMessage {
 ///     notify_verification_failure(&project_id, &proof_cid, &err),
 /// ).await;
 /// ```
+#[allow(dead_code)]
 pub async fn notify_verification_failure(
     project_id: &str,
     proof_cid: &str,
@@ -91,6 +93,7 @@ pub async fn notify_verification_failure(
 ///
 /// Any delivery failure is logged as a warning but **never propagated**.
 /// This is the recommended call-site pattern for the verification pipeline.
+#[allow(dead_code)]
 pub async fn alert_verification_failure(project_id: &str, proof_cid: &str, error_msg: &str) {
     use tokio::time::{timeout, Duration};
 

@@ -95,6 +95,7 @@ pub use types::{
 pub struct PifpProtocol;
 
 #[contractimpl]
+#[allow(clippy::too_many_arguments, deprecated)]
 impl PifpProtocol {
     // ─────────────────────────────────────────────────────────
     // Initialisation
@@ -433,7 +434,8 @@ impl PifpProtocol {
         Self::require_project_not_paused(&env, &state);
 
         if env.ledger().timestamp() >= config.deadline {
-            if matches!(state.status, ProjectStatus::Funding | ProjectStatus::Active) {
+            if (state.status == ProjectStatus::Funding || state.status == ProjectStatus::Active)
+                && env.ledger().timestamp() >= config.deadline {
                 state.status = ProjectStatus::Expired;
                 state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
                 save_project_state(&env, project_id, &state);
@@ -464,7 +466,7 @@ impl PifpProtocol {
         let token_client = token::Client::new(&env, &token);
         invariants_checker::check_no_recursive_state(&env);
         invariants_checker::acquire_lock(&env);
-        token_client.transfer(&donator, &env.current_contract_address(), &amount);
+        token_client.transfer(&donator, env.current_contract_address(), &amount);
         invariants_checker::release_lock(&env);
 
         let new_balance = storage::add_to_token_balance(&env, project_id, &token, amount);

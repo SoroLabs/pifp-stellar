@@ -1,10 +1,12 @@
-use crate::rpc::RawEvent;
 use std::sync::Arc;
-use tracing::{error, info, warn};
 use tract_onnx::prelude::*;
+use tracing::{info, warn, error};
+use crate::rpc::RawEvent;
+
+type ModelPlan = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 
 pub struct MLPipeline {
-    model: Option<SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>>,
+    model: Option<ModelPlan>,
 }
 
 impl MLPipeline {
@@ -13,11 +15,12 @@ impl MLPipeline {
             info!("Loading ML model from {}", path);
             let model = tract_onnx::onnx()
                 .model_for_path(path)?
-                .with_input_fact(0, f32::fact(&[1, 100]).into())? // Example input shape
+                .with_input_fact(0, f32::fact([1, 100]).into())? // Example input shape
                 .into_optimized()?
                 .into_runnable()?;
             Some(model)
         } else {
+
             warn!("No ML model path provided; running in mock mode");
             None
         };

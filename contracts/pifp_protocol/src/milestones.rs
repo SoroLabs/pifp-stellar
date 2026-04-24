@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_variables)]
 use crate::errors::Error;
 use crate::types::Milestone;
 use soroban_sdk::{BytesN, Env, Vec};
