@@ -49,7 +49,8 @@ jobs:
             sed 's/INTEGER PRIMARY KEY AUTOINCREMENT/SERIAL PRIMARY KEY/g' | \
             sed "s/strftime('%s', 'now')/EXTRACT(EPOCH FROM NOW())::BIGINT/g" | \
             sed 's/INSERT OR IGNORE/INSERT/g' | \
-            sed 's/INTEGER PRIMARY KEY CHECK (id = 1)/INTEGER PRIMARY KEY/g' \
+            sed 's/INTEGER PRIMARY KEY CHECK (id = 1)/INTEGER PRIMARY KEY/g' | \
+            sed 's/DATETIME/TIMESTAMP/g' \
             > "pg_migrations/$filename"
           done
           sqlx migrate run --source pg_migrations --database-url ${{ env.DATABASE_URL }}
