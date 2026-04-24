@@ -15,6 +15,7 @@
 //! | Queries      | `get_project`, `get_project_balances`, `role_of`, etc.  |
 
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contractimpl, panic_with_error, token, Address, Bytes, BytesN, Env, Vec,
@@ -531,12 +532,12 @@ impl PifpProtocol {
         donator.require_auth();
         let (config, mut state) = load_project_pair(&env, project_id);
 
-        if state.status == ProjectStatus::Funding || state.status == ProjectStatus::Active {
-            if env.ledger().timestamp() >= config.deadline {
-                state.status = ProjectStatus::Expired;
-                state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
-                save_project_state(&env, project_id, &state);
-            }
+        if (state.status == ProjectStatus::Funding || state.status == ProjectStatus::Active)
+            && env.ledger().timestamp() >= config.deadline
+        {
+            state.status = ProjectStatus::Expired;
+            state.refund_expiry = env.ledger().timestamp() + REFUND_WINDOW;
+            save_project_state(&env, project_id, &state);
         }
 
         if !matches!(
