@@ -6,9 +6,9 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ContractUpgraded {
+pub struct ProtocolUpgraded {
+    pub caller: Address,
     pub new_wasm_hash: BytesN<32>,
-    pub upgraded_by: Address,
 }
 
 const PROJECT_CREATED: Symbol = symbol_short!("created");
@@ -413,7 +413,11 @@ pub fn emit_milestone_verified(env: &Env, project_id: u64, milestone_index: u32,
     env.events().publish(topics, bps);
 }
 
-pub fn emit_contract_upgraded(env: &Env, new_wasm_hash: BytesN<32>, upgraded_by: Address) {
-    let topics = (symbol_short!("upgraded"),);
-    env.events().publish(topics, ContractUpgraded { new_wasm_hash, upgraded_by });
+pub fn emit_protocol_upgraded(env: &Env, caller: Address, new_wasm_hash: BytesN<32>) {
+    let topics = (symbol_short!("prot_upg"),);
+    let data = ProtocolUpgraded {
+        caller,
+        new_wasm_hash,
+    };
+    env.events().publish(topics, data);
 }
