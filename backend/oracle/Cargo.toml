@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+crossbeam-epoch = "0.9"
+crossbeam-skiplist = "0.1"
+wasmtime = "18.0"
 # Stellar/Soroban
 soroban-sdk = "25"
 stellar-strkey = "0.0.16"
@@ -40,6 +43,7 @@ dotenvy = "0.15"
 sha2 = "0.11"
 hex = "0.4"
 k256 = { version = "0.13", features = ["arithmetic", "ecdsa", "serde"] }
+rand = "0.8"
 threshold_crypto = "0.4"
 libp2p = { version = "0.54", features = ["tcp", "tls", "dns", "noise", "yamux", "kad", "macros", "tokio"] }
 
@@ -56,3 +60,4 @@ sentry-tracing = "0.47"
 [dev-dependencies]
 mockito = "1"
 tower = { version = "0.5", features = ["util"] }
+rand07 = { package = "rand", version = "0.7" }

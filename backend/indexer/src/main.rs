@@ -4,6 +4,7 @@
 //! PIFP contract events and persists them to SQLite.  Simultaneously
 //! exposes a small Axum REST API for frontend / admin consumption.
 
+pub(crate) mod actor;
 pub(crate) mod api;
 pub(crate) mod cache;
 pub(crate) mod config;
