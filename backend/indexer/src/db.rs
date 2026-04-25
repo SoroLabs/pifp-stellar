@@ -822,12 +822,24 @@ mod tests {
         ).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO project_stats (id, total_projects, total_tvl, total_donors, completed_projects, failed_projects) VALUES (1, 0, '0', 0, 0, 0);").execute(&pool).await.unwrap();
 
+        // FTS5 virtual table + triggers (mirrors migration 007)
         sqlx::query(
-            "CREATE TABLE projects (project_id TEXT PRIMARY KEY, creator TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Funding', goal TEXT NOT NULL, primary_token TEXT NOT NULL, created_ledger INTEGER NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
+            "CREATE TABLE IF NOT EXISTS projects (
+                project_id TEXT PRIMARY KEY,
+                creator TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'Funding',
+                goal TEXT NOT NULL DEFAULT '0',
+                primary_token TEXT NOT NULL DEFAULT '',
+                created_ledger INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT ''
+            );",
         )
         .execute(&pool)
         .await
         .unwrap();
+
         sqlx::query("CREATE INDEX idx_projects_status ON projects (status);")
             .execute(&pool)
             .await
@@ -856,26 +868,14 @@ mod tests {
             "CREATE TABLE unique_donors (address TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
         ).execute(&pool).await.unwrap();
 
-        // FTS5 virtual table + triggers (mirrors migration 007)
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS projects (
-                project_id TEXT PRIMARY KEY,
-                creator TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'Funding',
-                goal TEXT NOT NULL DEFAULT '0',
-                primary_token TEXT NOT NULL DEFAULT '',
-                created_ledger INTEGER NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-                title TEXT NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT ''
-            );",
-        ).execute(&pool).await.unwrap();
-
         sqlx::query(
             "CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
                 title, description, content='projects', content_rowid='rowid'
             );",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         sqlx::query(
             "CREATE TRIGGER IF NOT EXISTS projects_fts_insert
@@ -883,7 +883,10 @@ mod tests {
                     INSERT INTO projects_fts (rowid, title, description)
                     VALUES (new.rowid, new.title, new.description);
                 END;",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         pool
     }
@@ -1312,8 +1315,20 @@ mod tests {
     #[tokio::test]
     async fn test_search_returns_matching_project() {
         let pool = setup_test_db().await;
-        insert_project(&pool, "1", "Solar Power Initiative", "Bringing solar energy to rural areas").await;
-        insert_project(&pool, "2", "Wind Turbine Project", "Harnessing wind energy for clean power").await;
+        insert_project(
+            &pool,
+            "1",
+            "Solar Power Initiative",
+            "Bringing solar energy to rural areas",
+        )
+        .await;
+        insert_project(
+            &pool,
+            "2",
+            "Wind Turbine Project",
+            "Harnessing wind energy for clean power",
+        )
+        .await;
 
         let results = search_projects(&pool, "Solar", 20, 0).await.unwrap();
         assert_eq!(results.len(), 1);

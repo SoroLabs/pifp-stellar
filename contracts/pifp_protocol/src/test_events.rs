@@ -1,6 +1,6 @@
 extern crate std;
 
-use soroban_sdk::{vec, BytesN, Vec, Address};
+use soroban_sdk::{vec, BytesN, Vec};
 
 use crate::test_utils::TestContext;
 
@@ -26,8 +26,7 @@ fn test_project_verified_event() {
     let (project, _, _) = ctx.setup_project(1000);
     let proof = ctx.dummy_proof();
     ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, &proof));
-    ctx.client
-        .verify_proof(&ctx.oracle, &project.id, &proof);
+    ctx.client.verify_proof(&ctx.oracle, &project.id, &proof);
 }
 
 #[test]
@@ -37,11 +36,11 @@ fn test_get_project_balances() {
     let (token_b, sac_b) = ctx.create_token();
     let env = &ctx.env;
     let tokens = vec![env, token_a.address.clone(), token_b.address.clone()];
-    
+
     let proof_hash = ctx.dummy_proof();
     let metadata_uri = ctx.dummy_metadata_uri();
     let deadline = env.ledger().timestamp() + 86400;
-    
+
     let mut milestones = Vec::new(env);
     milestones.push_back(crate::types::Milestone {
         label: BytesN::from_array(env, &[0u8; 32]),
@@ -82,7 +81,7 @@ fn test_funds_released_to_creator() {
     ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
-        
+
     // Claim after grace period
     ctx.jump_time(86_400); // grace period
     ctx.client.claim_funds(&project.id);

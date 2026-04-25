@@ -417,7 +417,7 @@ pub async fn upsert_profile(
             .into_response();
     }
 
-    if !auth::verify_profile_signature(&address, &payload.signature).is_ok() {
+    if auth::verify_profile_signature(&address, &payload.signature).is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {
@@ -502,7 +502,7 @@ pub async fn delete_profile(
             .into_response();
     }
 
-    if !auth::verify_profile_signature(&address, &payload.signature).is_ok() {
+    if auth::verify_profile_signature(&address, &payload.signature).is_err() {
         return (
             StatusCode::UNAUTHORIZED,
             Json(serde_json::json!(ErrorResponse {

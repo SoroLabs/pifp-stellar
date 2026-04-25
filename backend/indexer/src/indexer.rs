@@ -7,12 +7,13 @@ use std::time::Duration;
 use reqwest::Client;
 use sqlx::SqlitePool;
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::db;
 use crate::metrics;
+use crate::ml_pipeline::{self, MLPipeline};
 use crate::rpc::{self, ProviderManager};
 use crate::webhook;
 
@@ -22,6 +23,7 @@ pub struct IndexerState {
     pub client: Client,
     pub cache: Option<Cache>,
     pub providers: ProviderManager,
+    pub ml_pipeline: Arc<MLPipeline>,
 }
 
 /// Spawn the indexer loop as a background [`tokio`] task.
@@ -64,6 +66,7 @@ pub async fn run(state: Arc<IndexerState>) {
             &state.config,
             &state.providers,
             state.cache.as_ref(),
+            state.ml_pipeline.clone(),
             current_ledger,
             cursor.as_deref(),
         )
@@ -85,12 +88,14 @@ pub async fn run(state: Arc<IndexerState>) {
 /// Perform a single poll iteration.
 ///
 /// Returns `(next_start_ledger, next_cursor)`.
+#[allow(clippy::too_many_arguments)]
 async fn poll_once(
     pool: &SqlitePool,
     client: &Client,
     config: &Config,
     providers: &ProviderManager,
     cache: Option<&Cache>,
+    ml_pipeline: Arc<MLPipeline>,
     start_ledger: u32,
     cursor: Option<&str>,
 ) -> crate::errors::Result<(u32, Option<String>)> {
@@ -103,6 +108,13 @@ async fn poll_once(
         config.events_per_page,
     )
     .await?;
+
+    // ─── ML Anomaly Detection ─────────────────────────────
+    if !raw_events.is_empty() && ml_pipeline::process_events(ml_pipeline, &raw_events).await {
+        warn!("Anomaly detected! Pausing indexer for safety.");
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        return Ok((start_ledger, cursor.map(String::from)));
+    }
 
     // Count every event the network returned, regardless of dedup.
     if !raw_events.is_empty() {

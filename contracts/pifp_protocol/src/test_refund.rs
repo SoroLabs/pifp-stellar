@@ -5,7 +5,7 @@ use soroban_sdk::{
     token, Address, Env, IntoVal, Vec, Val, Bytes, BytesN,
 };
 
-use crate::{PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
+use crate::{types, PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
 
 fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
     let env = Env::default();
@@ -141,7 +141,10 @@ fn test_refund_success_after_expiry() {
     assert_eq!(token.balance(&donator), 1_000i128);
     assert_eq!(token.balance(&client.address), 0i128);
     assert_eq!(client.get_balance(&project.id, &token.address), 0i128);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Expired);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Expired
+    );
 }
 
 #[test]
@@ -165,6 +168,17 @@ fn test_refund_fails_when_not_expired() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -202,6 +216,17 @@ fn test_refund_double_refund_fails() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -242,6 +267,17 @@ fn test_refund_wrong_donator_fails() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -278,6 +314,17 @@ fn test_refund_success_after_cancellation() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 
@@ -285,11 +332,17 @@ fn test_refund_success_after_cancellation() {
     token_sac.mint(&donator, &700i128);
     mock_deposit_auth(&env, &client.address, &donator, project.id, &token.address, 600i128);
     client.deposit(&project.id, &donator, &token.address, &600i128);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Active);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Active
+    );
 
     mock_auth(&env, &client.address, &creator, "cancel_project", (&creator, project.id));
     client.cancel_project(&creator, &project.id);
-    assert_eq!(client.get_project(&project.id).status, ProjectStatus::Cancelled);
+    assert_eq!(
+        client.get_project(&project.id).status,
+        ProjectStatus::Cancelled
+    );
 
     mock_auth(&env, &client.address, &donator, "refund", (&donator, project.id, &token.address));
     client.refund(&donator, &project.id, &token.address);
@@ -318,6 +371,17 @@ fn test_refund_distribution_after_cancellation_multi_donor() {
         &dummy_metadata_uri(&env),
         &deadline,
         &false,
+        &{
+            let mut ms = Vec::new(&env);
+            ms.push_back(types::Milestone {
+                label: BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: dummy_proof(&env),
+            });
+            ms
+        },
+        &0u32,
+        &Vec::new(&env),
         &0u32,
     );
 

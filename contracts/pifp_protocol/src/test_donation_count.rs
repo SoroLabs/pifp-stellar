@@ -54,8 +54,9 @@ fn test_donation_count_increments_for_same_donor_different_tokens() {
     let ctx = TestContext::new();
     let (token1, sac1) = ctx.create_token();
     let (token2, sac2) = ctx.create_token();
-    let tokens = soroban_sdk::Vec::from_array(&ctx.env, [token1.address.clone(), token2.address.clone()]);
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
+    let tokens =
+        soroban_sdk::Vec::from_array(&ctx.env, [token1.address.clone(), token2.address.clone()]);
+    let _empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
     let project = ctx.client.register_project(
         &ctx.manager,
         &tokens,
@@ -64,6 +65,17 @@ fn test_donation_count_increments_for_same_donor_different_tokens() {
         &ctx.dummy_metadata_uri(),
         &(ctx.env.ledger().timestamp() + 86400),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
     let donator = ctx.generate_address();
@@ -82,8 +94,9 @@ fn test_donation_count_complex_scenario() {
     let ctx = TestContext::new();
     let (token1, sac1) = ctx.create_token();
     let (token2, sac2) = ctx.create_token();
-    let tokens = soroban_sdk::Vec::from_array(&ctx.env, [token1.address.clone(), token2.address.clone()]);
-    let empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
+    let tokens =
+        soroban_sdk::Vec::from_array(&ctx.env, [token1.address.clone(), token2.address.clone()]);
+    let _empty_oracles: soroban_sdk::Vec<soroban_sdk::Address> = soroban_sdk::Vec::new(&ctx.env);
     let project = ctx.client.register_project(
         &ctx.manager,
         &tokens,
@@ -92,13 +105,27 @@ fn test_donation_count_complex_scenario() {
         &ctx.dummy_metadata_uri(),
         &(ctx.env.ledger().timestamp() + 86400),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
     let d1 = ctx.generate_address();
     let d2 = ctx.generate_address();
     let d3 = ctx.generate_address();
-    sac1.mint(&d1, &5_000i128); sac1.mint(&d2, &5_000i128); sac1.mint(&d3, &5_000i128);
-    sac2.mint(&d1, &5_000i128); sac2.mint(&d2, &5_000i128);
+    sac1.mint(&d1, &5_000i128);
+    sac1.mint(&d2, &5_000i128);
+    sac1.mint(&d3, &5_000i128);
+    sac2.mint(&d1, &5_000i128);
+    sac2.mint(&d2, &5_000i128);
 
     ctx.mock_deposit_auth(&d1, project.id, &token1.address, 100i128);
     ctx.client.deposit(&project.id, &d1, &token1.address, &100i128);

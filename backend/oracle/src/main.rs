@@ -1,8 +1,10 @@
 mod chain;
 mod config;
+mod dkg;
 mod errors;
 mod health;
 mod metrics;
+mod mpc;
 mod notifications;
 mod verifier;
 
@@ -10,7 +12,6 @@ use std::sync::Arc;
 
 use clap::Parser;
 use sentry::{self, protocol::Event};
-use sentry_tracing;
 use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -56,16 +57,11 @@ struct Cli {
 fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
     event.request = None;
     event.user = None;
-    event.extra = None;
-    event.tags = event
-        .tags
-        .map(|mut t| {
-            t.retain(|k, _| {
-                let key = k.to_ascii_lowercase();
-                !key.contains("auth") && !key.contains("token") && !key.contains("password")
-            });
-            t
-        });
+    event.extra.clear();
+    event.tags.retain(|k, _| {
+        let key = k.to_ascii_lowercase();
+        !key.contains("auth") && !key.contains("token") && !key.contains("password")
+    });
     event
 }
 
@@ -92,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         ))
     });
 
-    sentry::integrations::panic::register_panic_handler();
+    // sentry::integrations::panic::register_panic_handler();
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())

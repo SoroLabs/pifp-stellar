@@ -82,8 +82,28 @@ fn test_transfer_super_admin() {
 fn test_project_manager_can_register() {
     let ctx = TestContext::new();
     let tokens = soroban_sdk::Vec::from_array(&ctx.env, [ctx.generate_address()]);
-
-    let project = ctx.register_project(&tokens, 1000, false);
+    let metadata_uri = ctx.dummy_metadata_uri();
+    let project = ctx.client.register_project(
+        &ctx.manager,
+        &tokens,
+        &1000i128,
+        &ctx.dummy_proof(),
+        &metadata_uri,
+        &(ctx.env.ledger().timestamp() + 86400),
+        &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: ctx.dummy_proof().clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
+        &0u32,
+    );
     assert_eq!(project.creator, ctx.manager);
 }
 

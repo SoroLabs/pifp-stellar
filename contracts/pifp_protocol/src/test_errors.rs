@@ -41,7 +41,7 @@ fn test_verify_already_completed_project() {
     ctx.jump_time(86_400); // grace period
     ctx.client.claim_funds(&project.id);
 
-    // Second verification must fail with MilestoneAlreadyReleased or similar.
+    // Second verification must fail with MilestoneAlreadyReleased (Error #3).
     ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
@@ -81,7 +81,7 @@ fn test_register_deadline_too_far_in_future_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     let too_far_deadline = ctx.env.ledger().timestamp() + 200_000_000;
-    
+
     let proof_hash = ctx.dummy_proof();
     let metadata_uri = ctx.dummy_metadata_uri();
     let mut milestones = Vec::new(&ctx.env);
@@ -112,9 +112,17 @@ fn test_register_deadline_too_far_in_future_fails() {
         &metadata_uri,
         &too_far_deadline,
         &false,
-        &milestones,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
         &0u32,
-        &Vec::new(&ctx.env),
+        &soroban_sdk::Vec::new(&ctx.env),
         &0u32,
     );
 }

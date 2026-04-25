@@ -120,44 +120,44 @@ fn test_verify_and_release_with_fees() {
     ]);
     client.update_protocol_config(&admin, &fee_recipient, &500);
 
-    let milestones = Vec::new(&env);
-    let proof_hash = dummy_proof(&env);
-    env.mock_auths(&[
-        MockAuth {
-            address: &creator,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "register_project",
-                args: (
-                    &creator,
-                    &accepted_tokens,
-                    1000i128,
-                    &proof_hash,
-                    dummy_metadata_uri(&env),
-                    env.ledger().timestamp() + 10000,
-                    false,
-                    &milestones,
-                    0u32,
-                    Vec::new(&env),
-                    0u32,
-                ).into_val(&env),
-                sub_invocations: &[],
-            },
-        },
-    ]);
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &proof_hash,
-        &dummy_metadata_uri(&env),
-        &(env.ledger().timestamp() + 10000),
-        &false,
-        &milestones,
-        &0u32,
-        &Vec::new(&env),
-        &0u32,
-    );
+     let milestones = Vec::new(&env);
+     let proof_hash = dummy_proof(&env);
+     env.mock_auths(&[
+         MockAuth {
+             address: &creator,
+             invoke: &MockAuthInvoke {
+                 contract: &client.address,
+                 fn_name: "register_project",
+                 args: (
+                     &creator,
+                     &accepted_tokens,
+                     1000i128,
+                     &proof_hash,
+                     dummy_metadata_uri(&env),
+                     env.ledger().timestamp() + 10000,
+                     false,
+                     &milestones,
+                     0u32,
+                     Vec::new(&env),
+                     0u32,
+                 ).into_val(&env),
+                 sub_invocations: &[],
+             },
+         },
+     ]);
+     let project = client.register_project(
+         &creator,
+         &accepted_tokens,
+         &1000,
+         &proof_hash,
+         &dummy_metadata_uri(&env),
+         &(env.ledger().timestamp() + 10000),
+         &false,
+         &milestones,
+         &0u32,
+         &Vec::new(&env),
+         &0u32,
+     );
 
     // Deposit 1000 tokens
     token_sac.mint(&donor, &1000);
@@ -237,6 +237,17 @@ fn test_verify_and_release_zero_fee() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 

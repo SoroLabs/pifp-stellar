@@ -34,6 +34,9 @@ sha2 = "0.11"
 async-trait = "0.1"
 prometheus = { version = "0.14", features = ["process"] }
 lazy_static = "1"
+sysinfo = "0.33"
+tract-onnx = "0.22"
+stellar-xdr = { version = "22.0.0", features = ["std"] }
 governor = { version = "0.10", features = ["dashmap"] }
 dashmap = "6"
 # Sentry error tracking

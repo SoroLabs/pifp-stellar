@@ -62,7 +62,10 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
     (env, client, admin, oracle, manager)
 }
 
-fn create_token(env: &Env, admin: &Address) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
+fn create_token(
+    env: &Env,
+    admin: &Address,
+) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
     let addr = env.register_stellar_asset_contract_v2(admin.clone());
     (
         token::Client::new(env, &addr.address()),
@@ -70,12 +73,18 @@ fn create_token(env: &Env, admin: &Address) -> (token::Client<'static>, token::S
     )
 }
 
-fn register(env: &Env, client: &PifpProtocolClient, manager: &Address, token_addr: &Address, goal: i128) -> u64 {
+fn register(
+    env: &Env,
+    client: &PifpProtocolClient,
+    manager: &Address,
+    token_addr: &Address,
+    goal: i128,
+) -> u64 {
     let tokens = soroban_sdk::vec![env, token_addr.clone()];
     let deadline = env.ledger().timestamp() + 86_400;
     let proof = BytesN::from_array(env, &[0xabu8; 32]);
     let uri = Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
-    
+
     let milestones = Vec::new(env);
     env.mock_auths(&[
         MockAuth {
@@ -101,7 +110,6 @@ fn register(env: &Env, client: &PifpProtocolClient, manager: &Address, token_add
         },
     ]);
     client.register_project(manager, &tokens, &goal, &proof, &uri, &deadline, &false, &milestones, &0u32, &Vec::new(env), &0u32).id
-}
 
 #[test]
 fn test_batch_deposit_funds_multiple_projects() {
@@ -119,8 +127,16 @@ fn test_batch_deposit_funds_multiple_projects() {
 
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
-        DepositRequest { project_id: pid2, token: tok2.address.clone(), amount: 800 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
+        DepositRequest {
+            project_id: pid2,
+            token: tok2.address.clone(),
+            amount: 800
+        },
     ];
 
     env.mock_auths(&[
@@ -170,8 +186,16 @@ fn test_batch_deposit_reverts_on_invalid_amount() {
     // Second entry has amount=0 — should panic and revert the whole tx.
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
-        DepositRequest { project_id: pid2, token: tok2.address.clone(), amount: 0 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
+        DepositRequest {
+            project_id: pid2,
+            token: tok2.address.clone(),
+            amount: 0
+        },
     ];
 
     env.mock_auths(&[
@@ -225,7 +249,11 @@ fn test_batch_deposit_blocked_when_paused() {
 
     let deposits = soroban_sdk::vec![
         &env,
-        DepositRequest { project_id: pid1, token: tok1.address.clone(), amount: 500 },
+        DepositRequest {
+            project_id: pid1,
+            token: tok1.address.clone(),
+            amount: 500
+        },
     ];
     env.mock_auths(&[
         MockAuth {

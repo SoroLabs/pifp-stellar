@@ -15,14 +15,14 @@ use soroban_sdk::contracttype;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum Category {
-    Education   = 1,
-    Health      = 2,
+    Education = 1,
+    Health = 2,
     Environment = 4,
     Humanitarian = 8,
     Infrastructure = 16,
-    Technology  = 32,
-    Arts        = 64,
-    Research    = 128,
+    Technology = 32,
+    Arts = 64,
+    Research = 128,
 }
 
 impl Category {

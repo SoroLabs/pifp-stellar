@@ -1,3 +1,4 @@
+#![allow(dead_code, unused)]
 //! # Storage
 //!
 //! Provides typed helpers over Soroban's two storage tiers used by PIFP:
@@ -32,8 +33,8 @@ use soroban_sdk::{contracttype, panic_with_error, Address, Env, Vec};
 
 use crate::errors::Error;
 use crate::types::{
-    DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
-    ProjectState, ProtocolConfig, TokenBalance,
+    OracleAgreement, Project, ProjectBalances, ProjectConfig, ProjectState, ProtocolConfig,
+    TokenBalance,
 };
 
 // ── TTL Constants ────────────────────────────────────────────────────

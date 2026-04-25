@@ -38,6 +38,8 @@ pub struct Config {
     pub cache_ttl_active_projects_count_secs: u64,
     /// Optional Sentry DSN for error tracking
     pub sentry_dsn: Option<String>,
+    /// Optional API rate limit (requests per minute)
+    pub api_rate_limit: Option<u32>,
 }
 
 impl Config {
@@ -108,6 +110,9 @@ impl Config {
                     IndexerError::Config("Invalid CACHE_TTL_ACTIVE_PROJECTS_COUNT_SECS".to_string())
                 })?,
             sentry_dsn: env_var("SENTRY_DSN").ok(),
+            api_rate_limit: std::env::var("API_RATE_LIMIT")
+                .ok()
+                .and_then(|v| v.parse().ok()),
         })
     }
 }
