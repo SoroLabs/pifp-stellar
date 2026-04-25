@@ -135,6 +135,16 @@ cd backend/indexer
 cargo run
 ```
 
+#### Execution Engine
+
+The execution engine watches live pool snapshots over WebSocket, searches for
+profitable multi-hop routes with Bellman-Ford, and produces a fee-bump plan for
+next-ledger submission:
+
+```bash
+cargo run -p pifp-execution-engine -- --snapshot-file path/to/snapshots.json
+```
+
 ### Database Backup & Restore
 
 Automated backup system for the indexer database with support for AWS S3 and Google Cloud Storage:
