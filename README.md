@@ -145,6 +145,16 @@ next-ledger submission:
 cargo run -p pifp-execution-engine -- --snapshot-file path/to/snapshots.json
 ```
 
+#### Formal Verification
+
+Before an upgrade is deployed, the formal verifier can symbolically inspect the
+proposed Soroban WASM and reject binaries that violate the protocol invariant
+profile:
+
+```bash
+cargo run -p pifp-formal-verifier -- --wasm target/wasm32-unknown-unknown/release/pifp_protocol.wasm
+```
+
 ### Database Backup & Restore
 
 Automated backup system for the indexer database with support for AWS S3 and Google Cloud Storage:
