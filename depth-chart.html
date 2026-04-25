@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Performance Depth Chart</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background: #111111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #depthChart {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        label {
+            font-size: 12px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        select, button {
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        button:hover {
+            background: #2a2a2a;
+            border-color: #555;
+        }
+        
+        .performance-stats {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: monospace;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Decentralized Exchange Depth Chart</h1>
+    
+    <div class="chart-container">
+        <canvas id="depthChart"></canvas>
+        <div class="performance-stats" id="perfStats">
+            FPS: <span id="fps">0</span> | 
+            Render: <span id="renderTime">0</span>ms | 
+            Mouse: <span id="mouseLatency">0</span>ms
+        </div>
+    </div>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="scaleType">Scale:</label>
+            <select id="scaleType">
+                <option value="linear">Linear</option>
+                <option value="logarithmic">Logarithmic</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label for="dataPoints">Data Points:</label>
+            <select id="dataPoints">
+                <option value="100">100</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="5000">5000</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <button id="toggleAnimation">Toggle Animation</button>
+            <button id="regenerateData">Regenerate Data</button>
+        </div>
+    </div>
+    
+    <script src="depth-chart.js"></script>
+</body>
+</html>
