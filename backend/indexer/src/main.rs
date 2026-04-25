@@ -163,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/projects", get(api::get_projects))
         .route("/projects/search", get(api::search_projects))
         .route("/projects/:id/history", get(api::get_project_history_paged))
+        .route("/projects/:id/donors", get(api::get_project_donors))
         .route("/projects/top", get(api::get_top_projects))
         .route(
             "/projects/active/count",

@@ -76,6 +76,19 @@ pub struct HistoryQuery {
     pub offset: Option<i64>,
 }
 
+#[derive(Deserialize)]
+pub struct DonorsQuery {
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct DonorsResponse {
+    pub project_id: String,
+    pub total_donors: i64,
+    pub donors: Vec<db::DonorRecord>,
+}
+
 #[derive(Serialize)]
 pub struct ProjectsResponse {
     pub count: usize,
@@ -182,6 +195,46 @@ pub async fn get_project_history_paged(
                 .into_response()
         }
         Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!(ErrorResponse {
+                error: e.to_string()
+            })),
+        )
+            .into_response(),
+    }
+}
+
+/// `GET /projects/:id/donors`
+///
+/// Returns paginated list of donors for a specific project.
+/// Donors are sorted by total donated amount (descending), then by first donation timestamp (ascending).
+pub async fn get_project_donors(
+    State(state): State<Arc<ApiState>>,
+    Path(project_id): Path<String>,
+    Query(query): Query<DonorsQuery>,
+) -> impl IntoResponse {
+    let limit = query.limit.unwrap_or(20).clamp(1, 100);
+    let offset = query.offset.unwrap_or(0).max(0);
+
+    // Get total count and donors in parallel for better performance
+    let (total_count_result, donors_result) = tokio::join!(
+        db::get_project_donors_count(&state.pool, &project_id),
+        db::get_project_donors(&state.pool, &project_id, limit, offset)
+    );
+
+    match (total_count_result, donors_result) {
+        (Ok(total_donors), Ok(donors)) => {
+            (
+                StatusCode::OK,
+                Json(DonorsResponse {
+                    project_id,
+                    total_donors,
+                    donors,
+                }),
+            )
+                .into_response()
+        }
+        (Err(e), _) | (_, Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!(ErrorResponse {
                 error: e.to_string()
