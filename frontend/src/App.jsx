@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import PeerMesh from './components/PeerMesh.jsx'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -146,6 +147,8 @@ function App() {
           </select>
         </label>
       </section>
+
+      <PeerMesh />
 
       <section className="results" aria-live="polite">
         <div className="results-bar">

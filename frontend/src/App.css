@@ -150,6 +150,98 @@ td {
   }
 }
 
+.mesh-panel {
+  padding: 1rem;
+  border: 1px solid #dce5ea;
+  border-radius: 18px;
+  background: #f9fcfd;
+  display: grid;
+  gap: 1rem;
+}
+
+.mesh-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mesh-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.mesh-stats {
+  text-align: right;
+  min-width: 140px;
+}
+
+.mesh-stats strong {
+  display: block;
+  font-size: 1.4rem;
+  color: #1f5868;
+}
+
+.mesh-block {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.mesh-card {
+  padding: 1rem;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 36, 48, 0.04);
+}
+
+.mesh-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.mesh-card code {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.88rem;
+  background: #eef6f9;
+  padding: 0.75rem;
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mesh-card ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.mesh-card li {
+  margin-bottom: 0.35rem;
+}
+
+.mesh-log,
+.mesh-messages {
+  padding: 1rem;
+  border-radius: 16px;
+  background: #ffffff;
+  min-height: 8rem;
+}
+
+.mesh-log pre {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #1f5665;
+  line-height: 1.45;
+  max-height: 240px;
+  overflow: auto;
+}
+
+@media (max-width: 840px) {
+  .mesh-block {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .dashboard {
     width: calc(100% - 1rem);
@@ -158,7 +250,8 @@ td {
 
   .hero,
   .filters,
-  .results {
+  .results,
+  .mesh-panel {
     border-radius: 14px;
   }
 
