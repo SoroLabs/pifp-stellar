@@ -3,10 +3,13 @@ mod config;
 mod dkg;
 mod errors;
 mod health;
+mod mempool;
 mod metrics;
 mod mpc;
 mod notifications;
+mod tss;
 mod verifier;
+mod wasm_debug;
 
 use std::sync::Arc;
 
