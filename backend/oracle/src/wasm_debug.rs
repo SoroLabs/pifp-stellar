@@ -297,11 +297,7 @@ impl ReplayEngine {
 
     /// Jump to a specific snapshot by its sequential index.
     pub fn goto(&mut self, index: u64) -> Option<&ExecutionSnapshot> {
-        let pos = self
-            .report
-            .trace
-            .iter()
-            .position(|s| s.index == index)?;
+        let pos = self.report.trace.iter().position(|s| s.index == index)?;
         self.cursor = pos;
         self.report.trace.get(pos)
     }

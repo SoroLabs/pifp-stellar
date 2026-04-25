@@ -223,9 +223,7 @@ impl Handler<ProcessBatch> for EventStreamWorker {
 
         info!(
             partition = self.partition_idx,
-            count,
-            last_ledger,
-            "batch processed"
+            count, last_ledger, "batch processed"
         );
 
         Ok(ProcessedBatch {
@@ -287,10 +285,7 @@ impl Actor for BrokerRouter {
     type Context = Context<Self>;
 
     fn started(&mut self, _ctx: &mut Self::Context) {
-        info!(
-            partitions = self.num_partitions,
-            "BrokerRouter started"
-        );
+        info!(partitions = self.num_partitions, "BrokerRouter started");
     }
 }
 
@@ -374,10 +369,7 @@ impl Handler<RespawnWorker> for EventSupervisor {
         let partition = msg.partition;
         let resume_ledger = self.checkpoint.load(partition);
 
-        info!(
-            partition,
-            resume_ledger, "Supervisor: respawning worker"
-        );
+        info!(partition, resume_ledger, "Supervisor: respawning worker");
 
         let checkpoint = self.checkpoint.clone();
         let new_worker = EventStreamWorker::new(partition, checkpoint);
@@ -482,8 +474,7 @@ mod tests {
         checkpoint.save(0, 99);
 
         let worker = EventStreamWorker::new(0, checkpoint.clone()).start();
-        let mut supervisor =
-            EventSupervisor::new(vec![worker], checkpoint.clone(), 1);
+        let mut supervisor = EventSupervisor::new(vec![worker], checkpoint.clone(), 1);
 
         // Simulate respawn: replace the worker with a fresh one.
         let new_worker = EventStreamWorker::new(0, checkpoint.clone());

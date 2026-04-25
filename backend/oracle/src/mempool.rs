@@ -249,7 +249,8 @@ impl LockFreeMempool {
             self.map.remove(&k);
         }
         if count > 0 {
-            self.total_evicted.fetch_add(count as u64, Ordering::Relaxed);
+            self.total_evicted
+                .fetch_add(count as u64, Ordering::Relaxed);
             info!(evicted = count, "mempool eviction pass complete");
         }
         count

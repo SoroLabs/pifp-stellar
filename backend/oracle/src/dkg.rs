@@ -101,9 +101,7 @@ impl DkgProtocol {
         info!("Node {} starting DKG Round 1", self.node_id);
 
         // Generate t random scalar coefficients.
-        self.secret_poly = (0..self.threshold)
-            .map(|_| random_scalar())
-            .collect();
+        self.secret_poly = (0..self.threshold).map(|_| random_scalar()).collect();
 
         // Compute Feldman commitments C_j = a_j * G.
         self.commitments = self
@@ -252,10 +250,7 @@ impl DkgProtocol {
                 |acc, p| acc + p,
             );
 
-        info!(
-            "Node {} finalized DKG — group pubkey derived",
-            self.node_id
-        );
+        info!("Node {} finalized DKG — group pubkey derived", self.node_id);
         self.state = DkgState::Finalized;
         Some((key_share, group_pubkey))
     }
@@ -297,8 +292,7 @@ fn random_scalar() -> Scalar {
 fn scalar_from_u32(n: u32) -> Scalar {
     let mut bytes = [0u8; 32];
     bytes[28..32].copy_from_slice(&n.to_be_bytes());
-    Scalar::from_repr(bytes.into())
-        .unwrap_or(Scalar::ZERO)
+    Scalar::from_repr(bytes.into()).unwrap_or(Scalar::ZERO)
 }
 
 fn scalar_to_bytes(s: &Scalar) -> [u8; 32] {
@@ -393,9 +387,7 @@ mod tests {
     #[test]
     fn test_full_dkg_2_of_3() {
         // Simulate a 2-of-3 DKG between three nodes.
-        let mut nodes: Vec<DkgProtocol> = (1..=3)
-            .map(|id| DkgProtocol::new(id, 2, 3))
-            .collect();
+        let mut nodes: Vec<DkgProtocol> = (1..=3).map(|id| DkgProtocol::new(id, 2, 3)).collect();
 
         // Round 1: each node broadcasts commitments.
         let r1_msgs: Vec<DkgMessage> = nodes.iter_mut().map(|n| n.start_round1()).collect();
@@ -412,8 +404,7 @@ mod tests {
         }
 
         // Round 2: each node sends shares.
-        let r2_msgs: Vec<Vec<DkgMessage>> =
-            nodes.iter_mut().map(|n| n.start_round2()).collect();
+        let r2_msgs: Vec<Vec<DkgMessage>> = nodes.iter_mut().map(|n| n.start_round2()).collect();
 
         // Distribute Round-2 messages.
         for msgs in &r2_msgs {
