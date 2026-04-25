@@ -81,6 +81,7 @@ In parallel to the background indexing daemon, an Axum web server runs to expose
 - `GET /health` : Returns server operational status and application version.
 - `GET /events` : List all indexed events across the entire protocol.
 - `GET /projects/:id/events` : Query historical events specifically generated for `project_id`.
+- `GET /projects/:id/donors?limit=20&offset=0` : Get paginated list of donors for a specific project, sorted by total donated amount.
 - `GET /projects/top?limit=10` : Top funded projects ranked by indexed `project_funded` events (cached when Redis is configured).
 - `GET /projects/active/count` : Current active projects count inferred from latest status events (`project_active`, `project_verified`, `project_expired`, `project_cancelled`) (cached when Redis is configured).
 
@@ -88,6 +89,37 @@ In parallel to the background indexing daemon, an Axum web server runs to expose
 - `POST /admin/quorum` : Update the global quorum threshold (expects a `{ threshold: u32 }` JSON payload).
 - `POST /projects/:id/vote` : Submit an oracle vote (expects a `{ oracle: string, proof_hash: string }` JSON payload).
 - `GET /projects/:id/quorum` : Returns the active vote count vs existing threshold for the given project.
+
+### Donors Endpoint Details
+
+The `GET /projects/:id/donors` endpoint provides paginated access to donor information for projects with potentially thousands of participants.
+
+**Query Parameters:**
+- `limit` (optional): Number of donors per page (default: 20, max: 100)
+- `offset` (optional): Number of donors to skip (default: 0)
+
+**Response Format:**
+```json
+{
+  "project_id": "project_123",
+  "total_donors": 1234,
+  "donors": [
+    {
+      "address": "donor_address_1",
+      "total_donated": "5000",
+      "donation_count": 3,
+      "first_donation_ledger": 12345,
+      "last_donation_ledger": 12567,
+      "first_donation_timestamp": 1640995200,
+      "last_donation_timestamp": 1641081600
+    }
+  ]
+}
+```
+
+**Sorting:** Donors are sorted by total donated amount (descending), then by first donation timestamp (ascending) for consistent pagination.
+
+**Performance:** The endpoint uses efficient SQL aggregation queries and supports proper pagination for projects with thousands of donors.
 
 **Webhook Endpoints:**
 - `POST /webhooks` : Register webhook URL + event subscriptions + secret (`{ "url": "...", "secret": "...", "event_types": ["project_active"] }`).

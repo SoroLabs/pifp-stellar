@@ -4,8 +4,10 @@
 //! PIFP contract events and persists them to SQLite.  Simultaneously
 //! exposes a small Axum REST API for frontend / admin consumption.
 
+pub(crate) mod actor;
 pub(crate) mod api;
 pub(crate) mod atomic_swap;
+pub(crate) mod bft_consensus;
 pub(crate) mod cache;
 pub(crate) mod config;
 pub(crate) mod db;
@@ -18,6 +20,7 @@ pub(crate) mod ml_pipeline;
 pub(crate) mod profiles;
 pub(crate) mod rate_limit;
 pub(crate) mod rpc;
+pub(crate) mod btree_storage;
 pub(crate) mod webhook;
 
 #[cfg(test)]
@@ -163,6 +166,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/projects", get(api::get_projects))
         .route("/projects/search", get(api::search_projects))
         .route("/projects/:id/history", get(api::get_project_history_paged))
+        .route("/projects/:id/donors", get(api::get_project_donors))
         .route("/projects/top", get(api::get_top_projects))
         .route(
             "/projects/active/count",

@@ -4,6 +4,13 @@
 use crate::types::ProtocolConfig;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol};
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ContractUpgraded {
+    pub new_wasm_hash: BytesN<32>,
+    pub upgraded_by: Address,
+}
+
 const PROJECT_CREATED: Symbol = symbol_short!("created");
 const FUNDS_RELEASED: Symbol = symbol_short!("released");
 const MILESTONE_VERIFIED: Symbol = symbol_short!("m_verify");
@@ -404,4 +411,9 @@ pub fn emit_oracle_removed(env: &Env, project_id: u64, oracle: Address) {
 pub fn emit_milestone_verified(env: &Env, project_id: u64, milestone_index: u32, bps: u32) {
     let topics = (MILESTONE_VERIFIED, project_id, milestone_index);
     env.events().publish(topics, bps);
+}
+
+pub fn emit_contract_upgraded(env: &Env, new_wasm_hash: BytesN<32>, upgraded_by: Address) {
+    let topics = (symbol_short!("upgraded"),);
+    env.events().publish(topics, ContractUpgraded { new_wasm_hash, upgraded_by });
 }
