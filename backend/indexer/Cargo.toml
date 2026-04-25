@@ -43,6 +43,8 @@ dashmap = "6"
 sentry = { version = "0.34", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
 sentry-tracing = "0.34"
 tower = "0.5"
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
