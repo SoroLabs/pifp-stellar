@@ -6,6 +6,7 @@ members = [
   "backend/oracle",
   "backend/execution-engine",
   "backend/formal-verifier",
+  "backend/dag-resolver",
 ]
 
 [profile.release]

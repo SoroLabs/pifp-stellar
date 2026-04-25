@@ -155,6 +155,15 @@ profile:
 cargo run -p pifp-formal-verifier -- --wasm target/wasm32-unknown-unknown/release/pifp_protocol.wasm
 ```
 
+#### DAG Resolution
+
+Incoming transaction intents can be dependency-analyzed and partitioned into
+parallel Soroban submission layers:
+
+```bash
+cargo run -p pifp-dag-resolver -- --intents intents.json
+```
+
 ### Database Backup & Restore
 
 Automated backup system for the indexer database with support for AWS S3 and Google Cloud Storage:
