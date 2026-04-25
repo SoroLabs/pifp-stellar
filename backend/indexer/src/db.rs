@@ -642,6 +642,83 @@ pub async fn get_project_history(
     Ok(rows)
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct DonorRecord {
+    pub address: String,
+    pub total_donated: String,
+    pub donation_count: i64,
+    pub first_donation_ledger: i64,
+    pub last_donation_ledger: i64,
+    pub first_donation_timestamp: i64,
+    pub last_donation_timestamp: i64,
+}
+
+/// Fetch donors for a specific project with pagination and consistent sorting.
+/// Returns donors sorted by total donated amount (descending), then by first donation timestamp (ascending).
+pub async fn get_project_donors(
+    pool: &SqlitePool,
+    project_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<DonorRecord>> {
+    let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64)>(
+        r#"
+        SELECT 
+            actor as address,
+            COALESCE(SUM(CAST(amount AS INTEGER)), 0) as total_donated,
+            COUNT(*) as donation_count,
+            MIN(ledger) as first_donation_ledger,
+            MAX(ledger) as last_donation_ledger,
+            MIN(timestamp) as first_donation_timestamp,
+            MAX(timestamp) as last_donation_timestamp
+        FROM events
+        WHERE project_id = ?1 
+          AND event_type = 'project_funded'
+          AND actor IS NOT NULL
+        GROUP BY actor
+        ORDER BY total_donated DESC, first_donation_timestamp ASC, address ASC
+        LIMIT ?2 OFFSET ?3
+        "#,
+    )
+    .bind(project_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+    
+    // Convert to DonorRecord structs
+    let donors = rows.into_iter().map(|(address, total_donated, donation_count, first_donation_ledger, last_donation_ledger, first_donation_timestamp, last_donation_timestamp)| {
+        DonorRecord {
+            address,
+            total_donated: total_donated.to_string(),
+            donation_count,
+            first_donation_ledger,
+            last_donation_ledger,
+            first_donation_timestamp,
+            last_donation_timestamp,
+        }
+    }).collect();
+    
+    Ok(donors)
+}
+
+/// Get the total count of unique donors for a specific project.
+pub async fn get_project_donors_count(pool: &SqlitePool, project_id: &str) -> Result<i64> {
+    let row: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(DISTINCT actor)
+        FROM events
+        WHERE project_id = ?1 
+          AND event_type = 'project_funded'
+          AND actor IS NOT NULL
+        "#,
+    )
+    .bind(project_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
 // ─────────────────────────────────────────────────────────
 // Quorum management
 // ─────────────────────────────────────────────────────────
@@ -1365,5 +1442,154 @@ mod tests {
         let results = search_projects(&pool, "solar", 20, 0).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].project_id, "2"); // title match ranks first
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Insert funding events for different donors
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("1000")
+            .bind(100i64)
+            .bind(1000i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_2")
+            .bind("500")
+            .bind(101i64)
+            .bind(1001i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Second donation from donor_1
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("300")
+            .bind(102i64)
+            .bind(1002i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let donors = get_project_donors(&pool, project_id, 10, 0).await.unwrap();
+        assert_eq!(donors.len(), 2);
+
+        // Should be sorted by total donated amount (descending)
+        assert_eq!(donors[0].address, "donor_1");
+        assert_eq!(donors[0].total_donated, "1300");
+        assert_eq!(donors[0].donation_count, 2);
+        assert_eq!(donors[0].first_donation_ledger, 100);
+        assert_eq!(donors[0].last_donation_ledger, 102);
+
+        assert_eq!(donors[1].address, "donor_2");
+        assert_eq!(donors[1].total_donated, "500");
+        assert_eq!(donors[1].donation_count, 1);
+        assert_eq!(donors[1].first_donation_ledger, 101);
+        assert_eq!(donors[1].last_donation_ledger, 101);
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors_count() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Initially no donors
+        let count = get_project_donors_count(&pool, project_id).await.unwrap();
+        assert_eq!(count, 0);
+
+        // Add some funding events
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("1000")
+            .bind(100i64)
+            .bind(1000i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_2")
+            .bind("500")
+            .bind(101i64)
+            .bind(1001i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Multiple donations from same donor should count as 1
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("300")
+            .bind(102i64)
+            .bind(1002i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let count = get_project_donors_count(&pool, project_id).await.unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors_pagination() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Add multiple donors
+        for i in 1..=5 {
+            sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+                .bind("project_funded")
+                .bind(project_id)
+                .bind(format!("donor_{}", i))
+                .bind((i * 100).to_string())
+                .bind(i as i64)
+                .bind(i as i64)
+                .bind("contract_1")
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        // Test first page
+        let donors_page1 = get_project_donors(&pool, project_id, 2, 0).await.unwrap();
+        assert_eq!(donors_page1.len(), 2);
+        assert_eq!(donors_page1[0].address, "donor_5"); // Highest amount
+        assert_eq!(donors_page1[1].address, "donor_4");
+
+        // Test second page
+        let donors_page2 = get_project_donors(&pool, project_id, 2, 2).await.unwrap();
+        assert_eq!(donors_page2.len(), 2);
+        assert_eq!(donors_page2[0].address, "donor_3");
+        assert_eq!(donors_page2[1].address, "donor_2");
+
+        // Test third page
+        let donors_page3 = get_project_donors(&pool, project_id, 2, 4).await.unwrap();
+        assert_eq!(donors_page3.len(), 1);
+        assert_eq!(donors_page3[0].address, "donor_1"); // Lowest amount
     }
 }
