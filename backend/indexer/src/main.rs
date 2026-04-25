@@ -5,6 +5,7 @@
 //! exposes a small Axum REST API for frontend / admin consumption.
 
 pub(crate) mod api;
+pub(crate) mod atomic_swap;
 pub(crate) mod cache;
 pub(crate) mod config;
 pub(crate) mod db;
