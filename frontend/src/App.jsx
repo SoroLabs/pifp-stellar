@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import { NetworkDashboard } from './components/NetworkDashboard'
+import { L2Wallet } from './components/L2Wallet'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -109,6 +111,18 @@ function App() {
           onClick={() => setActiveTab('ipfs')}
         >
           IPFS Storage
+        </button>
+        <button
+          className={activeTab === 'l2wallet' ? 'active' : ''}
+          onClick={() => setActiveTab('l2wallet')}
+        >
+          L2 Wallet
+        </button>
+        <button
+          className={activeTab === 'network' ? 'active' : ''}
+          onClick={() => setActiveTab('network')}
+        >
+          Network
         </button>
       </nav>
 
@@ -225,6 +239,8 @@ function App() {
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+      {activeTab === 'l2wallet' && <L2Wallet />}
+      {activeTab === 'network' && <NetworkDashboard />}
     </main>
   )
 }
