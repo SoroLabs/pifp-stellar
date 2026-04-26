@@ -21,7 +21,10 @@ struct HealthResponse {
 }
 
 #[derive(Clone)]
-pub struct ServerState;
+pub struct ServerState {
+    pub bridge: Arc<crate::bridge_api::BridgeState>,
+    pub ipfs: Arc<crate::ipfs_api::IpfsState>,
+}
 
 async fn health(State(_state): State<Arc<ServerState>>) -> impl IntoResponse {
     Json(HealthResponse {
@@ -41,16 +44,25 @@ async fn metrics_handler() -> impl IntoResponse {
 }
 
 /// Start the health and metrics HTTP server on the given port.
-pub async fn serve(port: u16) -> anyhow::Result<()> {
-    let state = Arc::new(ServerState);
+pub async fn serve(
+    port: u16,
+    bridge_state: Arc<crate::bridge_api::BridgeState>,
+    ipfs_state: Arc<crate::ipfs_api::IpfsState>,
+) -> anyhow::Result<()> {
+    let state = Arc::new(ServerState {
+        bridge: bridge_state.clone(),
+        ipfs: ipfs_state.clone(),
+    });
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
+        .nest("/api", crate::bridge_api::router(bridge_state))
+        .nest("/api", crate::ipfs_api::router(ipfs_state))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
-    info!("Health server listening on http://{addr}");
+    info!("Oracle API server listening on http://{addr}");
 
     let listener = TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
@@ -64,10 +76,23 @@ mod tests {
     use tower::util::ServiceExt;
 
     fn test_app() -> Router {
-        let state = Arc::new(ServerState);
+        let bridge_state = Arc::new(crate::bridge_api::BridgeState::new());
+        let ipfs_state = Arc::new(crate::ipfs_api::IpfsState {
+            config: crate::ipfs::IpfsConfig {
+                pinata_api_key: None,
+                pinata_api_secret: None,
+                web3_storage_token: None,
+            },
+        });
+        let state = Arc::new(ServerState {
+            bridge: bridge_state.clone(),
+            ipfs: ipfs_state.clone(),
+        });
         Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics_handler))
+            .nest("/api", crate::bridge_api::router(bridge_state))
+            .nest("/api", crate::ipfs_api::router(ipfs_state))
             .with_state(state)
     }
 
