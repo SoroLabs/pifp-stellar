@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import NodeEditor from './components/NodeEditor'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -27,6 +28,8 @@ function App() {
   const [projects, setProjects] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const [currentView, setCurrentView] = useState('dashboard')
 
   const [status, setStatus] = useState('all')
   const [creator, setCreator] = useState('')
@@ -92,9 +95,29 @@ function App() {
         <p className="subhead">
           Live view of indexed projects with quick filters and sorting controls.
         </p>
+        <div style={{ marginTop: '20px' }}>
+          <button 
+            onClick={() => setCurrentView('dashboard')}
+            style={{ padding: '8px 16px', marginRight: '10px', background: currentView === 'dashboard' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Dashboard
+          </button>
+          <button 
+            onClick={() => setCurrentView('node-editor')}
+            style={{ padding: '8px 16px', background: currentView === 'node-editor' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Node Editor
+          </button>
+        </div>
       </header>
 
-      <section className="filters" aria-label="Project filters">
+      {currentView === 'node-editor' ? (
+        <section style={{ padding: '20px', background: '#121212', borderRadius: '8px', marginTop: '20px' }}>
+          <NodeEditor />
+        </section>
+      ) : (
+        <>
+          <section className="filters" aria-label="Project filters">
         <label>
           <span>Status</span>
           <select value={status} onChange={(e) => setStatus(e.target.value)}>
@@ -192,6 +215,7 @@ function App() {
           <p className="state">No projects matched current filters.</p>
         )}
       </section>
+      )}
     </main>
   )
 }
