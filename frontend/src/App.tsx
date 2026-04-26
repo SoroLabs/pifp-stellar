@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import { OTCInterface } from './components/OTCInterface'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -13,7 +14,7 @@ const SORT_FIELDS = [
   { value: 'status', label: 'Status' },
 ]
 
-function compareBigIntLike(a, b) {
+function compareBigIntLike(a: any, b: any) {
   try {
     const aBig = BigInt(a ?? 0)
     const bBig = BigInt(b ?? 0)
@@ -27,7 +28,7 @@ function compareBigIntLike(a, b) {
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [projects, setProjects] = useState([])
+  const [projects, setProjects] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -36,6 +37,11 @@ function App() {
   const [category, setCategory] = useState('')
   const [sortField, setSortField] = useState('created_ledger')
   const [sortDirection, setSortDirection] = useState('desc')
+
+  // OTC States
+  const [roomId, setRoomId] = useState('')
+  const [isInitiator, setIsInitiator] = useState(true)
+  const [isJoined, setIsJoined] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -59,7 +65,7 @@ function App() {
 
         const payload = await response.json()
         setProjects(Array.isArray(payload.projects) ? payload.projects : [])
-      } catch (err) {
+      } catch (err: any) {
         if (err.name !== 'AbortError') {
           setError(err.message || 'Failed to fetch projects')
           setProjects([])
@@ -109,6 +115,12 @@ function App() {
           onClick={() => setActiveTab('ipfs')}
         >
           IPFS Storage
+        </button>
+        <button 
+          className={activeTab === 'otc' ? 'active' : ''} 
+          onClick={() => setActiveTab('otc')}
+        >
+          OTC Trade (P2P)
         </button>
       </nav>
 
@@ -225,6 +237,112 @@ function App() {
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+      
+      {activeTab === 'otc' && (
+        <div className="otc-setup-container">
+          {!isJoined ? (
+            <div className="otc-join-card">
+              <Zap size={48} color="#3b82f6" />
+              <h2>Join OTC Negotiation</h2>
+              <p>Direct peer-to-peer off-chain negotiation for Soroban assets. Secure, zero-knowledge signaling.</p>
+              <div className="join-form">
+                <input 
+                  placeholder="Enter Room ID (e.g. trade-123)" 
+                  value={roomId} 
+                  onChange={e => setRoomId(e.target.value)} 
+                />
+                <div className="role-selector">
+                    <button 
+                        className={isInitiator ? 'active' : ''} 
+                        onClick={() => setIsInitiator(true)}
+                    >Initiator</button>
+                    <button 
+                        className={!isInitiator ? 'active' : ''} 
+                        onClick={() => setIsInitiator(false)}
+                    >Receiver</button>
+                </div>
+                <button 
+                  className="join-btn"
+                  onClick={() => roomId && setIsJoined(true)}
+                >
+                  Enter Negotiation Room
+                </button>
+              </div>
+            </div>
+          ) : (
+            <OTCInterface roomId={roomId} isInitiator={isInitiator} />
+          )}
+        </div>
+      )}
+
+      <style>{`
+        .otc-setup-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 600px;
+        }
+        .otc-join-card {
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .otc-join-card h2 { margin: 0; color: white; }
+        .otc-join-card p { color: #94a3b8; font-size: 14px; }
+        .join-form {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .join-form input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .role-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .role-selector button {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .role-selector button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        .join-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .join-btn:hover { background: #2563eb; transform: translateY(-1px); }
+      `}</style>
     </main>
   )
 }

@@ -10,8 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stellar/stellar-sdk": "^15.0.1",
+    "@types/simple-peer": "^9.11.9",
+    "@types/uuid": "^10.0.0",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.11.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "simple-peer": "^9.11.1",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
