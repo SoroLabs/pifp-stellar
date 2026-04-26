@@ -14,6 +14,7 @@ mod observer;
 mod bridge_api;
 mod ipfs_api;
 mod ipfs;
+mod tx_diagnostics;
 
 use std::sync::Arc;
 
@@ -31,6 +32,7 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 use crate::config::Config;
 use crate::errors::{OracleError, Result};
 use crate::metrics::OracleMetrics;
+use crate::tx_diagnostics::TxDiagnosticsStore;
 
 const MAX_CONCURRENT_PROOFS: usize = 5;
 
@@ -109,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let metrics = Arc::new(OracleMetrics::new());
+    let diagnostics_store = Arc::new(TxDiagnosticsStore::new());
     
     // Initialize Bridge and IPFS states
     let bridge_state = Arc::new(BridgeState::new());
@@ -132,7 +135,13 @@ async fn main() -> anyhow::Result<()> {
     });
 
     if cli.serve {
-        health::serve(config.metrics_port, bridge_state, ipfs_state).await?;
+        health::serve(
+            config.metrics_port,
+            bridge_state,
+            ipfs_state,
+            diagnostics_store,
+        )
+        .await?;
         return Ok(());
     }
 
@@ -148,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
         MAX_CONCURRENT_PROOFS
     );
 
-    process_batch(tasks, config, cli.dry_run, metrics).await;
+    process_batch(tasks, config, cli.dry_run, metrics, diagnostics_store).await;
     Ok(())
 }
 
@@ -204,6 +213,7 @@ async fn process_batch(
     config: Arc<Config>,
     dry_run: bool,
     metrics: Arc<OracleMetrics>,
+    diagnostics_store: Arc<TxDiagnosticsStore>,
 ) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_PROOFS));
     let mut handles = Vec::with_capacity(tasks.len());
@@ -212,10 +222,11 @@ async fn process_batch(
         let config = Arc::clone(&config);
         let semaphore = Arc::clone(&semaphore);
         let metrics = Arc::clone(&metrics);
+        let diagnostics_store = Arc::clone(&diagnostics_store);
 
         let handle = tokio::spawn(async move {
             let _permit = semaphore.acquire().await.expect("semaphore closed");
-            process_single_proof(task, config, dry_run, metrics).await
+            process_single_proof(task, config, dry_run, metrics, diagnostics_store).await
         });
         handles.push(handle);
     }
@@ -249,6 +260,7 @@ async fn process_single_proof(
     config: Arc<Config>,
     dry_run: bool,
     metrics: Arc<OracleMetrics>,
+    diagnostics_store: Arc<TxDiagnosticsStore>,
 ) -> std::result::Result<(u64, Option<String>), (u64, String)> {
     let project_id = task.project_id;
     metrics.verifications_total.inc();
@@ -288,7 +300,9 @@ async fn process_single_proof(
 
     let tx_hash = {
         let _timer = metrics.chain_submit_duration_seconds.start_timer();
-        match chain::submit_verification(&config, project_id, proof_hash).await {
+        match chain::submit_verification(&config, project_id, proof_hash, Some(&diagnostics_store))
+            .await
+        {
             Ok(hash) => hash,
             Err(e) => {
                 metrics.verification_errors_total.inc();

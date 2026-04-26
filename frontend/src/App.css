@@ -317,3 +317,68 @@ td {
 
 .page-header h2 { margin: 0; font-size: 1.8rem; }
 .page-header p { color: #64748b; margin: 0.5rem 0 0; }
+
+.recovery-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 999;
+}
+
+.recovery-modal {
+  width: min(680px, 100%);
+  background: #ffffff;
+  border-radius: 18px;
+  border: 1px solid #dce5ea;
+  padding: 1.25rem;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.2);
+}
+
+.recovery-label {
+  margin: 0;
+  color: #a22d2d;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+
+.recovery-modal h2 {
+  margin: 0.4rem 0 0;
+  color: #1b2f3a;
+}
+
+.recovery-section {
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #edf2f5;
+}
+
+.recovery-section h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #2b4a58;
+}
+
+.recovery-section p,
+.recovery-section li {
+  color: #2f4e5a;
+}
+
+.recovery-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.recovery-actions button {
+  border: 0;
+  border-radius: 10px;
+  padding: 0.65rem 1rem;
+  background: #0f172a;
+  color: #ffffff;
+  font-weight: 600;
+}

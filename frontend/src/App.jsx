@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import { RecoveryModal } from './components/RecoveryModal'
+import {
+  fetchTxDiagnostics,
+  isLikelyTransactionError,
+  parseTxHashFromMessage,
+} from './lib/txRecovery'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -36,6 +42,54 @@ function App() {
   const [category, setCategory] = useState('')
   const [sortField, setSortField] = useState('created_ledger')
   const [sortDirection, setSortDirection] = useState('desc')
+  const [recoveryModalOpen, setRecoveryModalOpen] = useState(false)
+  const [recoveryMessage, setRecoveryMessage] = useState('')
+  const [txDiagnostics, setTxDiagnostics] = useState(null)
+
+  async function handleTransactionFailure(rawError) {
+    const message = rawError?.message || String(rawError || 'Transaction failed')
+    if (!isLikelyTransactionError(message)) return
+
+    setRecoveryMessage(message)
+    const txHash = parseTxHashFromMessage(message)
+
+    if (txHash) {
+      try {
+        const diagnostics = await fetchTxDiagnostics(txHash)
+        setTxDiagnostics(diagnostics)
+      } catch {
+        setTxDiagnostics({ tx_hash: txHash })
+      }
+    } else {
+      setTxDiagnostics(null)
+    }
+
+    setRecoveryModalOpen(true)
+  }
+
+  useEffect(() => {
+    function onGlobalError(event) {
+      const msg = event?.error?.message || event?.message
+      if (msg) {
+        void handleTransactionFailure(new Error(msg))
+      }
+    }
+
+    function onUnhandledRejection(event) {
+      const reason = event?.reason
+      if (reason) {
+        void handleTransactionFailure(reason)
+      }
+    }
+
+    window.addEventListener('error', onGlobalError)
+    window.addEventListener('unhandledrejection', onUnhandledRejection)
+
+    return () => {
+      window.removeEventListener('error', onGlobalError)
+      window.removeEventListener('unhandledrejection', onUnhandledRejection)
+    }
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -223,8 +277,15 @@ function App() {
         </section>
       )}
 
-      {activeTab === 'bridge' && <BridgeWatcher />}
+      {activeTab === 'bridge' && <BridgeWatcher onTransactionError={handleTransactionFailure} />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+
+      <RecoveryModal
+        isOpen={recoveryModalOpen}
+        diagnostics={txDiagnostics}
+        fallbackMessage={recoveryMessage}
+        onClose={() => setRecoveryModalOpen(false)}
+      />
     </main>
   )
 }
