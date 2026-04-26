@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import { OptimisticTradeUI } from './components/OptimisticTradeUI'
+import { IpfsVideoStreamer } from './components/IpfsVideoStreamer'
+import { HardwareWalletConnector } from './components/HardwareWalletConnector'
+import { SecureIframeEmbed } from './components/SecureIframeEmbed'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -109,6 +113,30 @@ function App() {
           onClick={() => setActiveTab('ipfs')}
         >
           IPFS Storage
+        </button>
+        <button 
+          className={activeTab === 'trade' ? 'active' : ''} 
+          onClick={() => setActiveTab('trade')}
+        >
+          Optimistic Trade
+        </button>
+        <button 
+          className={activeTab === 'video' ? 'active' : ''} 
+          onClick={() => setActiveTab('video')}
+        >
+          IPFS Video
+        </button>
+        <button 
+          className={activeTab === 'wallet' ? 'active' : ''} 
+          onClick={() => setActiveTab('wallet')}
+        >
+          Hardware Wallet
+        </button>
+        <button 
+          className={activeTab === 'embed' ? 'active' : ''} 
+          onClick={() => setActiveTab('embed')}
+        >
+          Embedded Dapp
         </button>
       </nav>
 
