@@ -149,6 +149,9 @@ mod tests {
             network_passphrase: String::new(),
             sentry_dsn: None,
             metrics_port: 9090,
+            foreign_rpc_url: None,
+            foreign_bridge_address: None,
+            node_id: 1,
         };
 
         // Use a CID that definitely doesn't exist

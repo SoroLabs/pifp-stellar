@@ -32,6 +32,9 @@ pub struct Config {
     /// Optional Sentry DSN for error tracking
     pub sentry_dsn: Option<String>,
 
+    /// Metrics/HTTP API port for the oracle service.
+    pub metrics_port: u16,
+
     /// Foreign chain RPC URL (e.g., Ethereum/Polygon)
     pub foreign_rpc_url: Option<String>,
 
@@ -181,6 +184,9 @@ mod tests {
             timeout_secs: 30,
             sentry_dsn: None,
             metrics_port: 9090,
+            foreign_rpc_url: None,
+            foreign_bridge_address: None,
+            node_id: 1,
         }
     }
 }

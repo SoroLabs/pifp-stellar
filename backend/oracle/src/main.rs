@@ -14,6 +14,7 @@ mod observer;
 mod bridge_api;
 mod ipfs_api;
 mod ipfs;
+mod rollup_api;
 
 use std::sync::Arc;
 
@@ -21,6 +22,7 @@ use crate::bridge_api::BridgeState;
 use crate::ipfs_api::IpfsState;
 use crate::ipfs::IpfsConfig;
 use crate::observer::BridgeObserver;
+use crate::rollup_api::RollupState;
 
 use clap::Parser;
 use sentry::{self, protocol::Event};
@@ -115,6 +117,7 @@ async fn main() -> anyhow::Result<()> {
     let ipfs_state = Arc::new(IpfsState {
         config: IpfsConfig::from_env(),
     });
+    let rollup_state = Arc::new(RollupState::new(std::time::Duration::from_secs(15)));
 
     // Start Bridge Observer in the background if configured
     let observer_config = Arc::clone(&config);
@@ -132,7 +135,8 @@ async fn main() -> anyhow::Result<()> {
     });
 
     if cli.serve {
-        health::serve(config.metrics_port, bridge_state, ipfs_state).await?;
+        rollup_state.clone().start_settlement_loop();
+        health::serve(config.metrics_port, bridge_state, ipfs_state, rollup_state).await?;
         return Ok(());
     }
 

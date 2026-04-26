@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::State,
     http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -20,13 +19,7 @@ struct HealthResponse {
     service: &'static str,
 }
 
-#[derive(Clone)]
-pub struct ServerState {
-    pub bridge: Arc<crate::bridge_api::BridgeState>,
-    pub ipfs: Arc<crate::ipfs_api::IpfsState>,
-}
-
-async fn health(State(_state): State<Arc<ServerState>>) -> impl IntoResponse {
+async fn health() -> impl IntoResponse {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -48,18 +41,14 @@ pub async fn serve(
     port: u16,
     bridge_state: Arc<crate::bridge_api::BridgeState>,
     ipfs_state: Arc<crate::ipfs_api::IpfsState>,
+    rollup_state: Arc<crate::rollup_api::RollupState>,
 ) -> anyhow::Result<()> {
-    let state = Arc::new(ServerState {
-        bridge: bridge_state.clone(),
-        ipfs: ipfs_state.clone(),
-    });
-
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
-        .nest("/api", crate::bridge_api::router(bridge_state))
-        .nest("/api", crate::ipfs_api::router(ipfs_state))
-        .with_state(state);
+        .merge(crate::bridge_api::router(bridge_state))
+        .merge(crate::ipfs_api::router(ipfs_state))
+        .merge(crate::rollup_api::router(rollup_state));
 
     let addr = format!("0.0.0.0:{port}");
     info!("Oracle API server listening on http://{addr}");
@@ -84,16 +73,13 @@ mod tests {
                 web3_storage_token: None,
             },
         });
-        let state = Arc::new(ServerState {
-            bridge: bridge_state.clone(),
-            ipfs: ipfs_state.clone(),
-        });
+        let rollup_state = Arc::new(crate::rollup_api::RollupState::new(std::time::Duration::from_secs(30)));
         Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics_handler))
-            .nest("/api", crate::bridge_api::router(bridge_state))
-            .nest("/api", crate::ipfs_api::router(ipfs_state))
-            .with_state(state)
+            .merge(crate::bridge_api::router(bridge_state))
+            .merge(crate::ipfs_api::router(ipfs_state))
+            .merge(crate::rollup_api::router(rollup_state))
     }
 
     #[tokio::test]
