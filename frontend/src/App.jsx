@@ -3,6 +3,8 @@ import './App.css'
 import NodeEditor from './components/NodeEditor'
 import Orderbook from './components/Orderbook'
 import VirtualGrid from './components/VirtualGrid'
+import CrossTabDemo from './components/CrossTabDemo'
+import { SharedStateProvider } from './context/SharedStateContext'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -90,13 +92,17 @@ function App() {
   }, [projects, sortField, sortDirection])
 
   return (
-    <main className="dashboard">
-      <header className="hero">
-        <p className="eyebrow">PIFP Stellar Indexer</p>
-        <h1>Project Discovery Dashboard</h1>
-        <p className="subhead">
-          Live view of indexed projects with quick filters and sorting controls.
-        </p>
+    <SharedStateProvider>
+      <main className="dashboard">
+        <header className="hero">
+          <p className="eyebrow">PIFP Stellar Indexer</p>
+          <h1>Project Discovery Dashboard</h1>
+          <p className="subhead">
+            Live view of indexed projects with quick filters and sorting controls.
+          </p>
+          
+          {/* Issue #236 Cross-tab Demo Panel */}
+          <CrossTabDemo />
         <div style={{ marginTop: '20px' }}>
           <button 
             onClick={() => setCurrentView('dashboard')}
@@ -237,8 +243,10 @@ function App() {
           <p className="state">No projects matched current filters.</p>
         )}
       </section>
+        </>
       )}
-    </main>
+      </main>
+    </SharedStateProvider>
   )
 }
 

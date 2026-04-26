@@ -107,7 +107,7 @@ export default function VirtualGrid() {
         ref={containerRef}
         onScroll={onScroll}
       >
-        <div style={{ height: \`\${totalHeight}px\`, position: 'relative', width: '100%' }}>
+        <div style={{ height: `${totalHeight}px`, position: 'relative', width: '100%' }}>
           {visibleRows}
         </div>
       </div>
