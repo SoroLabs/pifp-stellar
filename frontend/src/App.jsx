@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import NodeEditor from './components/NodeEditor'
 import Orderbook from './components/Orderbook'
+import VirtualGrid from './components/VirtualGrid'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -111,9 +112,15 @@ function App() {
           </button>
           <button 
             onClick={() => setCurrentView('orderbook')}
-            style={{ padding: '8px 16px', background: currentView === 'orderbook' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            style={{ padding: '8px 16px', marginRight: '10px', background: currentView === 'orderbook' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             Live Orderbook
+          </button>
+          <button 
+            onClick={() => setCurrentView('explorer')}
+            style={{ padding: '8px 16px', background: currentView === 'explorer' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Block Explorer
           </button>
         </div>
       </header>
@@ -125,6 +132,10 @@ function App() {
       ) : currentView === 'orderbook' ? (
         <section style={{ padding: '20px', display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
           <Orderbook />
+        </section>
+      ) : currentView === 'explorer' ? (
+        <section style={{ padding: '20px', display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <VirtualGrid />
         </section>
       ) : (
         <>
