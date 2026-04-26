@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { DidWallet } from './components/DidWallet'
+import { ZkProver } from './components/ZkProver'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -196,6 +197,10 @@ function App() {
 
       <section className="identity-section">
         <DidWallet />
+      </section>
+
+      <section className="identity-section">
+        <ZkProver />
       </section>
     </main>
   )

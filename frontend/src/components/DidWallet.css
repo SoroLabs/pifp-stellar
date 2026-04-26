@@ -1,14 +1,17 @@
 .did-wallet {
-  background: #ffffff;
-  border: none;
+  background: 
+    radial-gradient(1200px 220px at top left, rgba(7, 59, 76, 0.08), transparent 65%),
+    radial-gradient(700px 180px at top right, rgba(219, 84, 97, 0.08), transparent 60%),
+    #ffffff;
+  border: 1px solid #dce5ea;
   border-radius: 18px;
   padding: 1.5rem;
   color: #0f2430;
 }
 
 .did-wallet h2 {
-  margin: 0 0 1.5rem;
-  font-size: 1.4rem;
+  margin: 0.35rem 0 0.35rem;
+  font-size: 1.8rem;
   color: #0f2430;
 }
 
@@ -21,11 +24,10 @@
 }
 
 .section {
-  margin-bottom: 2rem;
+  margin-top: 1rem;
   padding: 0;
   background: transparent;
   border: none;
-  border-radius: 14px;
 }
 
 .did-wallet input,

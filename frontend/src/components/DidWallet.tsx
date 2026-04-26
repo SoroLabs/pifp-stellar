@@ -67,6 +67,7 @@ export const DidWallet: React.FC = () => {
 
     return (
         <div className="did-wallet">
+            <p className="eyebrow">Identity Management</p>
             <h2>PIFP Identity Verification</h2>
             
             <div className="section">
