@@ -1,6 +1,7 @@
 mod chain;
 mod config;
 mod dkg;
+mod did;
 mod errors;
 mod health;
 mod mempool;

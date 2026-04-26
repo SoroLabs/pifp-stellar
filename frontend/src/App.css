@@ -166,3 +166,7 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+.identity-section {
+  padding: 2rem 0;
+}

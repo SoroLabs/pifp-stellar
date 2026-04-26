@@ -1,0 +1,112 @@
+.did-wallet {
+  background: #ffffff;
+  border: none;
+  border-radius: 18px;
+  padding: 1.5rem;
+  color: #0f2430;
+}
+
+.did-wallet h2 {
+  margin: 0 0 1.5rem;
+  font-size: 1.4rem;
+  color: #0f2430;
+}
+
+.did-wallet h3 {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4f6a76;
+}
+
+.section {
+  margin-bottom: 2rem;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 14px;
+}
+
+.did-wallet input,
+.did-wallet textarea {
+  width: 100%;
+  padding: 0.62rem 0.7rem;
+  margin-bottom: 1rem;
+  border: 1px solid #bfd0d8;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: #203742;
+  font-family: inherit;
+}
+
+.did-wallet textarea {
+  height: 80px;
+  resize: vertical;
+}
+
+.did-wallet button {
+  background: #1f5868;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.7rem 1.2rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.did-wallet button:hover:not(:disabled) {
+  background: #143d49;
+}
+
+.did-wallet button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vc-display pre,
+.result pre {
+  background: #f1f5f7;
+  padding: 1rem;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+  border: 1px solid #e2e8eb;
+  color: #334e5a;
+}
+
+.field-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.field-selector label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2b4f5d;
+  cursor: pointer;
+}
+
+.field-selector input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.result pre.success {
+  border-color: #aac7d2;
+  background: #ebf5f8;
+}
+
+.result pre.error {
+  border-color: #f1c4c9;
+  background: #fdf2f3;
+  color: #8c2630;
+}

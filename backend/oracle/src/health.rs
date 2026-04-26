@@ -10,8 +10,10 @@ use axum::{
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tracing::info;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::metrics;
+use crate::did;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -47,6 +49,15 @@ pub async fn serve(port: u16) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
+        .route("/did/challenge", axum::routing::post(did::request_challenge))
+        .route("/did/issue", axum::routing::post(did::issue_credential))
+        .route("/did/verify", axum::routing::post(did::verify_credential))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers(Any),
+        )
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");

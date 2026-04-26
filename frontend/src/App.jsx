@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { DidWallet } from './components/DidWallet'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -191,6 +192,10 @@ function App() {
         {!isLoading && !error && sortedProjects.length === 0 && (
           <p className="state">No projects matched current filters.</p>
         )}
+      </section>
+
+      <section className="identity-section">
+        <DidWallet />
       </section>
     </main>
   )
