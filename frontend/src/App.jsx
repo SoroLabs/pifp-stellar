@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import NodeEditor from './components/NodeEditor'
+import Orderbook from './components/Orderbook'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -104,9 +105,15 @@ function App() {
           </button>
           <button 
             onClick={() => setCurrentView('node-editor')}
-            style={{ padding: '8px 16px', background: currentView === 'node-editor' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            style={{ padding: '8px 16px', marginRight: '10px', background: currentView === 'node-editor' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
           >
             Node Editor
+          </button>
+          <button 
+            onClick={() => setCurrentView('orderbook')}
+            style={{ padding: '8px 16px', background: currentView === 'orderbook' ? '#4caf50' : '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Live Orderbook
           </button>
         </div>
       </header>
@@ -114,6 +121,10 @@ function App() {
       {currentView === 'node-editor' ? (
         <section style={{ padding: '20px', background: '#121212', borderRadius: '8px', marginTop: '20px' }}>
           <NodeEditor />
+        </section>
+      ) : currentView === 'orderbook' ? (
+        <section style={{ padding: '20px', display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <Orderbook />
         </section>
       ) : (
         <>

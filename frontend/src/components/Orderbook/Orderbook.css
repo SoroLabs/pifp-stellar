@@ -1,0 +1,79 @@
+.orderbook-container {
+  width: 100%;
+  max-width: 600px;
+  background-color: #121212;
+  border: 1px solid #333;
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: monospace;
+  color: #fff;
+}
+
+.orderbook-container h3 {
+  padding: 15px;
+  margin: 0;
+  border-bottom: 1px solid #333;
+  background-color: #1a1a1a;
+}
+
+.orderbook-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.orderbook-table th {
+  text-align: right;
+  padding: 10px;
+  border-bottom: 1px solid #333;
+  color: #888;
+}
+
+.orderbook-table th:first-child,
+.orderbook-table td:first-child {
+  text-align: left;
+}
+
+.orderbook-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #222;
+  transition: background-color 0.4s ease-out;
+}
+
+.price-cell {
+  color: #4caf50;
+  font-weight: bold;
+}
+
+.size-cell {
+  text-align: right;
+}
+
+/* Throttling & Visual Cues via CSS animations to avoid JS reflows */
+@keyframes flashGreen {
+  0% { background-color: rgba(76, 175, 80, 0.4); }
+  100% { background-color: transparent; }
+}
+
+@keyframes flashRed {
+  0% { background-color: rgba(244, 67, 54, 0.4); }
+  100% { background-color: transparent; }
+}
+
+.flash-green td {
+  animation: flashGreen 0.5s ease-out forwards;
+}
+
+.flash-red td {
+  animation: flashRed 0.5s ease-out forwards;
+}
+
+.engine-stats {
+  padding: 10px 15px;
+  font-size: 0.8rem;
+  color: #aaa;
+  background-color: #1a1a1a;
+  border-top: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+}
