@@ -1,17 +1,22 @@
 use axum::{
     extract::{Multipart, State},
+    http::StatusCode,
     routing::post,
     Json, Router,
 };
 use serde::Serialize;
 use std::sync::Arc;
 use crate::ipfs::{pin_file, IpfsConfig};
-use crate::errors::Result;
 
 #[derive(Serialize)]
 pub struct UploadResponse {
     pub cid: String,
     pub status: String,
+}
+
+#[derive(Serialize)]
+pub struct UploadErrorResponse {
+    pub error: String,
 }
 
 pub struct IpfsState {
@@ -27,23 +32,57 @@ pub fn router(state: Arc<IpfsState>) -> Router {
 async fn upload_file(
     State(state): State<Arc<IpfsState>>,
     mut multipart: Multipart,
-) -> Result<Json<UploadResponse>> {
+) -> std::result::Result<Json<UploadResponse>, (StatusCode, Json<UploadErrorResponse>)> {
     let mut file_data = Vec::new();
 
-    while let Some(field) = multipart.next_field().await.map_err(|e| crate::errors::OracleError::Network(format!("Multipart error: {}", e)))? {
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(UploadErrorResponse {
+                    error: format!("Multipart error: {e}"),
+                }),
+            )
+        })?
+    {
         if let Some(name) = field.name() {
             if name == "file" {
-                file_data = field.bytes().await.map_err(|e| crate::errors::OracleError::Network(format!("Field bytes error: {}", e)))?.to_vec();
+                file_data = field
+                    .bytes()
+                    .await
+                    .map_err(|e| {
+                        (
+                            StatusCode::BAD_REQUEST,
+                            Json(UploadErrorResponse {
+                                error: format!("Field bytes error: {e}"),
+                            }),
+                        )
+                    })?
+                    .to_vec();
                 break;
             }
         }
     }
 
     if file_data.is_empty() {
-        return Err(crate::errors::OracleError::Verification("No file data provided".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(UploadErrorResponse {
+                error: "No file data provided".to_string(),
+            }),
+        ));
     }
 
-    let cid = pin_file(file_data, &state.config).await?;
+    let cid = pin_file(file_data, &state.config).await.map_err(|e| {
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(UploadErrorResponse {
+                error: e.to_string(),
+            }),
+        )
+    })?;
 
     Ok(Json(UploadResponse {
         cid,

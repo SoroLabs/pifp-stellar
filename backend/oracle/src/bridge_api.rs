@@ -26,8 +26,8 @@ pub struct BridgeState {
 pub fn router(state: Arc<BridgeState>) -> Router {
     Router::new()
         .route("/bridge/messages", get(get_messages))
-        .route("/bridge/messages/:id", get(get_message))
-        .route("/bridge/sign/:id", post(add_signature))
+    .route("/bridge/messages/{id}", get(get_message))
+    .route("/bridge/sign/{id}", post(add_signature))
         .with_state(state)
 }
 
