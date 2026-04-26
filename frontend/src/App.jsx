@@ -26,6 +26,7 @@ function compareBigIntLike(a, b) {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [projects, setProjects] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -70,9 +71,11 @@ function App() {
       }
     }
 
-    loadProjects()
+    if (activeTab === 'dashboard') {
+      loadProjects()
+    }
     return () => controller.abort()
-  }, [status, creator, category])
+  }, [status, creator, category, activeTab])
 
   const sortedProjects = useMemo(() => {
     const items = [...projects]
