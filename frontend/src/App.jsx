@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import { OracleStatusBanner, useOracleStatus } from './components/OracleStatusBanner'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -30,6 +31,9 @@ function App() {
   const [projects, setProjects] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [oracleModalOpen, setOracleModalOpen] = useState(false)
+
+  const { oracleStatus, oracleBlocking } = useOracleStatus()
 
   const [status, setStatus] = useState('all')
   const [creator, setCreator] = useState('')
@@ -91,6 +95,25 @@ function App() {
 
   return (
     <main className="app-container">
+      <OracleStatusBanner
+        showModal={oracleModalOpen}
+        onModalClose={() => setOracleModalOpen((o) => !o)}
+      />
+
+      {oracleBlocking && (
+        <div className="oracle-blocking-notice" role="alert">
+          <strong>Oracle protection active:</strong>{' '}
+          {oracleStatus?.summary || 'Oracle data is stale or has high variance.'}{' '}
+          Critical protocol actions are disabled until the oracle recovers.
+          <button
+            className="oracle-detail-btn"
+            onClick={() => setOracleModalOpen(true)}
+          >
+            View details
+          </button>
+        </div>
+      )}
+
       <nav className="main-nav">
         <button 
           className={activeTab === 'dashboard' ? 'active' : ''} 

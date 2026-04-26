@@ -14,6 +14,7 @@ mod observer;
 mod bridge_api;
 mod ipfs_api;
 mod ipfs;
+mod oracle_api;
 mod rollup_api;
 
 use std::sync::Arc;
@@ -21,6 +22,7 @@ use std::sync::Arc;
 use crate::bridge_api::BridgeState;
 use crate::ipfs_api::IpfsState;
 use crate::ipfs::IpfsConfig;
+use crate::oracle_api::OracleApiState;
 use crate::observer::BridgeObserver;
 use crate::rollup_api::RollupState;
 
@@ -136,7 +138,8 @@ async fn main() -> anyhow::Result<()> {
 
     if cli.serve {
         rollup_state.clone().start_settlement_loop();
-        health::serve(config.metrics_port, bridge_state, ipfs_state, rollup_state).await?;
+        let oracle_state = Arc::new(OracleApiState::new(config.as_ref())?);
+        health::serve(config.metrics_port, bridge_state, ipfs_state, rollup_state, oracle_state).await?;
         return Ok(());
     }
 
