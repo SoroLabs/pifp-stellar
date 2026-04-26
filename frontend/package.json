@@ -12,7 +12,8 @@
   "dependencies": {
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "xstate": "^5.0.0",
+    "xstate": "^5.28.0",
+    "@xstate/react": "^6.1.0",
     "helia": "^4.0.0",
     "@helia/http": "^1.0.0",
     "stellar-sdk": "^12.0.0",

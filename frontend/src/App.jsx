@@ -7,7 +7,9 @@ import { IpfsVideoStreamer } from './components/IpfsVideoStreamer'
 import { HardwareWalletConnector } from './components/HardwareWalletConnector'
 import { SecureIframeEmbed } from './components/SecureIframeEmbed'
 
-const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const API_BASE = (
+  import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080'
+).replace(/\/$/, '')
 
 const SORT_FIELDS = [
   { value: 'created_ledger', label: 'Created Ledger' },
@@ -53,9 +55,12 @@ function App() {
         if (creator.trim()) params.set('creator', creator.trim())
         if (category.trim()) params.set('category', category.trim())
 
-        const response = await fetch(`${API_BASE}/projects?${params.toString()}`, {
-          signal: controller.signal,
-        })
+        const response = await fetch(
+          `${API_BASE}/projects?${params.toString()}`,
+          {
+            signal: controller.signal,
+          }
+        )
 
         if (!response.ok) {
           throw new Error(`Indexer returned ${response.status}`)
@@ -86,7 +91,9 @@ function App() {
       if (sortField === 'created_ledger' || sortField === 'goal') {
         result = compareBigIntLike(a[sortField], b[sortField])
       } else {
-        result = String(a[sortField] ?? '').localeCompare(String(b[sortField] ?? ''))
+        result = String(a[sortField] ?? '').localeCompare(
+          String(b[sortField] ?? '')
+        )
       }
       return sortDirection === 'asc' ? result : -result
     })
@@ -96,44 +103,44 @@ function App() {
   return (
     <main className="app-container">
       <nav className="main-nav">
-        <button 
-          className={activeTab === 'dashboard' ? 'active' : ''} 
+        <button
+          className={activeTab === 'dashboard' ? 'active' : ''}
           onClick={() => setActiveTab('dashboard')}
         >
           Project Discovery
         </button>
-        <button 
-          className={activeTab === 'bridge' ? 'active' : ''} 
+        <button
+          className={activeTab === 'bridge' ? 'active' : ''}
           onClick={() => setActiveTab('bridge')}
         >
           Bridge Watcher
         </button>
-        <button 
-          className={activeTab === 'ipfs' ? 'active' : ''} 
+        <button
+          className={activeTab === 'ipfs' ? 'active' : ''}
           onClick={() => setActiveTab('ipfs')}
         >
           IPFS Storage
         </button>
-        <button 
-          className={activeTab === 'trade' ? 'active' : ''} 
+        <button
+          className={activeTab === 'trade' ? 'active' : ''}
           onClick={() => setActiveTab('trade')}
         >
           Optimistic Trade
         </button>
-        <button 
-          className={activeTab === 'video' ? 'active' : ''} 
+        <button
+          className={activeTab === 'video' ? 'active' : ''}
           onClick={() => setActiveTab('video')}
         >
           IPFS Video
         </button>
-        <button 
-          className={activeTab === 'wallet' ? 'active' : ''} 
+        <button
+          className={activeTab === 'wallet' ? 'active' : ''}
           onClick={() => setActiveTab('wallet')}
         >
           Hardware Wallet
         </button>
-        <button 
-          className={activeTab === 'embed' ? 'active' : ''} 
+        <button
+          className={activeTab === 'embed' ? 'active' : ''}
           onClick={() => setActiveTab('embed')}
         >
           Embedded Dapp
@@ -146,14 +153,18 @@ function App() {
             <p className="eyebrow">PIFP Stellar Indexer</p>
             <h1>Project Discovery Dashboard</h1>
             <p className="subhead">
-              Live view of indexed projects with quick filters and sorting controls.
+              Live view of indexed projects with quick filters and sorting
+              controls.
             </p>
           </header>
 
           <section className="filters" aria-label="Project filters">
             <label>
               <span>Status</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
                 <option value="all">All</option>
                 <option value="Funding">Funding</option>
                 <option value="Active">Active</option>
@@ -182,7 +193,10 @@ function App() {
 
             <label>
               <span>Sort By</span>
-              <select value={sortField} onChange={(e) => setSortField(e.target.value)}>
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+              >
                 {SORT_FIELDS.map((field) => (
                   <option key={field.value} value={field.value}>
                     {field.label}
@@ -253,6 +267,26 @@ function App() {
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+      {activeTab === 'trade' && (
+        <section className="trade">
+          <OptimisticTradeUI />
+        </section>
+      )}
+      {activeTab === 'video' && (
+        <section className="video">
+          <IpfsVideoStreamer cid="QmYourCIDHere" />
+        </section>
+      )}
+      {activeTab === 'wallet' && (
+        <section className="wallet">
+          <HardwareWalletConnector />
+        </section>
+      )}
+      {activeTab === 'embed' && (
+        <section className="embed">
+          <SecureIframeEmbed src="https://example-dapp.com" />
+        </section>
+      )}
     </main>
   )
 }

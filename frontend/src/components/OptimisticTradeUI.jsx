@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { createMachine, useMachine } from 'xstate'
+import { createMachine } from 'xstate'
+import { useMachine } from '@xstate/react'
 import { motion } from 'framer-motion'
 
 const tradeMachine = createMachine({
@@ -7,18 +8,18 @@ const tradeMachine = createMachine({
   initial: 'idle',
   states: {
     idle: {
-      on: { SUBMIT: 'optimistic' }
+      on: { SUBMIT: 'optimistic' },
     },
     optimistic: {
-      on: { CONFIRM: 'confirmed', REJECT: 'rolledBack' }
+      on: { CONFIRM: 'confirmed', REJECT: 'rolledBack' },
     },
     confirmed: {
-      type: 'final'
+      type: 'final',
     },
     rolledBack: {
-      type: 'final'
-    }
-  }
+      type: 'final',
+    },
+  },
 })
 
 export function OptimisticTradeUI() {
@@ -41,10 +42,25 @@ export function OptimisticTradeUI() {
   return (
     <div className="optimistic-trade">
       <h2>Optimistic P2P Trade</h2>
-      <p>Balance: <motion.span animate={{ scale: state.matches('optimistic') ? 1.1 : 1, color: state.matches('rolledBack') ? '#ff0000' : '#00ff00' }} transition={{ duration: 0.5 }}>{balance}</motion.span></p>
-      <button onClick={handleSubmit} disabled={!state.matches('idle')}>Submit Trade</button>
+      <p>
+        Balance:{' '}
+        <motion.span
+          animate={{
+            scale: state.matches('optimistic') ? 1.1 : 1,
+            color: state.matches('rolledBack') ? '#ff0000' : '#00ff00',
+          }}
+          transition={{ duration: 0.5 }}
+        >
+          {balance}
+        </motion.span>
+      </p>
+      <button onClick={handleSubmit} disabled={!state.matches('idle')}>
+        Submit Trade
+      </button>
       <p>State: {state.value}</p>
-      {state.matches('rolledBack') && <p className="error">Transaction failed, rolled back</p>}
+      {state.matches('rolledBack') && (
+        <p className="error">Transaction failed, rolled back</p>
+      )}
     </div>
   )
 }
