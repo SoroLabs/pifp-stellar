@@ -32,8 +32,14 @@ pub struct Config {
     /// Optional Sentry DSN for error tracking
     pub sentry_dsn: Option<String>,
 
-    /// Port for the health/metrics HTTP server
-    pub metrics_port: u16,
+    /// Foreign chain RPC URL (e.g., Ethereum/Polygon)
+    pub foreign_rpc_url: Option<String>,
+
+    /// Foreign bridge contract address
+    pub foreign_bridge_address: Option<String>,
+
+    /// Node ID for threshold signatures (1-based)
+    pub node_id: usize,
 }
 
 impl Config {
@@ -49,6 +55,9 @@ impl Config {
     /// - `IPFS_GATEWAY`: IPFS gateway (defaults to ipfs.io)
     /// - `NETWORK_PASSPHRASE`: Network passphrase (defaults to testnet)
     /// - `TIMEOUT_SECS`: Request timeout (defaults to 30)
+    /// - `FOREIGN_RPC_URL`: Foreign chain RPC URL
+    /// - `FOREIGN_BRIDGE_ADDRESS`: Foreign bridge contract address
+    /// - `NODE_ID`: Node ID for threshold signatures (defaults to 1)
     pub fn from_env() -> Result<Self> {
         Ok(Config {
             rpc_url: env_var("RPC_URL")
@@ -77,6 +86,15 @@ impl Config {
                 .unwrap_or_else(|_| "9090".to_string())
                 .parse()
                 .map_err(|_| OracleError::Config("Invalid METRICS_PORT".to_string()))?,
+
+            foreign_rpc_url: env_var("FOREIGN_RPC_URL").ok(),
+
+            foreign_bridge_address: env_var("FOREIGN_BRIDGE_ADDRESS").ok(),
+
+            node_id: env_var("NODE_ID")
+                .unwrap_or_else(|_| "1".to_string())
+                .parse()
+                .map_err(|_| OracleError::Config("Invalid NODE_ID".to_string()))?,
         })
     }
 
