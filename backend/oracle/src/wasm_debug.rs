@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// Deterministic Wasm Virtual Machine Debugger Protocol.
 ///
 /// Attaches metering and state-snapshotting hooks to Wasmtime execution.

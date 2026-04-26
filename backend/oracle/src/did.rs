@@ -9,7 +9,8 @@ use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
 pub struct ChallengeRequest {
-    pub user_id: String,
+    #[serde(rename = "user_id")]
+    pub _user_id: String,
 }
 
 #[derive(Debug, Deserialize)]

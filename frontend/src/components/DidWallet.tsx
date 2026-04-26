@@ -11,15 +11,18 @@ export const DidWallet: React.FC = () => {
     const getCredential = async () => {
         setLoading(true);
         try {
-            // 1. Request Challenge
+            console.log("Requesting challenge...");
             const challengeRes = await fetch('http://localhost:9090/did/challenge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: userId })
             });
+            
+            if (!challengeRes.ok) throw new Error(`Challenge fail: ${challengeRes.status}`);
             const { challenge } = await challengeRes.json();
+            console.log("Challenge received:", challenge);
 
-            // 2. Issue with Challenge
+            console.log("Requesting issuance...");
             const res = await fetch('http://localhost:9090/did/issue', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -29,10 +32,18 @@ export const DidWallet: React.FC = () => {
                     claims: { isHuman: true, age: 22, residency: 'US' }
                 })
             });
+            
+            if (!res.ok) {
+                const errText = await res.text();
+                throw new Error(`Issuance fail: ${res.status} - ${errText}`);
+            }
+            
             const data = await res.json();
+            console.log("Credential issued:", data.credential);
             setCredential(data.credential);
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            console.error("DID Error:", e);
+            alert(`Error: ${e.message}`);
         } finally {
             setLoading(false);
         }

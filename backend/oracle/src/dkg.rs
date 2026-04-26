@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// Distributed Key Generation (DKG) protocol for decentralized oracle nodes.
 ///
 /// Implements Feldman's Verifiable Secret Sharing (VSS) scheme so that `t`

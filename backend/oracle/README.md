@@ -102,18 +102,31 @@ RUST_LOG=info cargo run -- \
 
 Log levels: `error`, `warn`, `info`, `debug`, `trace`
 
+## Local Development (Testing without Oracle)
+
+To test the frontend identity and ZK features locally without requiring a full oracle setup or contract interaction, run the service in `serve` mode:
+
+```bash
+cargo run -- --serve
+```
+
+This starts a long-lived HTTP server on port `9090` (default) which handles:
+- **Identity Verification**: `/did/challenge`, `/did/issue`, `/did/verify`
+- **Health & Metrics**: `/health`, `/metrics`
+
 ## CLI Options
 
 ```
 pifp-oracle - Verify proofs and release funds
 
 USAGE:
-    pifp-oracle --project-id <ID> --proof-cid <CID> [--dry-run]
+    pifp-oracle --project-id <ID> --proof-cid <CID> [--dry-run] [--serve]
 
 OPTIONS:
     --project-id <ID>     Project ID to verify
     --proof-cid <CID>     IPFS CID of the proof artifact
     --dry-run             Compute hash and log without submitting transaction
+    --serve               Run as a long-lived HTTP service for local testing
     -h, --help            Print help information
 ```
 

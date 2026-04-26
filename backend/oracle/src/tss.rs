@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// Threshold Signature Scheme (TSS) for decentralized oracle nodes.
 ///
 /// Implements a FROST-inspired t-of-n threshold signing protocol over
