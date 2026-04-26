@@ -5,6 +5,7 @@ members = [
   "backend/indexer",
   "backend/oracle",
   "backend/sequencer",
+  "backend/signaling",
 ]
 
 [profile.release]
