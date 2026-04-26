@@ -4,6 +4,7 @@ members = [
   "contracts/pifp_protocol",
   "backend/indexer",
   "backend/oracle",
+  "backend/signaling",
 ]
 
 [profile.release]
