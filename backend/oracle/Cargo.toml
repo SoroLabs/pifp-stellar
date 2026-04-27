@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 crossbeam-epoch = "0.9"
 crossbeam-skiplist = "0.1"
-wasmtime = "18.0"
+wasmtime = "28.0"
 # Stellar/Soroban
 soroban-sdk = "25"
 stellar-strkey = "0.0.16"
@@ -43,9 +43,9 @@ dotenvy = "0.15"
 sha2 = "0.11"
 hex = "0.4"
 k256 = { version = "0.13", features = ["arithmetic", "ecdsa", "serde"] }
-rand = "0.8"
+rand = "0.10"
 threshold_crypto = "0.4"
-libp2p = { version = "0.54", features = ["tcp", "tls", "dns", "noise", "yamux", "kad", "macros", "tokio"] }
+libp2p = { version = "0.56", features = ["tcp", "tls", "dns", "noise", "yamux", "kad", "macros", "tokio"] }
 
 # Timestamps
 chrono = { version = "0.4", features = ["serde"] }
