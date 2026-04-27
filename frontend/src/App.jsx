@@ -48,6 +48,8 @@ function AppContent() {
   const [projects, setProjects] = useState([])
   const [error, setError] = useState('')
 
+  const [currentView, setCurrentView] = useState('dashboard')
+
   const [status, setStatus] = useState('all')
   const [creator, setCreator] = useState('')
   const [category, setCategory] = useState('')
@@ -302,7 +304,27 @@ function AppContent() {
             <RealtimeActivity />
           </section>
         </section>
-      )}
+      ) : currentView === 'orderbook' ? (
+        <section style={{ padding: '20px', display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <Orderbook />
+        </section>
+      ) : currentView === 'explorer' ? (
+        <section style={{ padding: '20px', display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+          <VirtualGrid />
+        </section>
+      ) : (
+        <>
+          <section className="filters" aria-label="Project filters">
+        <label>
+          <span>Status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">All</option>
+            <option value="Funding">Funding</option>
+            <option value="Active">Active</option>
+            <option value="Completed">Completed</option>
+            <option value="Expired">Expired</option>
+          </select>
+        </label>
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'trading' && <HighFrequencyTradingChart />}
