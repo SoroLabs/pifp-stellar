@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { DidWallet } from './components/DidWallet'
+import { BridgeWatcher } from './components/BridgeWatcher'
+import { IpfsUploader } from './components/IpfsUploader'
+
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 
@@ -25,6 +28,7 @@ function compareBigIntLike(a, b) {
 }
 
 function App() {
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [projects, setProjects] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -67,9 +71,11 @@ function App() {
       }
     }
 
-    loadProjects()
+    if (activeTab === 'dashboard') {
+      loadProjects()
+    }
     return () => controller.abort()
-  }, [status, creator, category])
+  }, [status, creator, category, activeTab])
 
   const sortedProjects = useMemo(() => {
     const items = [...projects]
@@ -86,117 +92,153 @@ function App() {
   }, [projects, sortField, sortDirection])
 
   return (
-    <main className="dashboard">
-      <header className="hero">
-        <p className="eyebrow">PIFP Stellar Indexer</p>
-        <h1>Project Discovery Dashboard</h1>
-        <p className="subhead">
-          Live view of indexed projects with quick filters and sorting controls.
-        </p>
-      </header>
+    <main className="app-container">
+      <nav className="main-nav">
+        <button 
+          className={activeTab === 'dashboard' ? 'active' : ''} 
+          onClick={() => setActiveTab('dashboard')}
+        >
+          Project Discovery
+        </button>
+        <button 
+          className={activeTab === 'bridge' ? 'active' : ''} 
+          onClick={() => setActiveTab('bridge')}
+        >
+          Bridge Watcher
+        </button>
+        <button 
+          className={activeTab === 'ipfs' ? 'active' : ''} 
+          onClick={() => setActiveTab('ipfs')}
+        >
+          IPFS Storage
+        </button>
+        <button 
+          className={activeTab === 'identity' ? 'active' : ''} 
+          onClick={() => setActiveTab('identity')}
+        >
+          DID Identity
+        </button>
+      </nav>
 
-      <section className="filters" aria-label="Project filters">
-        <label>
-          <span>Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="all">All</option>
-            <option value="Funding">Funding</option>
-            <option value="Active">Active</option>
-            <option value="Completed">Completed</option>
-            <option value="Expired">Expired</option>
-          </select>
-        </label>
+      {activeTab === 'dashboard' && (
+        <section className="dashboard">
+          <header className="hero">
+            <p className="eyebrow">PIFP Stellar Indexer</p>
+            <h1>Project Discovery Dashboard</h1>
+            <p className="subhead">
+              Live view of indexed projects with quick filters and sorting controls.
+            </p>
+          </header>
 
-        <label>
-          <span>Creator</span>
-          <input
-            value={creator}
-            onChange={(e) => setCreator(e.target.value)}
-            placeholder="G... address"
-          />
-        </label>
+          <section className="filters" aria-label="Project filters">
+            <label>
+              <span>Status</span>
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="all">All</option>
+                <option value="Funding">Funding</option>
+                <option value="Active">Active</option>
+                <option value="Completed">Completed</option>
+                <option value="Expired">Expired</option>
+              </select>
+            </label>
 
-        <label>
-          <span>Category</span>
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="edu,health"
-          />
-        </label>
+            <label>
+              <span>Creator</span>
+              <input
+                value={creator}
+                onChange={(e) => setCreator(e.target.value)}
+                placeholder="G... address"
+              />
+            </label>
 
-        <label>
-          <span>Sort By</span>
-          <select value={sortField} onChange={(e) => setSortField(e.target.value)}>
-            {SORT_FIELDS.map((field) => (
-              <option key={field.value} value={field.value}>
-                {field.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              <span>Category</span>
+              <input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="edu,health"
+              />
+            </label>
 
-        <label>
-          <span>Direction</span>
-          <select
-            value={sortDirection}
-            onChange={(e) => setSortDirection(e.target.value)}
-          >
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </select>
-        </label>
-      </section>
-
-      <section className="results" aria-live="polite">
-        <div className="results-bar">
-          <strong>{sortedProjects.length}</strong>
-          <span>projects</span>
-        </div>
-
-        {isLoading && <p className="state">Loading projects...</p>}
-        {error && !isLoading && <p className="state error">{error}</p>}
-
-        {!isLoading && !error && (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Project ID</th>
-                  <th>Status</th>
-                  <th>Creator</th>
-                  <th>Goal</th>
-                  <th>Primary Token</th>
-                  <th>Created Ledger</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedProjects.map((project) => (
-                  <tr key={project.project_id}>
-                    <td>{project.project_id}</td>
-                    <td>
-                      <span className="pill">{project.status}</span>
-                    </td>
-                    <td className="truncate" title={project.creator}>
-                      {project.creator}
-                    </td>
-                    <td>{project.goal}</td>
-                    <td>{project.primary_token}</td>
-                    <td>{project.created_ledger}</td>
-                  </tr>
+            <label>
+              <span>Sort By</span>
+              <select value={sortField} onChange={(e) => setSortField(e.target.value)}>
+                {SORT_FIELDS.map((field) => (
+                  <option key={field.value} value={field.value}>
+                    {field.label}
+                  </option>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {!isLoading && !error && sortedProjects.length === 0 && (
-          <p className="state">No projects matched current filters.</p>
-        )}
-      </section>
+              </select>
+            </label>
 
-      <section className="identity-section">
-        <DidWallet />
-      </section>
+            <label>
+              <span>Direction</span>
+              <select
+                value={sortDirection}
+                onChange={(e) => setSortDirection(e.target.value)}
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
+            </label>
+          </section>
+
+          <section className="results" aria-live="polite">
+            <div className="results-bar">
+              <strong>{sortedProjects.length}</strong>
+              <span>projects</span>
+            </div>
+
+            {isLoading && <p className="state">Loading projects...</p>}
+            {error && !isLoading && <p className="state error">{error}</p>}
+
+            {!isLoading && !error && (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Project ID</th>
+                      <th>Status</th>
+                      <th>Creator</th>
+                      <th>Goal</th>
+                      <th>Primary Token</th>
+                      <th>Created Ledger</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedProjects.map((project) => (
+                      <tr key={project.project_id}>
+                        <td>{project.project_id}</td>
+                        <td>
+                          <span className="pill">{project.status}</span>
+                        </td>
+                        <td className="truncate" title={project.creator}>
+                          {project.creator}
+                        </td>
+                        <td>{project.goal}</td>
+                        <td>{project.primary_token}</td>
+                        <td>{project.created_ledger}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!isLoading && !error && sortedProjects.length === 0 && (
+              <p className="state">No projects matched current filters.</p>
+            )}
+          </section>
+        </section>
+      )}
+
+      {activeTab === 'bridge' && <BridgeWatcher />}
+      {activeTab === 'ipfs' && <IpfsUploader />}
+      {activeTab === 'identity' && (
+        <section className="identity-section">
+          <DidWallet />
+        </section>
+      )}
+
     </main>
   )
 }

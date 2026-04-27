@@ -45,6 +45,12 @@ struct Web3StorageResponse {
 }
 
 pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
+    // Attempt local pinning first if it's considered "primary" or fallback
+    if let Ok(cid) = pin_locally(data.clone()).await {
+        info!(cid = %cid, "Pinned locally");
+        return Ok(cid);
+    }
+
     if config.pinata_api_key.is_some() && config.pinata_api_secret.is_some() {
         info!("Attempting to pin via Pinata");
         match pin_with_retry(data.clone(), config, pin_via_pinata).await {
@@ -184,6 +190,36 @@ async fn pin_via_web3_storage(
         .map_err(|e| OracleError::Network(format!("Failed to parse Web3.Storage response: {e}")))?;
 
     Ok(web3_resp.cid)
+}
+
+pub async fn pin_locally(data: Vec<u8>) -> Result<String> {
+    info!("Attempting to pin locally");
+    let client = build_client()?;
+    let part = Part::bytes(data)
+        .file_name("upload.bin")
+        .mime_str("application/octet-stream")
+        .map_err(|e| OracleError::Network(format!("Failed to build multipart part: {e}")))?;
+
+    let form = Form::new().part("file", part);
+
+    let response = client
+        .post("http://localhost:5001/api/v0/add")
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| OracleError::Network(format!("Local IPFS request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(OracleError::Network("Local IPFS node not reachable or returned error".to_string()));
+    }
+
+    let json: serde_json::Value = response.json().await
+        .map_err(|e| OracleError::Network(format!("Failed to parse local IPFS response: {e}")))?;
+
+    let cid = json["Hash"].as_str()
+        .ok_or_else(|| OracleError::Network("No Hash in local IPFS response".to_string()))?;
+
+    Ok(cid.to_string())
 }
 
 fn build_client() -> Result<Client> {
