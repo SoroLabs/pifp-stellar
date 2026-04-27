@@ -1,0 +1,91 @@
+.houdini-panel {
+  border: 1px solid #dce5ea;
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.houdini-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.houdini-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.houdini-heading p {
+  margin: 0.35rem 0 0;
+  color: #4d6f7d;
+}
+
+.houdini-tag span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  background: #eaf7f9;
+  color: #1f6e76;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.houdini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.houdini-supported {
+  display: layout(pifp-masonry);
+}
+
+.houdini-card {
+  padding: 1.25rem;
+  border-radius: 20px;
+  color: #0f2430;
+  background: paint(pifp-card-bg);
+  min-height: 160px;
+  position: relative;
+  overflow: hidden;
+}
+
+.houdini-card h3 {
+  margin: 0 0 0.6rem;
+}
+
+.houdini-card p {
+  margin: 0;
+  color: #27505e;
+  line-height: 1.65;
+}
+
+.houdini-card-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 2rem;
+  height: 2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  font-weight: 800;
+  color: #1f4d5a;
+}
+
+.houdini-fallback .houdini-card {
+  transition: min-height 0.2s ease;
+}
+
+@media (max-width: 840px) {
+  .houdini-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
