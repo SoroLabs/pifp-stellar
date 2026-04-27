@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 //! # PIFP Protocol Contract
 //!
 //! Proof-of-Impact Funding Protocol — Soroban smart contract.
@@ -14,7 +13,6 @@
 //! | Verification | [`PifpProtocol::verify_proof`]                          |
 //! | Claiming     | [`PifpProtocol::claim_funds`]                           |
 //! | Queries      | `get_project`, `get_project_balances`, `role_of`, etc.  |
-=======
 // contracts/pifp_protocol/src/lib.rs
 //
 // RBAC-integrated PifpProtocol contract.
@@ -31,7 +29,6 @@
 //   7. `verify_and_release` uses `rbac::require_oracle` instead of the old `get_oracle`.
 //   8. `register_project` uses `rbac::require_can_register` — SuperAdmin, Admin, and
 //      ProjectManager may register; an unauthenticated address cannot.
->>>>>>> origin/pr-38
 
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -97,8 +94,15 @@ mod test_refund;
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
+#[cfg(test)]
+mod test_grace_period;
+#[cfg(test)]
+mod test_batch_deposit;
+#[cfg(test)]
+mod test_batch_register;
+#[cfg(test)]
+mod test_reentrancy;
 
-<<<<<<< HEAD
 use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
@@ -112,7 +116,6 @@ pub use types::{
     DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
     ProjectState, ProtocolConfig,
 };
-=======
 use storage::{get_and_increment_project_id, load_project, save_project};
 pub use types::{Project, ProjectStatus};
 pub use rbac::Role;
@@ -140,7 +143,6 @@ pub enum Error {
     AlreadyInitialized    = 8,
     RoleNotFound          = 9,
 }
->>>>>>> origin/pr-38
 
 #[contract]
 pub struct PifpProtocol;
@@ -149,11 +151,9 @@ pub struct PifpProtocol;
 #[allow(clippy::too_many_arguments, deprecated)]
 impl PifpProtocol {
     // ─────────────────────────────────────────────────────────
-<<<<<<< HEAD
     // Initialisation
     // ─────────────────────────────────────────────────────────
 
-=======
     // Initialisation (new)
     // ─────────────────────────────────────────────────────────
 
@@ -163,18 +163,15 @@ impl PifpProtocol {
     /// Subsequent calls panic with `Error::AlreadyInitialized`.
     ///
     /// - `super_admin` is granted the `SuperAdmin` role and must sign the transaction.
->>>>>>> origin/pr-38
     pub fn init(env: Env, super_admin: Address) {
         super_admin.require_auth();
         rbac::init_super_admin(&env, &super_admin);
     }
 
     // ─────────────────────────────────────────────────────────
-<<<<<<< HEAD
     // Role management
     // ─────────────────────────────────────────────────────────
 
-=======
     // Role management (new)
     // ─────────────────────────────────────────────────────────
 
@@ -182,51 +179,37 @@ impl PifpProtocol {
     ///
     /// - `caller` must hold `SuperAdmin` or `Admin`.
     /// - Only `SuperAdmin` can grant `SuperAdmin`.
->>>>>>> origin/pr-38
     pub fn grant_role(env: Env, caller: Address, target: Address, role: Role) {
         rbac::grant_role(&env, &caller, &target, role);
     }
 
-<<<<<<< HEAD
-=======
     /// Revoke any role from `target`.
     ///
     /// - `caller` must hold `SuperAdmin` or `Admin`.
     /// - Cannot be used to remove the SuperAdmin; use `transfer_super_admin`.
->>>>>>> origin/pr-38
     pub fn revoke_role(env: Env, caller: Address, target: Address) {
         rbac::revoke_role(&env, &caller, &target);
     }
 
-<<<<<<< HEAD
-=======
     /// Transfer SuperAdmin to `new_super_admin`.
     ///
     /// - `current_super_admin` must authorize and hold the `SuperAdmin` role.
     /// - The previous SuperAdmin loses the role immediately.
->>>>>>> origin/pr-38
     pub fn transfer_super_admin(env: Env, current_super_admin: Address, new_super_admin: Address) {
         rbac::transfer_super_admin(&env, &current_super_admin, &new_super_admin);
     }
 
-<<<<<<< HEAD
-=======
     /// Return the role held by `address`, or `None`.
->>>>>>> origin/pr-38
     pub fn role_of(env: Env, address: Address) -> Option<Role> {
         rbac::role_of(&env, address)
     }
 
-<<<<<<< HEAD
-=======
     /// Return `true` if `address` holds `role`.
->>>>>>> origin/pr-38
     pub fn has_role(env: Env, address: Address, role: Role) -> bool {
         rbac::has_role(&env, address, role)
     }
 
     // ─────────────────────────────────────────────────────────
-<<<<<<< HEAD
     // Emergency Control
     // ─────────────────────────────────────────────────────────
 
@@ -317,14 +300,12 @@ impl PifpProtocol {
     // ─────────────────────────────────────────────────────────
 
     #[allow(clippy::too_many_arguments)]
-=======
     // Existing entry points — updated to use RBAC
     // ─────────────────────────────────────────────────────────
 
     /// Register a new funding project.
     ///
     /// `creator` must hold the `ProjectManager`, `Admin`, or `SuperAdmin` role.
->>>>>>> origin/pr-38
     pub fn register_project(
         env: Env,
         creator: Address,
@@ -341,18 +322,75 @@ impl PifpProtocol {
     ) -> Project {
         Self::require_not_paused(&env);
         creator.require_auth();
-<<<<<<< HEAD
-=======
         // RBAC gate: only authorised roles may create projects.
->>>>>>> origin/pr-38
+        rbac::require_can_register(&env, &creator);
+        Self::register_project_internal(
+            env,
+            creator,
+            accepted_tokens,
+            goal,
+            proof_hash,
+            metadata_uri,
+            deadline,
+            is_private,
+            milestones,
+            categories,
+            authorized_oracles,
+            threshold,
+        )
+    }
+
+    pub fn batch_register_projects(
+        env: Env,
+        creator: Address,
+        requests: Vec<crate::types::ProjectRegistrationRequest>,
+    ) -> Vec<Project> {
+        Self::require_not_paused(&env);
+        creator.require_auth();
         rbac::require_can_register(&env, &creator);
 
+        let mut projects = Vec::new(&env);
+        for i in 0..requests.len() {
+            let request = requests.get(i).unwrap();
+            let project = Self::register_project_internal(
+                env.clone(),
+                creator.clone(),
+                request.accepted_tokens.clone(),
+                request.goal,
+                request.proof_hash.clone(),
+                request.metadata_uri.clone(),
+                request.deadline,
+                request.is_private,
+                request.milestones.clone(),
+                request.categories,
+                request.authorized_oracles.clone(),
+                request.threshold,
+            );
+            projects.push_back(project);
+        }
+        projects
+    }
+
+    fn register_project_internal(
+        env: Env,
+        creator: Address,
+        accepted_tokens: Vec<Address>,
+        goal: i128,
+        proof_hash: BytesN<32>,
+        metadata_uri: Bytes,
+        deadline: u64,
+        is_private: bool,
+        milestones: Vec<Milestone>,
+        categories: u32,
+        authorized_oracles: Vec<Address>,
+        threshold: u32,
+    ) -> Project {
+        if milestones.is_empty() { panic_with_error!(&env, Error::InvalidGoal); }
         if milestones.is_empty() {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
         milestones::validate_milestone_set(&env, &milestones);
 
-<<<<<<< HEAD
         if accepted_tokens.is_empty() {
             panic_with_error!(&env, Error::EmptyAcceptedTokens);
         }
@@ -380,10 +418,8 @@ impl PifpProtocol {
         let oracle_count = authorized_oracles.len();
         if oracle_count > 0 && (threshold == 0 || threshold > oracle_count) {
             panic_with_error!(&env, Error::InvalidOracleConfig);
-=======
         if deadline <= env.ledger().timestamp() {
             panic_with_error!(&env, Error::InvalidMilestones);
->>>>>>> origin/pr-38
         }
 
         let id = get_and_increment_project_id(&env);
@@ -414,7 +450,6 @@ impl PifpProtocol {
         };
 
         save_project(&env, &project);
-<<<<<<< HEAD
         if let Some(token) = accepted_tokens.get(0) {
             events::emit_project_created(&env, id, creator, token, goal);
         }
@@ -428,7 +463,6 @@ impl PifpProtocol {
         submitted_proof_hash: BytesN<32>,
     ) {
         Self::require_not_paused(&env);
-=======
         project
     }
 
@@ -480,12 +514,10 @@ impl PifpProtocol {
     /// - The project must be in `Funding` or `Active` status.
     /// - `submitted_proof_hash` must match the project's `proof_hash`.
     pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, submitted_proof_hash: BytesN<32>) {
->>>>>>> origin/pr-38
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
 
-<<<<<<< HEAD
         let (config, mut state) = load_project_pair(&env, project_id);
         Self::require_project_not_paused(&env, &state);
 
@@ -923,7 +955,6 @@ impl PifpProtocol {
         if state.paused {
             panic_with_error!(env, Error::ProjectPaused);
         }
-=======
         let mut project = load_project(&env, project_id);
 
         match project.status {
@@ -941,6 +972,5 @@ impl PifpProtocol {
 
         env.events()
             .publish((symbol_short!("verified"),), project_id);
->>>>>>> origin/pr-38
     }
 }
