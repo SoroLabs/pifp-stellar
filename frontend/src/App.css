@@ -230,6 +230,41 @@ td {
 .signature-progress {
   margin-top: 1.5rem;
 }
+/* Off-chain Verification */
+.offchain-cell {
+  min-width: 200px;
+}
+
+.verify-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.verify-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.verify-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.v-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.v-text {
+  font-weight: 500;
+  color: #f8fafc;
+}
 
 .progress-bar {
   height: 8px;

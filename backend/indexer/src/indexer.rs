@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::Client;
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use tokio::time::Instant;
 use tracing::{error, info, warn};
 
@@ -18,7 +18,7 @@ use crate::rpc::{self, ProviderManager};
 use crate::webhook;
 
 pub struct IndexerState {
-    pub pool: SqlitePool,
+    pub pool: PgPool,
     pub config: Config,
     pub client: Client,
     pub cache: Option<Cache>,

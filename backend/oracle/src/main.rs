@@ -14,6 +14,12 @@ mod observer;
 mod bridge_api;
 mod ipfs_api;
 mod ipfs;
+pub(crate) mod state_proof;
+pub(crate) mod offchain_api;
+pub(crate) mod debt_graph;
+pub(crate) mod debt_api;
+pub(crate) mod bonding_curve;
+pub(crate) mod bonding_api;
 
 use std::sync::Arc;
 

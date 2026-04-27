@@ -2,8 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import VerifiedBadge from './components/VerifiedBadge'
+import { verifyMerkleProof } from './utils/merkle'
+import DebtVisualizer from './components/DebtVisualizer'
+import { ApolloProvider, useQuery } from '@apollo/client'
+import client from './graphql/client'
+import { GET_PROJECTS } from './graphql/queries'
+import RealtimeActivity from './components/RealtimeActivity'
+import BondingCurveSimulator from './components/BondingCurveSimulator'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const ORACLE_API = 'http://localhost:9090/api/offchain'
 
 const SORT_FIELDS = [
   { value: 'created_ledger', label: 'Created Ledger' },
@@ -26,9 +35,16 @@ function compareBigIntLike(a, b) {
 }
 
 function App() {
+  return (
+    <ApolloProvider client={client}>
+      <AppContent />
+    </ApolloProvider>
+  )
+}
+
+function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [projects, setProjects] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
   const [status, setStatus] = useState('all')
@@ -36,44 +52,29 @@ function App() {
   const [category, setCategory] = useState('')
   const [sortField, setSortField] = useState('created_ledger')
   const [sortDirection, setSortDirection] = useState('desc')
+  const [verificationResults, setVerificationResults] = useState({}) // { projectId: { isVerified, result, stateRoot, ledgerSeq } }
+  const [isVerifying, setIsVerifying] = useState({})
+
+  const { data, loading: isLoading, error: queryError } = useQuery(GET_PROJECTS, {
+    variables: {
+      status: status === 'all' ? undefined : status,
+      creator: creator.trim() || undefined,
+      limit: 200,
+    },
+    skip: activeTab !== 'dashboard'
+  })
 
   useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadProjects() {
-      setIsLoading(true)
-      setError('')
-      try {
-        const params = new URLSearchParams({ limit: '200', offset: '0' })
-        if (status !== 'all') params.set('status', status)
-        if (creator.trim()) params.set('creator', creator.trim())
-        if (category.trim()) params.set('category', category.trim())
-
-        const response = await fetch(`${API_BASE}/projects?${params.toString()}`, {
-          signal: controller.signal,
-        })
-
-        if (!response.ok) {
-          throw new Error(`Indexer returned ${response.status}`)
-        }
-
-        const payload = await response.json()
-        setProjects(Array.isArray(payload.projects) ? payload.projects : [])
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          setError(err.message || 'Failed to fetch projects')
-          setProjects([])
-        }
-      } finally {
-        setIsLoading(false)
-      }
+    if (data?.projects) {
+      setProjects(data.projects)
     }
+  }, [data])
 
-    if (activeTab === 'dashboard') {
-      loadProjects()
+  useEffect(() => {
+    if (queryError) {
+      setError(queryError.message)
     }
-    return () => controller.abort()
-  }, [status, creator, category, activeTab])
+  }, [queryError])
 
   const sortedProjects = useMemo(() => {
     const items = [...projects]
@@ -88,6 +89,44 @@ function App() {
     })
     return items
   }, [projects, sortField, sortDirection])
+
+  const handleVerify = async (projectId) => {
+    setIsVerifying(prev => ({ ...prev, [projectId]: true }))
+    try {
+      const response = await fetch(`${ORACLE_API}/compute?project_id=${projectId}`)
+      if (!response.ok) throw new Error('Failed to fetch off-chain result')
+      
+      const data = await response.json()
+      
+      // Verify all proofs
+      let allValid = true
+      for (const proof of data.proofs) {
+        const isValid = await verifyMerkleProof(data.state_root, proof.leaf, proof.index, proof.siblings)
+        if (!isValid) {
+          allValid = false
+          break
+        }
+      }
+
+      setVerificationResults(prev => ({
+        ...prev,
+        [projectId]: {
+          isVerified: allValid,
+          result: data.result,
+          stateRoot: data.state_root,
+          ledgerSeq: data.ledger_seq
+        }
+      }))
+    } catch (err) {
+      console.error(err)
+      setVerificationResults(prev => ({
+        ...prev,
+        [projectId]: { isVerified: false, result: 'Verification Error' }
+      }))
+    } finally {
+      setIsVerifying(prev => ({ ...prev, [projectId]: false }))
+    }
+  }
 
   return (
     <main className="app-container">
@@ -109,6 +148,18 @@ function App() {
           onClick={() => setActiveTab('ipfs')}
         >
           IPFS Storage
+        </button>
+        <button 
+          className={activeTab === 'debt' ? 'active' : ''} 
+          onClick={() => setActiveTab('debt')}
+        >
+          Debt Optimizer
+        </button>
+        <button 
+          className={activeTab === 'tokenomics' ? 'active' : ''} 
+          onClick={() => setActiveTab('tokenomics')}
+        >
+          Tokenomics
         </button>
       </nav>
 
@@ -195,6 +246,7 @@ function App() {
                       <th>Goal</th>
                       <th>Primary Token</th>
                       <th>Created Ledger</th>
+                      <th>Off-chain Computation</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -210,6 +262,26 @@ function App() {
                         <td>{project.goal}</td>
                         <td>{project.primary_token}</td>
                         <td>{project.created_ledger}</td>
+                        <td className="offchain-cell">
+                          {verificationResults[project.project_id] ? (
+                            <div className="v-result">
+                              <span className="v-text">{verificationResults[project.project_id].result}</span>
+                              <VerifiedBadge 
+                                isVerified={verificationResults[project.project_id].isVerified}
+                                stateRoot={verificationResults[project.project_id].stateRoot}
+                                ledgerSeq={verificationResults[project.project_id].ledgerSeq}
+                              />
+                            </div>
+                          ) : (
+                            <button 
+                              className="verify-btn"
+                              onClick={() => handleVerify(project.project_id)}
+                              disabled={isVerifying[project.project_id]}
+                            >
+                              {isVerifying[project.project_id] ? 'Verifying...' : 'Run & Verify'}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -219,12 +291,16 @@ function App() {
             {!isLoading && !error && sortedProjects.length === 0 && (
               <p className="state">No projects matched current filters.</p>
             )}
+
+            <RealtimeActivity />
           </section>
         </section>
       )}
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+      {activeTab === 'debt' && <DebtVisualizer />}
+      {activeTab === 'tokenomics' && <BondingCurveSimulator />}
     </main>
   )
 }

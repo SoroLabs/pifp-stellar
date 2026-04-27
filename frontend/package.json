@@ -10,8 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@apollo/client": "^4.1.9",
+    "@xyflow/react": "^12.10.2",
+    "graphql": "^16.13.2",
+    "graphql-ws": "^6.0.8",
+    "lightweight-charts": "^5.2.0",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "subscriptions-transport-ws": "^0.11.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

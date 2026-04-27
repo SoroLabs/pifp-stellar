@@ -1,7 +1,7 @@
 //! Database layer — migrations, queries, and cursor management.
 
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use tracing::info;
 
 use crate::errors::Result;
@@ -17,22 +17,15 @@ pub struct GlobalStats {
     pub updated_at: i64,
 }
 
-/// Establish a SQLite connection pool and run pending migrations.
-pub async fn init_pool(database_url: &str) -> Result<SqlitePool> {
-    // Make sure the file is created if it doesn't exist yet.
-    let url = if database_url.starts_with("sqlite:") {
-        database_url.to_string()
-    } else {
-        format!("sqlite:{database_url}")
-    };
-
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect(&url)
+/// Establish a PostgreSQL connection pool and run pending migrations.
+pub async fn init_pool(database_url: &str) -> Result<PgPool> {
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(database_url)
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
-    info!("Database migrations applied successfully");
+    info!("PostgreSQL migrations applied successfully");
     Ok(pool)
 }
 
@@ -42,7 +35,7 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool> {
 
 /// Read the last-seen ledger from the cursor row.
 /// Returns `0` when no cursor has been persisted yet.
-pub async fn get_last_ledger(pool: &SqlitePool) -> Result<i64> {
+pub async fn get_last_ledger(pool: &PgPool) -> Result<i64> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT last_ledger FROM indexer_cursor WHERE id = 1")
         .fetch_optional(pool)
         .await?;
@@ -51,11 +44,11 @@ pub async fn get_last_ledger(pool: &SqlitePool) -> Result<i64> {
 
 /// Persist the last-seen ledger (and optionally a pagination cursor string).
 pub async fn save_cursor(
-    pool: &SqlitePool,
+    pool: &PgPool,
     last_ledger: i64,
     last_cursor: Option<&str>,
 ) -> Result<()> {
-    sqlx::query("UPDATE indexer_cursor SET last_ledger = ?1, last_cursor = ?2 WHERE id = 1")
+    sqlx::query("UPDATE indexer_cursor SET last_ledger = $1, last_cursor = $2 WHERE id = 1")
         .bind(last_ledger)
         .bind(last_cursor)
         .execute(pool)
@@ -64,7 +57,7 @@ pub async fn save_cursor(
 }
 
 /// Read back the raw cursor string (used to resume pagination mid-ledger).
-pub async fn get_cursor_string(pool: &SqlitePool) -> Result<Option<String>> {
+pub async fn get_cursor_string(pool: &PgPool) -> Result<Option<String>> {
     let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT last_cursor FROM indexer_cursor WHERE id = 1")
             .fetch_optional(pool)
@@ -80,22 +73,23 @@ pub async fn get_cursor_string(pool: &SqlitePool) -> Result<Option<String>> {
 /// `(ledger, tx_hash, event_type, project_id)` tuple are silently ignored
 /// to make the indexer idempotent.
 #[allow(dead_code)]
-pub async fn insert_events(pool: &SqlitePool, events: &[PifpEvent]) -> Result<usize> {
+pub async fn insert_events(pool: &PgPool, events: &[PifpEvent]) -> Result<usize> {
     Ok(insert_events_with_new(pool, events).await?.len())
 }
 
 /// Persist a batch and return only events that were newly inserted.
 pub async fn insert_events_with_new(
-    pool: &SqlitePool,
+    pool: &PgPool,
     events: &[PifpEvent],
 ) -> Result<Vec<PifpEvent>> {
     let mut inserted_events = Vec::new();
     for ev in events {
         let rows_affected = sqlx::query(
             r#"
-            INSERT OR IGNORE INTO events
+            INSERT INTO events
                 (event_type, project_id, actor, amount, ledger, timestamp, contract_id, tx_hash, extra_data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(&ev.event_type)
@@ -113,14 +107,23 @@ pub async fn insert_events_with_new(
 
         if rows_affected > 0 {
             inserted_events.push(ev.clone());
+            
+            // Real-time notification for GraphQL Subscriptions
+            let payload = serde_json::to_string(ev).unwrap_or_default();
+            sqlx::query("SELECT pg_notify('events', $1)")
+                .bind(payload)
+                .execute(pool)
+                .await?;
+
             // Update Project Registry for life-cycle tracking
             if let Some(id) = &ev.project_id {
                 match ev.event_type.as_str() {
                     "project_created" => {
                         sqlx::query(
                             r#"
-                            INSERT OR IGNORE INTO projects (project_id, creator, goal, primary_token, created_ledger)
-                            VALUES (?1, ?2, ?3, ?4, ?5)
+                            INSERT INTO projects (project_id, creator, goal, primary_token, created_ledger)
+                            VALUES ($1, $2, $3, $4, $5)
+                            ON CONFLICT DO NOTHING
                             "#,
                         )
                         .bind(id)
@@ -132,21 +135,21 @@ pub async fn insert_events_with_new(
                         .await?;
                     }
                     "project_active" => {
-                        sqlx::query("UPDATE projects SET status = 'Active' WHERE project_id = ?1")
+                        sqlx::query("UPDATE projects SET status = 'Active' WHERE project_id = $1")
                             .bind(id)
                             .execute(pool)
                             .await?;
                     }
                     "project_verified" => {
                         sqlx::query(
-                            "UPDATE projects SET status = 'Completed' WHERE project_id = ?1",
+                            "UPDATE projects SET status = 'Completed' WHERE project_id = $1",
                         )
                         .bind(id)
                         .execute(pool)
                         .await?;
                     }
                     "project_expired" => {
-                        sqlx::query("UPDATE projects SET status = 'Expired' WHERE project_id = ?1")
+                        sqlx::query("UPDATE projects SET status = 'Expired' WHERE project_id = $1")
                             .bind(id)
                             .execute(pool)
                             .await?;
