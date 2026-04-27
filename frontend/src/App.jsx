@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
+import { HighFrequencyTradingChart } from './components/HighFrequencyTradingChart'
 import { IpfsUploader } from './components/IpfsUploader'
 import VerifiedBadge from './components/VerifiedBadge'
 import { verifyMerkleProof } from './utils/merkle'
@@ -142,6 +143,12 @@ function AppContent() {
           onClick={() => setActiveTab('bridge')}
         >
           Bridge Watcher
+        </button>
+        <button
+          className={activeTab === 'trading' ? 'active' : ''}
+          onClick={() => setActiveTab('trading')}
+        >
+          Trading Canvas
         </button>
         <button 
           className={activeTab === 'ipfs' ? 'active' : ''} 
@@ -298,6 +305,7 @@ function AppContent() {
       )}
 
       {activeTab === 'bridge' && <BridgeWatcher />}
+      {activeTab === 'trading' && <HighFrequencyTradingChart />}
       {activeTab === 'ipfs' && <IpfsUploader />}
       {activeTab === 'debt' && <DebtVisualizer />}
       {activeTab === 'tokenomics' && <BondingCurveSimulator />}
