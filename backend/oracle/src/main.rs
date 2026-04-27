@@ -11,8 +11,17 @@ mod notifications;
 mod tss;
 mod verifier;
 mod wasm_debug;
+mod observer;
+mod bridge_api;
+mod ipfs_api;
+mod ipfs;
 
 use std::sync::Arc;
+
+use crate::bridge_api::BridgeState;
+use crate::ipfs_api::IpfsState;
+use crate::ipfs::IpfsConfig;
+use crate::observer::BridgeObserver;
 
 use clap::Parser;
 use sentry::{self, protocol::Event};
@@ -101,8 +110,30 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let metrics = Arc::new(OracleMetrics::new());
+    
+    // Initialize Bridge and IPFS states
+    let bridge_state = Arc::new(BridgeState::new());
+    let ipfs_state = Arc::new(IpfsState {
+        config: IpfsConfig::from_env(),
+    });
+
+    // Start Bridge Observer in the background if configured
+    let observer_config = Arc::clone(&config);
+    // let observer_bridge_state = Arc::clone(&bridge_state);
+    
+    // In a real scenario, we'd load the node's secret share from DKG
+    // For now, we'll use a dummy signer if node_id > 0
+    let signer = None; // Simplified for this task
+
+    let observer = Arc::new(BridgeObserver::new(observer_config, signer));
+    tokio::spawn(async move {
+        if let Err(e) = observer.run().await {
+            error!("Bridge observer failed: {}", e);
+        }
+    });
+
     if cli.serve {
-        health::serve(config.metrics_port).await?;
+        health::serve(config.metrics_port, bridge_state, ipfs_state).await?;
         return Ok(());
     }
 

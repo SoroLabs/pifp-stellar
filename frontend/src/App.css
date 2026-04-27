@@ -144,29 +144,181 @@ td {
   color: #8c2630;
 }
 
-@media (max-width: 1080px) {
-  .filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.app-container {
+  width: min(1200px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0;
 }
 
-@media (max-width: 640px) {
-  .dashboard {
-    width: calc(100% - 1rem);
-    margin: 0.5rem auto 1rem;
-  }
-
-  .hero,
-  .filters,
-  .results {
-    border-radius: 14px;
-  }
-
-  .filters {
-    grid-template-columns: 1fr;
-  }
+.main-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 0.5rem;
+  background: #f0f4f8;
+  border-radius: 12px;
+  border: 1px solid #dce5ea;
 }
 
 .identity-section {
   padding: 2rem 0;
 }
+
+.main-nav button {
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #476876;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.main-nav button.active {
+  background: #ffffff;
+  color: #0f2430;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* Bridge Watcher Styles */
+.message-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.message-card {
+  background: white;
+  border: 1px solid #dce5ea;
+  border-radius: 18px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.tx-id {
+  font-family: monospace;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.status-pill {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-pill.pending { background: #fef3c7; color: #92400e; }
+.status-pill.signed { background: #dcfce7; color: #166534; }
+
+.route {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.arrow { color: #94a3b8; }
+
+.signature-progress {
+  margin-top: 1.5rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  color: #64748b;
+  text-align: right;
+}
+
+/* IPFS Uploader Styles */
+.ipfs-uploader {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.drop-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 18px;
+  padding: 3rem;
+  text-align: center;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.drop-zone:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.drop-zone.has-file {
+  border-style: solid;
+  border-color: #3b82f6;
+  background: #ffffff;
+}
+
+.upload-btn {
+  width: 100%;
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #0f172a;
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.upload-result {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #f0fdf4;
+  border-radius: 12px;
+  border: 1px solid #dcfce7;
+}
+
+.cid-box {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cid-box code {
+  flex: 1;
+  background: white;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #dcfce7;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+}
+
+.page-header h2 { margin: 0; font-size: 1.8rem; }
+.page-header p { color: #64748b; margin: 0.5rem 0 0; }
+
