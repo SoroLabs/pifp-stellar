@@ -86,7 +86,9 @@ function AppContent() {
       if (sortField === 'created_ledger' || sortField === 'goal') {
         result = compareBigIntLike(a[sortField], b[sortField])
       } else {
-        result = String(a[sortField] ?? '').localeCompare(String(b[sortField] ?? ''))
+        result = String(a[sortField] ?? '').localeCompare(
+          String(b[sortField] ?? '')
+        )
       }
       return sortDirection === 'asc' ? result : -result
     })
@@ -134,14 +136,14 @@ function AppContent() {
   return (
     <main className="app-container">
       <nav className="main-nav">
-        <button 
-          className={activeTab === 'dashboard' ? 'active' : ''} 
+        <button
+          className={activeTab === 'dashboard' ? 'active' : ''}
           onClick={() => setActiveTab('dashboard')}
         >
           Project Discovery
         </button>
-        <button 
-          className={activeTab === 'bridge' ? 'active' : ''} 
+        <button
+          className={activeTab === 'bridge' ? 'active' : ''}
           onClick={() => setActiveTab('bridge')}
         >
           Bridge Watcher
@@ -178,14 +180,18 @@ function AppContent() {
             <p className="eyebrow">PIFP Stellar Indexer</p>
             <h1>Project Discovery Dashboard</h1>
             <p className="subhead">
-              Live view of indexed projects with quick filters and sorting controls.
+              Live view of indexed projects with quick filters and sorting
+              controls.
             </p>
           </header>
 
           <section className="filters" aria-label="Project filters">
             <label>
               <span>Status</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
                 <option value="all">All</option>
                 <option value="Funding">Funding</option>
                 <option value="Active">Active</option>
@@ -214,7 +220,10 @@ function AppContent() {
 
             <label>
               <span>Sort By</span>
-              <select value={sortField} onChange={(e) => setSortField(e.target.value)}>
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value)}
+              >
                 {SORT_FIELDS.map((field) => (
                   <option key={field.value} value={field.value}>
                     {field.label}
