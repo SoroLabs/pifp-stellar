@@ -9,6 +9,7 @@ import { ApolloProvider, useQuery } from '@apollo/client'
 import client from './graphql/client'
 import { GET_PROJECTS } from './graphql/queries'
 import RealtimeActivity from './components/RealtimeActivity'
+import BondingCurveSimulator from './components/BondingCurveSimulator'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 const ORACLE_API = 'http://localhost:9090/api/offchain'
@@ -154,6 +155,12 @@ function AppContent() {
         >
           Debt Optimizer
         </button>
+        <button 
+          className={activeTab === 'tokenomics' ? 'active' : ''} 
+          onClick={() => setActiveTab('tokenomics')}
+        >
+          Tokenomics
+        </button>
       </nav>
 
       {activeTab === 'dashboard' && (
@@ -293,6 +300,7 @@ function AppContent() {
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
       {activeTab === 'debt' && <DebtVisualizer />}
+      {activeTab === 'tokenomics' && <BondingCurveSimulator />}
     </main>
   )
 }
