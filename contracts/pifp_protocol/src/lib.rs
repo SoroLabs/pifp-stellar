@@ -75,6 +75,8 @@ mod test_grace_period;
 #[cfg(test)]
 mod test_batch_deposit;
 #[cfg(test)]
+mod test_batch_register;
+#[cfg(test)]
 mod test_reentrancy;
 
 use crate::types::ProjectStatus;
@@ -223,7 +225,67 @@ impl PifpProtocol {
         Self::require_not_paused(&env);
         creator.require_auth();
         rbac::require_can_register(&env, &creator);
+        Self::register_project_internal(
+            env,
+            creator,
+            accepted_tokens,
+            goal,
+            proof_hash,
+            metadata_uri,
+            deadline,
+            is_private,
+            milestones,
+            categories,
+            authorized_oracles,
+            threshold,
+        )
+    }
 
+    pub fn batch_register_projects(
+        env: Env,
+        creator: Address,
+        requests: Vec<crate::types::ProjectRegistrationRequest>,
+    ) -> Vec<Project> {
+        Self::require_not_paused(&env);
+        creator.require_auth();
+        rbac::require_can_register(&env, &creator);
+
+        let mut projects = Vec::new(&env);
+        for i in 0..requests.len() {
+            let request = requests.get(i).unwrap();
+            let project = Self::register_project_internal(
+                env.clone(),
+                creator.clone(),
+                request.accepted_tokens.clone(),
+                request.goal,
+                request.proof_hash.clone(),
+                request.metadata_uri.clone(),
+                request.deadline,
+                request.is_private,
+                request.milestones.clone(),
+                request.categories,
+                request.authorized_oracles.clone(),
+                request.threshold,
+            );
+            projects.push_back(project);
+        }
+        projects
+    }
+
+    fn register_project_internal(
+        env: Env,
+        creator: Address,
+        accepted_tokens: Vec<Address>,
+        goal: i128,
+        proof_hash: BytesN<32>,
+        metadata_uri: Bytes,
+        deadline: u64,
+        is_private: bool,
+        milestones: Vec<Milestone>,
+        categories: u32,
+        authorized_oracles: Vec<Address>,
+        threshold: u32,
+    ) -> Project {
         if milestones.is_empty() { panic_with_error!(&env, Error::InvalidGoal); }
         milestones::validate_milestone_set(&env, &milestones);
 
