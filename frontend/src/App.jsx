@@ -47,6 +47,9 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [projects, setProjects] = useState([])
   const [error, setError] = useState('')
+  const [oracleModalOpen, setOracleModalOpen] = useState(false)
+
+  const { oracleStatus, oracleBlocking } = useOracleStatus()
 
   const [currentView, setCurrentView] = useState('dashboard')
 
@@ -135,6 +138,25 @@ function AppContent() {
 
   return (
     <main className="app-container">
+      <OracleStatusBanner
+        showModal={oracleModalOpen}
+        onModalClose={() => setOracleModalOpen((o) => !o)}
+      />
+
+      {oracleBlocking && (
+        <div className="oracle-blocking-notice" role="alert">
+          <strong>Oracle protection active:</strong>{' '}
+          {oracleStatus?.summary || 'Oracle data is stale or has high variance.'}{' '}
+          Critical protocol actions are disabled until the oracle recovers.
+          <button
+            className="oracle-detail-btn"
+            onClick={() => setOracleModalOpen(true)}
+          >
+            View details
+          </button>
+        </div>
+      )}
+
       <nav className="main-nav">
         <button
           className={activeTab === 'dashboard' ? 'active' : ''}

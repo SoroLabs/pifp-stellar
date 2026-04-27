@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::State,
     http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -20,13 +19,7 @@ struct HealthResponse {
     service: &'static str,
 }
 
-#[derive(Clone)]
-pub struct ServerState {
-    pub bridge: Arc<crate::bridge_api::BridgeState>,
-    pub ipfs: Arc<crate::ipfs_api::IpfsState>,
-}
-
-async fn health(State(_state): State<Arc<ServerState>>) -> impl IntoResponse {
+async fn health() -> impl IntoResponse {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -48,12 +41,9 @@ pub async fn serve(
     port: u16,
     bridge_state: Arc<crate::bridge_api::BridgeState>,
     ipfs_state: Arc<crate::ipfs_api::IpfsState>,
+    rollup_state: Arc<crate::rollup_api::RollupState>,
+    oracle_state: Arc<crate::oracle_api::OracleApiState>,
 ) -> anyhow::Result<()> {
-    let state = Arc::new(ServerState {
-        bridge: bridge_state.clone(),
-        ipfs: ipfs_state.clone(),
-    });
-
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
@@ -87,16 +77,39 @@ mod tests {
                 web3_storage_token: None,
             },
         });
-        let state = Arc::new(ServerState {
-            bridge: bridge_state.clone(),
-            ipfs: ipfs_state.clone(),
-        });
+        let rollup_state = Arc::new(crate::rollup_api::RollupState::new(std::time::Duration::from_secs(30)));
+        let oracle_state = Arc::new(
+            crate::oracle_api::OracleApiState::new(&crate::config::Config {
+                rpc_url: "https://soroban-testnet.stellar.org".to_string(),
+                horizon_url: "https://horizon-testnet.stellar.org".to_string(),
+                contract_id: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM".to_string(),
+                oracle_secret_key: "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ipfs_gateway: "https://ipfs.io".to_string(),
+                network_passphrase: "Test SDF Network ; September 2015".to_string(),
+                timeout_secs: 30,
+                sentry_dsn: None,
+                metrics_port: 9090,
+                oracle_asset_symbol: "XLM".to_string(),
+                oracle_quote_symbol: "USD".to_string(),
+                oracle_refresh_secs: 15,
+                oracle_max_staleness_secs: 90,
+                oracle_max_variance_pct: 5.0,
+                oracle_coingecko_url: "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd".to_string(),
+                oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT".to_string(),
+                oracle_kraken_url: "https://api.kraken.com/0/public/Ticker?pair=XLMUSD".to_string(),
+                foreign_rpc_url: None,
+                foreign_bridge_address: None,
+                node_id: 1,
+            })
+            .expect("oracle state should build in test"),
+        );
         Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics_handler))
-            .nest("/api", crate::bridge_api::router(bridge_state))
-            .nest("/api", crate::ipfs_api::router(ipfs_state))
-            .with_state(state)
+            .merge(crate::bridge_api::router(bridge_state))
+            .merge(crate::ipfs_api::router(ipfs_state))
+            .merge(crate::rollup_api::router(rollup_state))
+            .merge(crate::oracle_api::router(oracle_state))
     }
 
     #[tokio::test]
