@@ -14,6 +14,8 @@ mod observer;
 mod bridge_api;
 mod ipfs_api;
 mod ipfs;
+mod state_proof;
+mod offchain_api;
 
 use std::sync::Arc;
 

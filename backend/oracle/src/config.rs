@@ -40,6 +40,9 @@ pub struct Config {
 
     /// Node ID for threshold signatures (1-based)
     pub node_id: usize,
+
+    /// Port for metrics and health endpoints
+    pub metrics_port: u16,
 }
 
 impl Config {

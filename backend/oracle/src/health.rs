@@ -59,6 +59,7 @@ pub async fn serve(
         .route("/metrics", get(metrics_handler))
         .nest("/api", crate::bridge_api::router(bridge_state))
         .nest("/api", crate::ipfs_api::router(ipfs_state))
+        .nest("/api/offchain", crate::offchain_api::router())
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
