@@ -11,6 +11,7 @@ use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::metrics;
+use crate::tx_diagnostics::TxDiagnosticsStore;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -36,6 +37,23 @@ async fn metrics_handler() -> impl IntoResponse {
     )
 }
 
+async fn get_tx_diagnostics(
+    State(state): State<Arc<ServerState>>,
+    axum::extract::Path(hash): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if let Some(payload) = state.diagnostics.get(&hash) {
+        return (StatusCode::OK, Json(payload)).into_response();
+    }
+
+    (
+        StatusCode::NOT_FOUND,
+        Json(ApiErrorResponse {
+            error: format!("No diagnostics found for transaction hash {hash}"),
+        }),
+    )
+        .into_response()
+}
+
 /// Start the health and metrics HTTP server on the given port.
 pub async fn serve(
     port: u16,
@@ -47,6 +65,7 @@ pub async fn serve(
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
+        .route("/api/v1/tx/diagnostics/:hash", get(get_tx_diagnostics))
         .nest("/api", crate::bridge_api::router(bridge_state))
         .nest("/api", crate::ipfs_api::router(ipfs_state))
         .nest("/api/offchain", crate::offchain_api::router())
@@ -165,5 +184,21 @@ mod tests {
         assert_eq!(json["status"], "ok");
         assert_eq!(json["service"], "pifp-oracle");
         assert!(json["version"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_tx_diagnostics_not_found() {
+        let app = test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/tx/diagnostics/unknown")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 const ORACLE_API = (import.meta.env.VITE_ORACLE_API_URL || 'http://localhost:9090/api').replace(/\/$/, '')
 
-export function BridgeWatcher() {
+export function BridgeWatcher({ onTransactionError }) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -28,8 +28,19 @@ export function BridgeWatcher() {
 
   const handleSign = async (id) => {
     try {
-      await fetch(`${ORACLE_API}/bridge/sign/${id}`, { method: 'POST' })
+      const response = await fetch(`${ORACLE_API}/bridge/sign/${id}`, { method: 'POST' })
+      if (!response.ok) {
+        throw new Error(`Transaction failed while signing bridge message ${id}`)
+      }
+
+      const accepted = await response.json()
+      if (!accepted) {
+        throw new Error(`Transaction failed for bridge message ${id}`)
+      }
     } catch (err) {
+      if (onTransactionError) {
+        void onTransactionError(err)
+      }
       console.error('Failed to sign:', err)
     }
   }
