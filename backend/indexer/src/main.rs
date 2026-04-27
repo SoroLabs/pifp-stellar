@@ -21,6 +21,7 @@ pub(crate) mod rate_limit;
 pub(crate) mod rpc;
 pub(crate) mod btree_storage;
 pub(crate) mod webhook;
+pub(crate) mod graphql;
 
 #[cfg(test)]
 mod auth_test;
@@ -159,7 +160,7 @@ async fn main() -> anyhow::Result<()> {
         cache_ttl_active_projects_count_secs: config.cache_ttl_active_projects_count_secs,
     });
 
-    let app = Router::new()
+    let rest_router = Router::new()
         .route("/health", get(api::health))
         .route("/events", get(api::get_all_events))
         .route("/projects", get(api::get_projects))
@@ -187,9 +188,13 @@ async fn main() -> anyhow::Result<()> {
             axum::routing::delete(api::delete_profile),
         )
         .layer(RateLimitLayer::new(rate_limit_store))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
         .with_state(api_state);
+
+    let app = Router::new()
+        .merge(rest_router)
+        .merge(graphql::router(pool.clone()))
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http());
 
     let addr = format!("0.0.0.0:{}", config.api_port);
     info!("API listening on http://{addr}");
