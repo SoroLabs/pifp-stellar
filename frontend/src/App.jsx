@@ -4,6 +4,7 @@ import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
 import VerifiedBadge from './components/VerifiedBadge'
 import { verifyMerkleProof } from './utils/merkle'
+import DebtVisualizer from './components/DebtVisualizer'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 const ORACLE_API = 'http://localhost:9090/api/offchain'
@@ -153,6 +154,12 @@ function App() {
         >
           IPFS Storage
         </button>
+        <button 
+          className={activeTab === 'debt' ? 'active' : ''} 
+          onClick={() => setActiveTab('debt')}
+        >
+          Debt Optimizer
+        </button>
       </nav>
 
       {activeTab === 'dashboard' && (
@@ -289,6 +296,7 @@ function App() {
 
       {activeTab === 'bridge' && <BridgeWatcher />}
       {activeTab === 'ipfs' && <IpfsUploader />}
+      {activeTab === 'debt' && <DebtVisualizer />}
     </main>
   )
 }

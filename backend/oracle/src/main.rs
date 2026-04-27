@@ -16,6 +16,8 @@ mod ipfs_api;
 mod ipfs;
 mod state_proof;
 mod offchain_api;
+mod debt_graph;
+mod debt_api;
 
 use std::sync::Arc;
 
