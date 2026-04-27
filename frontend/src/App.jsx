@@ -200,23 +200,25 @@ function AppContent() {
               </select>
             </label>
 
-            <label>
-              <span>Creator</span>
-              <input
-                value={creator}
-                onChange={(e) => setCreator(e.target.value)}
-                placeholder="G... address"
-              />
-            </label>
+        <label>
+          <span>Category</span>
+          <input
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            placeholder="edu,health"
+          />
+        </label>
 
-            <label>
-              <span>Category</span>
-              <input
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="edu,health"
-              />
-            </label>
+        <label>
+          <span>Sort By</span>
+          <select value={sortField} onChange={(e) => setSortField(e.target.value)}>
+            {SORT_FIELDS.map((field) => (
+              <option key={field.value} value={field.value}>
+                {field.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
             <label>
               <span>Sort By</span>
