@@ -1,23 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 const IPFS_GATEWAY = 'https://ipfs.io/ipfs/'
 
-export function IpfsResolver({ uri, alt = "IPFS Content" }) {
-  const [url, setUrl] = useState('')
+function ResolvedImage({ url, alt }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(false)
-
-  useEffect(() => {
-    if (!uri) return
-    
-    // Resolve ipfs:// protocol to gateway URL
-    const cid = uri.replace('ipfs://', '')
-    const resolvedUrl = `${IPFS_GATEWAY}${cid}`
-    
-    setUrl(resolvedUrl)
-    setIsLoading(true)
-    setError(false)
-  }, [uri])
 
   return (
     <div className="ipfs-media">
@@ -35,4 +22,15 @@ export function IpfsResolver({ uri, alt = "IPFS Content" }) {
       {error && <div className="media-error">Failed to resolve IPFS content</div>}
     </div>
   )
+}
+
+export function IpfsResolver({ uri, alt = "IPFS Content" }) {
+  if (!uri) {
+    return null
+  }
+
+  const cid = uri.replace('ipfs://', '')
+  const resolvedUrl = `${IPFS_GATEWAY}${cid}`
+
+  return <ResolvedImage key={resolvedUrl} url={resolvedUrl} alt={alt} />
 }

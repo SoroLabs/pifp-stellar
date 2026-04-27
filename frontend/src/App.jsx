@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
+import { HighFrequencyTradingChart } from './components/HighFrequencyTradingChart'
 import { IpfsUploader } from './components/IpfsUploader'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
@@ -103,6 +104,12 @@ function App() {
           onClick={() => setActiveTab('bridge')}
         >
           Bridge Watcher
+        </button>
+        <button
+          className={activeTab === 'trading' ? 'active' : ''}
+          onClick={() => setActiveTab('trading')}
+        >
+          Trading Canvas
         </button>
         <button 
           className={activeTab === 'ipfs' ? 'active' : ''} 
@@ -224,6 +231,7 @@ function App() {
       )}
 
       {activeTab === 'bridge' && <BridgeWatcher />}
+      {activeTab === 'trading' && <HighFrequencyTradingChart />}
       {activeTab === 'ipfs' && <IpfsUploader />}
     </main>
   )

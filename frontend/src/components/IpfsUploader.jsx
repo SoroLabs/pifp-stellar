@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 
 const ORACLE_API = (import.meta.env.VITE_ORACLE_API_URL || 'http://localhost:9090/api').replace(/\/$/, '')
 
