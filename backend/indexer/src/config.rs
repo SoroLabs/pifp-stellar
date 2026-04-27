@@ -1,6 +1,6 @@
 //! Application configuration loaded from environment variables.
 
-use crate::errors::{IndexerError, Result};
+use crate::errors::{ IndexerError, Result };
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -20,6 +20,8 @@ pub struct Config {
     /// Port for the Prometheus /metrics endpoint
     /// Port for the Prometheus metrics server
     pub metrics_port: u16,
+    /// Port for the WebSocket server
+    pub ws_port: u16,
     /// How often (in seconds) to poll the RPC for new events
     pub poll_interval_secs: u64,
     /// Maximum number of events to fetch per RPC request
@@ -46,9 +48,11 @@ impl Config {
     pub fn from_env() -> Result<Self> {
         let contract_ids = parse_contract_ids()?;
         Ok(Config {
-            rpc_url: env_var("RPC_URL")
-                .unwrap_or_else(|_| "https://soroban-testnet.stellar.org".to_string()),
-            rpc_fallback_urls: std::env::var("RPC_FALLBACK_URLS")
+            rpc_url: env_var("RPC_URL").unwrap_or_else(|_|
+                "https://soroban-testnet.stellar.org".to_string()
+            ),
+            rpc_fallback_urls: std::env
+                ::var("RPC_FALLBACK_URLS")
                 .unwrap_or_default()
                 .split(',')
                 .map(str::trim)
@@ -60,8 +64,9 @@ impl Config {
                 .parse()
                 .map_err(|_| IndexerError::Config("Invalid RPC_COOLDOWN_SECS".to_string()))?,
             contract_ids,
-            database_url: env_var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:./pifp_events.db".to_string()),
+            database_url: env_var("DATABASE_URL").unwrap_or_else(|_|
+                "sqlite:./pifp_events.db".to_string()
+            ),
             api_port: env_var("API_PORT")
                 .unwrap_or_else(|_| "3001".to_string())
                 .parse()
@@ -70,6 +75,10 @@ impl Config {
                 .unwrap_or_else(|_| "9090".to_string())
                 .parse()
                 .map_err(|_| IndexerError::Config("Invalid METRICS_PORT".to_string()))?,
+            ws_port: env_var("WS_PORT")
+                .unwrap_or_else(|_| "3002".to_string())
+                .parse()
+                .map_err(|_| IndexerError::Config("Invalid WS_PORT".to_string()))?,
             poll_interval_secs: env_var("POLL_INTERVAL_SECS")
                 .unwrap_or_else(|_| "5".to_string())
                 .parse()
@@ -82,7 +91,8 @@ impl Config {
                 .unwrap_or_else(|_| "0".to_string())
                 .parse()
                 .map_err(|_| IndexerError::Config("Invalid START_LEDGER".to_string()))?,
-            backfill_start_ledger: std::env::var("BACKFILL_START_LEDGER")
+            backfill_start_ledger: std::env
+                ::var("BACKFILL_START_LEDGER")
                 .ok()
                 .filter(|v| !v.trim().is_empty())
                 .map(|v| {
@@ -91,10 +101,12 @@ impl Config {
                     })
                 })
                 .transpose()?,
-            backfill_cursor: std::env::var("BACKFILL_CURSOR")
+            backfill_cursor: std::env
+                ::var("BACKFILL_CURSOR")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
-            redis_url: std::env::var("REDIS_URL")
+            redis_url: std::env
+                ::var("REDIS_URL")
                 .ok()
                 .filter(|v| !v.trim().is_empty()),
             cache_ttl_top_projects_secs: env_var("CACHE_TTL_TOP_PROJECTS_SECS")
@@ -110,7 +122,8 @@ impl Config {
                     IndexerError::Config("Invalid CACHE_TTL_ACTIVE_PROJECTS_COUNT_SECS".to_string())
                 })?,
             sentry_dsn: env_var("SENTRY_DSN").ok(),
-            api_rate_limit: std::env::var("API_RATE_LIMIT")
+            api_rate_limit: std::env
+                ::var("API_RATE_LIMIT")
                 .ok()
                 .and_then(|v| v.parse().ok()),
         })
@@ -136,7 +149,7 @@ fn parse_contract_ids() -> Result<Vec<String>> {
 
     let single = env_var("CONTRACT_ID").map_err(|_| {
         IndexerError::Config(
-            "Set CONTRACT_ID (single) or CONTRACT_IDS (comma-separated)".to_string(),
+            "Set CONTRACT_ID (single) or CONTRACT_IDS (comma-separated)".to_string()
         )
     })?;
     Ok(vec![single])
