@@ -42,7 +42,10 @@ impl VrfOutput {
         h.update(seed);
         h.update(node_id.as_bytes());
         let value: [u8; 32] = h.finalize().into();
-        Self { value, proof: value.to_vec() }
+        Self {
+            value,
+            proof: value.to_vec(),
+        }
     }
 
     /// Numeric score derived from the VRF output (lower wins in this election).
@@ -99,7 +102,13 @@ impl ConsensusMessage {
         h.update(value_hash);
         h.update(sender.as_bytes());
         let signature = h.finalize().to_vec();
-        Self { phase, round, value_hash, sender, signature }
+        Self {
+            phase,
+            round,
+            value_hash,
+            sender,
+            signature,
+        }
     }
 
     /// Verify the stub signature (replace with ed25519 in production).
@@ -212,7 +221,12 @@ impl<SM: StateMachine> BftConsensus<SM> {
         }
         rs.proposed_hash = Some(msg.value_hash);
         rs.phase = EnginePhase::Prevoting;
-        let prevote = ConsensusMessage::new(Phase::Prevote, rs.round, msg.value_hash, self.node_id.clone());
+        let prevote = ConsensusMessage::new(
+            Phase::Prevote,
+            rs.round,
+            msg.value_hash,
+            self.node_id.clone(),
+        );
         debug!(round = rs.round, node = %self.node_id, "PREVOTE sent");
         Some(prevote)
     }
@@ -239,7 +253,11 @@ impl<SM: StateMachine> BftConsensus<SM> {
 
     /// **Commit**: On receiving a quorum of precommits, apply to the state machine.
     /// Returns the new state hash on success.
-    pub fn handle_precommit(&self, msg: &ConsensusMessage, cmd: Option<&Command>) -> Option<[u8; 32]> {
+    pub fn handle_precommit(
+        &self,
+        msg: &ConsensusMessage,
+        cmd: Option<&Command>,
+    ) -> Option<[u8; 32]> {
         if !msg.verify() {
             return None;
         }
@@ -276,7 +294,10 @@ impl<SM: StateMachine> BftConsensus<SM> {
         let rs = self.current_round.lock().unwrap();
         if rs.started_at.elapsed() > self.round_timeout && rs.phase != EnginePhase::Committed {
             let next = rs.round + 1;
-            warn!(round = rs.round, "round timeout — advancing to round {next}");
+            warn!(
+                round = rs.round,
+                "round timeout — advancing to round {next}"
+            );
             drop(rs);
             *self.current_round.lock().unwrap() = RoundState::new(next);
         }
@@ -321,13 +342,7 @@ mod tests {
         let ids: Vec<NodeId> = (0..n).map(|i| format!("node{i:02}")).collect();
         let nodes = ids
             .iter()
-            .map(|id| {
-                BftConsensus::new(
-                    id.clone(),
-                    ids.clone(),
-                    MockSM { state: Vec::new() },
-                )
-            })
+            .map(|id| BftConsensus::new(id.clone(), ids.clone(), MockSM { state: Vec::new() }))
             .collect();
         (nodes, ids)
     }
@@ -382,7 +397,10 @@ mod tests {
                 }
             }
         }
-        assert!(!committed_hashes.is_empty(), "at least one node must commit");
+        assert!(
+            !committed_hashes.is_empty(),
+            "at least one node must commit"
+        );
         // All committed hashes must match.
         assert!(committed_hashes.windows(2).all(|w| w[0] == w[1]));
     }

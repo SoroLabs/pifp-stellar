@@ -89,7 +89,11 @@ async fn pin_with_retry_pinata(data: Vec<u8>, config: &IpfsConfig) -> Result<Str
     for attempt in 0..MAX_RETRIES {
         if attempt > 0 {
             let backoff = BASE_BACKOFF_MS * (1 << (attempt - 1));
-            warn!(attempt, backoff_ms = backoff, "Retrying IPFS pin after backoff");
+            warn!(
+                attempt,
+                backoff_ms = backoff,
+                "Retrying IPFS pin after backoff"
+            );
             tokio::time::sleep(Duration::from_millis(backoff)).await;
         }
 

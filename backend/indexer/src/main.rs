@@ -8,6 +8,7 @@ pub(crate) mod actor;
 pub(crate) mod api;
 pub(crate) mod atomic_swap;
 pub(crate) mod bft_consensus;
+pub(crate) mod btree_storage;
 pub(crate) mod cache;
 pub(crate) mod config;
 pub(crate) mod db;
@@ -20,7 +21,6 @@ pub(crate) mod ml_pipeline;
 pub(crate) mod profiles;
 pub(crate) mod rate_limit;
 pub(crate) mod rpc;
-pub(crate) mod btree_storage;
 pub(crate) mod webhook;
 pub(crate) mod graphql;
 
