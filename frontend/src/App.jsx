@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { IpfsUploader } from './components/IpfsUploader'
+import VerifiedBadge from './components/VerifiedBadge'
+import { verifyMerkleProof } from './utils/merkle'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
+const ORACLE_API = 'http://localhost:9090/api/offchain'
 
 const SORT_FIELDS = [
   { value: 'created_ledger', label: 'Created Ledger' },
@@ -36,6 +39,8 @@ function App() {
   const [category, setCategory] = useState('')
   const [sortField, setSortField] = useState('created_ledger')
   const [sortDirection, setSortDirection] = useState('desc')
+  const [verificationResults, setVerificationResults] = useState({}) // { projectId: { isVerified, result, stateRoot, ledgerSeq } }
+  const [isVerifying, setIsVerifying] = useState({})
 
   useEffect(() => {
     const controller = new AbortController()
@@ -88,6 +93,44 @@ function App() {
     })
     return items
   }, [projects, sortField, sortDirection])
+
+  const handleVerify = async (projectId) => {
+    setIsVerifying(prev => ({ ...prev, [projectId]: true }))
+    try {
+      const response = await fetch(`${ORACLE_API}/compute?project_id=${projectId}`)
+      if (!response.ok) throw new Error('Failed to fetch off-chain result')
+      
+      const data = await response.json()
+      
+      // Verify all proofs
+      let allValid = true
+      for (const proof of data.proofs) {
+        const isValid = await verifyMerkleProof(data.state_root, proof.leaf, proof.index, proof.siblings)
+        if (!isValid) {
+          allValid = false
+          break
+        }
+      }
+
+      setVerificationResults(prev => ({
+        ...prev,
+        [projectId]: {
+          isVerified: allValid,
+          result: data.result,
+          stateRoot: data.state_root,
+          ledgerSeq: data.ledger_seq
+        }
+      }))
+    } catch (err) {
+      console.error(err)
+      setVerificationResults(prev => ({
+        ...prev,
+        [projectId]: { isVerified: false, result: 'Verification Error' }
+      }))
+    } finally {
+      setIsVerifying(prev => ({ ...prev, [projectId]: false }))
+    }
+  }
 
   return (
     <main className="app-container">
@@ -195,6 +238,7 @@ function App() {
                       <th>Goal</th>
                       <th>Primary Token</th>
                       <th>Created Ledger</th>
+                      <th>Off-chain Computation</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -210,6 +254,26 @@ function App() {
                         <td>{project.goal}</td>
                         <td>{project.primary_token}</td>
                         <td>{project.created_ledger}</td>
+                        <td className="offchain-cell">
+                          {verificationResults[project.project_id] ? (
+                            <div className="v-result">
+                              <span className="v-text">{verificationResults[project.project_id].result}</span>
+                              <VerifiedBadge 
+                                isVerified={verificationResults[project.project_id].isVerified}
+                                stateRoot={verificationResults[project.project_id].stateRoot}
+                                ledgerSeq={verificationResults[project.project_id].ledgerSeq}
+                              />
+                            </div>
+                          ) : (
+                            <button 
+                              className="verify-btn"
+                              onClick={() => handleVerify(project.project_id)}
+                              disabled={isVerifying[project.project_id]}
+                            >
+                              {isVerifying[project.project_id] ? 'Verifying...' : 'Run & Verify'}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
