@@ -18,14 +18,13 @@ pub struct IpfsState {
     pub config: IpfsConfig,
 }
 
-pub fn router(state: Arc<IpfsState>) -> Router {
+pub fn router() -> Router<Arc<crate::health::ServerState>> {
     Router::new()
         .route("/ipfs/upload", post(upload_file))
-        .with_state(state)
 }
 
 async fn upload_file(
-    State(state): State<Arc<IpfsState>>,
+    State(state): State<Arc<crate::health::ServerState>>,
     mut multipart: Multipart,
 ) -> Result<Json<UploadResponse>> {
     let mut file_data = Vec::new();
@@ -43,7 +42,7 @@ async fn upload_file(
         return Err(crate::errors::OracleError::Verification("No file data provided".to_string()));
     }
 
-    let cid = pin_file(file_data, &state.config).await?;
+    let cid = pin_file(file_data, &state.ipfs.config).await?;
 
     Ok(Json(UploadResponse {
         cid,

@@ -119,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Start Bridge Observer in the background if configured
     let observer_config = Arc::clone(&config);
-    let observer_bridge_state = Arc::clone(&bridge_state);
+    // let observer_bridge_state = Arc::clone(&bridge_state);
     
     // In a real scenario, we'd load the node's secret share from DKG
     // For now, we'll use a dummy signer if node_id > 0

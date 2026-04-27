@@ -62,8 +62,8 @@ pub async fn serve(
         .route("/did/challenge", axum::routing::post(did::request_challenge))
         .route("/did/issue", axum::routing::post(did::issue_credential))
         .route("/did/verify", axum::routing::post(did::verify_credential))
-        .nest("/api", crate::bridge_api::router(bridge_state))
-        .nest("/api", crate::ipfs_api::router(ipfs_state))
+        .nest("/api", crate::bridge_api::router())
+        .nest("/api", crate::ipfs_api::router())
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

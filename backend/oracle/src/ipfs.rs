@@ -53,7 +53,7 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
 
     if config.pinata_api_key.is_some() && config.pinata_api_secret.is_some() {
         info!("Attempting to pin via Pinata");
-        match pin_with_retry(data.clone(), config, pin_via_pinata).await {
+        match pin_with_retry(data.clone(), config.clone(), pin_via_pinata).await {
             Ok(cid) => {
                 info!(cid = %cid, "Pinned via Pinata");
                 return Ok(cid);
@@ -66,7 +66,7 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
 
     if config.web3_storage_token.is_some() {
         info!("Attempting to pin via Web3.Storage");
-        match pin_with_retry(data, config, pin_via_web3_storage).await {
+        match pin_with_retry(data, config.clone(), pin_via_web3_storage).await {
             Ok(cid) => {
                 info!(cid = %cid, "Pinned via Web3.Storage");
                 return Ok(cid);
@@ -85,11 +85,11 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
 
 async fn pin_with_retry<F, Fut>(
     data: Vec<u8>,
-    config: &IpfsConfig,
+    config: IpfsConfig,
     pin_fn: F,
 ) -> Result<String>
 where
-    F: Fn(Vec<u8>, &IpfsConfig, Client) -> Fut,
+    F: Fn(Vec<u8>, IpfsConfig, Client) -> Fut,
     Fut: std::future::Future<Output = Result<String>>,
 {
     let mut last_err = OracleError::Network("No attempts made".to_string());
@@ -103,7 +103,7 @@ where
 
         let client = build_client()?;
 
-        match pin_fn(data.clone(), config, client).await {
+        match pin_fn(data.clone(), config.clone(), client).await {
             Ok(cid) => return Ok(cid),
             Err(e) => {
                 warn!(attempt, error = %e, "IPFS pin attempt failed");
@@ -115,7 +115,7 @@ where
     Err(last_err)
 }
 
-async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> Result<String> {
+async fn pin_via_pinata(data: Vec<u8>, config: IpfsConfig, client: Client) -> Result<String> {
     let api_key = config
         .pinata_api_key
         .as_deref()
@@ -159,7 +159,7 @@ async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> R
 
 async fn pin_via_web3_storage(
     data: Vec<u8>,
-    config: &IpfsConfig,
+    config: IpfsConfig,
     client: Client,
 ) -> Result<String> {
     let token = config
