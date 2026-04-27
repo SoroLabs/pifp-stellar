@@ -6,6 +6,7 @@
 
 pub(crate) mod actor;
 pub(crate) mod api;
+pub(crate) mod atomic_swap;
 pub(crate) mod bft_consensus;
 pub(crate) mod cache;
 pub(crate) mod config;
