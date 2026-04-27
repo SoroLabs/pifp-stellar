@@ -41,6 +41,9 @@ pub struct Config {
     /// Foreign bridge contract address
     pub foreign_bridge_address: Option<String>,
 
+    /// Port for the metrics and health server
+    pub metrics_port: u16,
+
     /// Node ID for threshold signatures (1-based)
     pub node_id: usize,
 

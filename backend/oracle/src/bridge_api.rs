@@ -23,7 +23,7 @@ pub struct BridgeState {
     pub messages: Mutex<HashMap<String, BridgeMessage>>,
 }
 
-pub fn router(state: Arc<BridgeState>) -> Router {
+pub fn router() -> Router<Arc<crate::health::ServerState>> {
     Router::new()
         .route("/bridge/messages", get(get_messages))
     .route("/bridge/messages/{id}", get(get_message))
@@ -31,24 +31,24 @@ pub fn router(state: Arc<BridgeState>) -> Router {
         .with_state(state)
 }
 
-async fn get_messages(State(state): State<Arc<BridgeState>>) -> Json<Vec<BridgeMessage>> {
-    let messages = state.messages.lock().unwrap();
+async fn get_messages(State(state): State<Arc<crate::health::ServerState>>) -> Json<Vec<BridgeMessage>> {
+    let messages = state.bridge.messages.lock().unwrap();
     Json(messages.values().cloned().collect())
 }
 
 async fn get_message(
-    State(state): State<Arc<BridgeState>>,
+    State(state): State<Arc<crate::health::ServerState>>,
     Path(id): Path<String>,
 ) -> Json<Option<BridgeMessage>> {
-    let messages = state.messages.lock().unwrap();
+    let messages = state.bridge.messages.lock().unwrap();
     Json(messages.get(&id).cloned())
 }
 
 async fn add_signature(
-    State(state): State<Arc<BridgeState>>,
+    State(state): State<Arc<crate::health::ServerState>>,
     Path(id): Path<String>,
 ) -> Json<bool> {
-    let mut messages = state.messages.lock().unwrap();
+    let mut messages = state.bridge.messages.lock().unwrap();
     if let Some(msg) = messages.get_mut(&id) {
         if msg.signatures_collected < msg.total_required {
             msg.signatures_collected += 1;

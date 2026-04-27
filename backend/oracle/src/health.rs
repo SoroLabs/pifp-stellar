@@ -9,6 +9,7 @@ use axum::{
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tracing::info;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::metrics;
 use crate::tx_diagnostics::TxDiagnosticsStore;

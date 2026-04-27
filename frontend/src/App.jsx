@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
+import { DidWallet } from './components/DidWallet'
+import { ZkProver } from './components/ZkProver'
 import { BridgeWatcher } from './components/BridgeWatcher'
 import { HighFrequencyTradingChart } from './components/HighFrequencyTradingChart'
 import { IpfsUploader } from './components/IpfsUploader'
@@ -11,6 +13,7 @@ import client from './graphql/client'
 import { GET_PROJECTS } from './graphql/queries'
 import RealtimeActivity from './components/RealtimeActivity'
 import BondingCurveSimulator from './components/BondingCurveSimulator'
+
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 const ORACLE_API = 'http://localhost:9090/api/offchain'

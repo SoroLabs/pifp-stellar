@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 /// Lock-free multi-threaded mempool for keeper nodes.
 ///
 /// Uses `crossbeam-epoch` for safe memory reclamation and `crossbeam-skiplist`

@@ -131,7 +131,7 @@ async fn pin_with_retry_web3_storage(data: Vec<u8>, config: &IpfsConfig) -> Resu
     Err(last_err)
 }
 
-async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> Result<String> {
+async fn pin_via_pinata(data: Vec<u8>, config: IpfsConfig, client: Client) -> Result<String> {
     let api_key = config
         .pinata_api_key
         .as_deref()
@@ -175,7 +175,7 @@ async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> R
 
 async fn pin_via_web3_storage(
     data: Vec<u8>,
-    config: &IpfsConfig,
+    config: IpfsConfig,
     client: Client,
 ) -> Result<String> {
     let token = config
