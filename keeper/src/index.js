@@ -5,6 +5,8 @@ import * as Tracing from '@sentry/tracing';
 import { loadTaskRegistry, saveTaskRegistry } from './taskRegistry.js';
 import { startMonitoring } from './monitor.js';
 import healthRoutes from './routes/healthRoutes.js';
+import peerRoutes from './routes/peerRoutes.js';
+import { initP2P, startGossipLoop } from './p2pSync.js';
 
 dotenv.config();
 
@@ -51,6 +53,9 @@ app.use(express.json());
 // Monitoring & Health Endpoints
 app.use('/health', healthRoutes);
 
+// P2P peer endpoints
+app.use('/peers', peerRoutes);
+
 // Metrics endpoint
 app.get('/metrics', (req, res) => {
   const tasks = loadTaskRegistry();
@@ -70,14 +75,21 @@ async function start() {
     // Load task registry
     const tasks = loadTaskRegistry();
     console.log(`📋 Loaded ${tasks.length} tasks from registry`);
-    
+
+    // Initialise P2P gossip mesh
+    initP2P();
+
     // Start monitoring
     startMonitoring();
+
+    // Start gossip loop
+    startGossipLoop();
     
     // Start HTTP server
     app.listen(PORT, HOST, () => {
       console.log(`✅ Keeper HTTP server listening on ${HOST}:${PORT}`);
       console.log(`   Health check: http://${HOST}:${PORT}/health`);
+      console.log(`   Peer status:  http://${HOST}:${PORT}/peers/status`);
       console.log(`   Metrics: http://${HOST}:${PORT}/metrics`);
     });
   } catch (error) {

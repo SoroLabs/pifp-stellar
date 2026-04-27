@@ -15,6 +15,11 @@ describe('Health Check Controller', () => {
       json: jest.fn()
     };
     jest.clearAllMocks();
+    process.env.STELLAR_RPC_URL = 'http://localhost:8000';
+  });
+
+  afterEach(() => {
+    delete process.env.STELLAR_RPC_URL;
   });
 
   test('should return 200 OK when both DB and RPC are healthy', async () => {
