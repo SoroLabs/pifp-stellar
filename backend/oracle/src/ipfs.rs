@@ -77,11 +77,7 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
     ))
 }
 
-async fn pin_with_retry<F, Fut>(
-    data: Vec<u8>,
-    config: &IpfsConfig,
-    pin_fn: F,
-) -> Result<String>
+async fn pin_with_retry<F, Fut>(data: Vec<u8>, config: &IpfsConfig, pin_fn: F) -> Result<String>
 where
     F: Fn(Vec<u8>, &IpfsConfig, Client) -> Fut,
     Fut: std::future::Future<Output = Result<String>>,
@@ -91,7 +87,11 @@ where
     for attempt in 0..MAX_RETRIES {
         if attempt > 0 {
             let backoff = BASE_BACKOFF_MS * (1 << (attempt - 1));
-            warn!(attempt, backoff_ms = backoff, "Retrying IPFS pin after backoff");
+            warn!(
+                attempt,
+                backoff_ms = backoff,
+                "Retrying IPFS pin after backoff"
+            );
             tokio::time::sleep(Duration::from_millis(backoff)).await;
         }
 
