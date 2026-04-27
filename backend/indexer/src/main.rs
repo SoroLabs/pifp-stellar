@@ -18,6 +18,7 @@ pub(crate) mod indexer;
 pub(crate) mod metrics;
 pub(crate) mod middleware;
 pub(crate) mod ml_pipeline;
+pub(crate) mod p2p_topology;
 pub(crate) mod profiles;
 pub(crate) mod rate_limit;
 pub(crate) mod rpc;
