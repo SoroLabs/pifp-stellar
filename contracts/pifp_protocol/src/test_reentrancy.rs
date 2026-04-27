@@ -10,8 +10,8 @@
 extern crate std;
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Bytes, BytesN, Env,
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
+    token, Address, Bytes, BytesN, Env, IntoVal, Val, Vec,
 };
 
 use crate::{PifpProtocol, PifpProtocolClient, Role};
@@ -29,7 +29,6 @@ struct Ctx {
 impl Ctx {
     fn new() -> Self {
         let env = Env::default();
-        env.mock_all_auths();
         let mut ledger = env.ledger().get();
         ledger.timestamp = 100_000;
         env.ledger().set(ledger);
@@ -41,15 +40,58 @@ impl Ctx {
         let oracle = Address::generate(&env);
         let manager = Address::generate(&env);
 
+        env.mock_auths(&[
+            MockAuth {
+                address: &admin,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "init",
+                    args: (&admin,).into_val(&env),
+                    sub_invocations: &[],
+                },
+            },
+        ]);
         client.init(&admin);
+
+        env.mock_auths(&[
+            MockAuth {
+                address: &admin,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "grant_role",
+                    args: (&admin, &oracle, Role::Oracle).into_val(&env),
+                    sub_invocations: &[],
+                },
+            },
+        ]);
         client.grant_role(&admin, &oracle, &Role::Oracle);
+
+        env.mock_auths(&[
+            MockAuth {
+                address: &admin,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "grant_role",
+                    args: (&admin, &manager, Role::ProjectManager).into_val(&env),
+                    sub_invocations: &[],
+                },
+            },
+        ]);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
 
-        Self { env, client, admin, oracle, manager }
+        Self {
+            env,
+            client,
+            admin,
+            oracle,
+            manager,
+        }
     }
 
     fn create_token(&self) -> (token::Client<'static>, token::StellarAssetClient<'static>) {
-        let addr = self.env.register_stellar_asset_contract_v2(self.admin.clone());
+        let addr = self
+            .env
+            .register_stellar_asset_contract_v2(self.admin.clone());
         (
             token::Client::new(&self.env, &addr.address()),
             token::StellarAssetClient::new(&self.env, &addr.address()),
@@ -70,16 +112,46 @@ impl Ctx {
     fn register(&self, token_addr: &Address, goal: i128) -> u64 {
         let tokens = soroban_sdk::vec![&self.env, token_addr.clone()];
         let deadline = self.env.ledger().timestamp() + 86_400;
-        let p = self.client.register_project(
-            &self.manager,
-            &tokens,
-            &goal,
-            &self.dummy_proof(),
-            &self.dummy_uri(),
-            &deadline,
-            &false,
-            &0u32,
-        );
+        let milestones = Vec::new(&self.env);
+        let proof = self.dummy_proof();
+        let uri = self.dummy_uri();
+        
+        self.env.mock_auths(&[
+            MockAuth {
+                address: &self.manager,
+                invoke: &MockAuthInvoke {
+                    contract: &self.client.address,
+                    fn_name: "register_project",
+                    args: (
+                        &self.manager,
+                        &tokens,
+                        &goal,
+                        &proof,
+                        &uri,
+                        &deadline,
+                        &false,
+                        &milestones,
+                        &0u32,
+                        &Vec::new(&self.env),
+                        &0u32,
+                    ).into_val(&self.env),
+                    sub_invocations: &[],
+                },
+            },
+        ]);
+         let p = self.client.register_project(
+             &self.manager,
+             &tokens,
+             &goal,
+             &proof,
+             &uri,
+             &deadline,
+             &false,
+             &milestones,
+             &0u32,
+             &Vec::new(&self.env),
+             &0u32,
+         );
         p.id
     }
 
@@ -101,7 +173,7 @@ impl Ctx {
 // ── deposit blocked when locked ───────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_deposit_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
@@ -112,38 +184,69 @@ fn test_deposit_blocked_when_locked() {
     // Simulate re-entrant state.
     ctx.force_lock();
 
+    ctx.env.mock_auths(&[
+        MockAuth {
+            address: &ctx.manager,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.client.address,
+                fn_name: "deposit",
+                args: (project_id, &ctx.manager, &token.address, 500i128).into_val(&ctx.env),
+                sub_invocations: &[
+                    MockAuthInvoke {
+                        contract: &token.address,
+                        fn_name: "transfer",
+                        args: (&ctx.manager, &ctx.client.address, 500i128).into_val(&ctx.env),
+                        sub_invocations: &[],
+                    }
+                ],
+            },
+        },
+    ]);
     ctx.client.deposit(&project_id, &ctx.manager, &token.address, &500i128);
 }
 
 // ── verify_and_release blocked when locked ────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_verify_and_release_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &1_000);
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &1_000i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &1_000i128);
 
     // Simulate re-entrant state.
     ctx.force_lock();
 
+    ctx.env.mock_auths(&[
+        MockAuth {
+            address: &ctx.oracle,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.client.address,
+                fn_name: "verify_and_release",
+                args: (&ctx.oracle, project_id, ctx.dummy_proof()).into_val(&ctx.env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     ctx.client.verify_and_release(&ctx.oracle, &project_id, &ctx.dummy_proof());
 }
 
 // ── refund blocked when locked ────────────────────────────────────────
 
 #[test]
-#[should_panic(expected = "HostError: Error(Contract, #34)")]
+#[should_panic(expected = "HostError: Error(Contract, #35)")]
 fn test_refund_blocked_when_locked() {
     let ctx = Ctx::new();
     let (token, sac) = ctx.create_token();
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &200);
-    ctx.client.deposit(&project_id, &ctx.manager, &token.address, &200i128);
+    ctx.client
+        .deposit(&project_id, &ctx.manager, &token.address, &200i128);
 
     // Expire the project so refund is valid.
     ctx.jump_time(86_401);
@@ -152,6 +255,17 @@ fn test_refund_blocked_when_locked() {
     // Simulate re-entrant state.
     ctx.force_lock();
 
+    ctx.env.mock_auths(&[
+        MockAuth {
+            address: &ctx.manager,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.client.address,
+                fn_name: "refund",
+                args: (&ctx.manager, project_id, &token.address).into_val(&ctx.env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     ctx.client.refund(&ctx.manager, &project_id, &token.address);
 }
 
@@ -164,6 +278,24 @@ fn test_lock_released_after_successful_deposit() {
     let project_id = ctx.register(&token.address, 1_000);
 
     sac.mint(&ctx.manager, &500);
+    ctx.env.mock_auths(&[
+        MockAuth {
+            address: &ctx.manager,
+            invoke: &MockAuthInvoke {
+                contract: &ctx.client.address,
+                fn_name: "deposit",
+                args: (project_id, &ctx.manager, &token.address, 500i128).into_val(&ctx.env),
+                sub_invocations: &[
+                    MockAuthInvoke {
+                        contract: &token.address,
+                        fn_name: "transfer",
+                        args: (&ctx.manager, &ctx.client.address, 500i128).into_val(&ctx.env),
+                        sub_invocations: &[],
+                    }
+                ],
+            },
+        },
+    ]);
     ctx.client.deposit(&project_id, &ctx.manager, &token.address, &500i128);
 
     // Lock must be cleared after the call completes.

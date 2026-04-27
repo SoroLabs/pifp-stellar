@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::State,
     http::{header, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -10,8 +9,10 @@ use axum::{
 use serde::Serialize;
 use tokio::net::TcpListener;
 use tracing::info;
+use tower_http::cors::{Any, CorsLayer};
 
 use crate::metrics;
+use crate::tx_diagnostics::TxDiagnosticsStore;
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -20,10 +21,7 @@ struct HealthResponse {
     service: &'static str,
 }
 
-#[derive(Clone)]
-pub struct ServerState;
-
-async fn health(State(_state): State<Arc<ServerState>>) -> impl IntoResponse {
+async fn health() -> impl IntoResponse {
     Json(HealthResponse {
         status: "ok",
         version: env!("CARGO_PKG_VERSION"),
@@ -40,17 +38,44 @@ async fn metrics_handler() -> impl IntoResponse {
     )
 }
 
-/// Start the health and metrics HTTP server on the given port.
-pub async fn serve(port: u16) -> anyhow::Result<()> {
-    let state = Arc::new(ServerState);
+async fn get_tx_diagnostics(
+    State(state): State<Arc<ServerState>>,
+    axum::extract::Path(hash): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    if let Some(payload) = state.diagnostics.get(&hash) {
+        return (StatusCode::OK, Json(payload)).into_response();
+    }
 
+    (
+        StatusCode::NOT_FOUND,
+        Json(ApiErrorResponse {
+            error: format!("No diagnostics found for transaction hash {hash}"),
+        }),
+    )
+        .into_response()
+}
+
+/// Start the health and metrics HTTP server on the given port.
+pub async fn serve(
+    port: u16,
+    bridge_state: Arc<crate::bridge_api::BridgeState>,
+    ipfs_state: Arc<crate::ipfs_api::IpfsState>,
+    rollup_state: Arc<crate::rollup_api::RollupState>,
+    oracle_state: Arc<crate::oracle_api::OracleApiState>,
+) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/metrics", get(metrics_handler))
+        .route("/api/v1/tx/diagnostics/:hash", get(get_tx_diagnostics))
+        .nest("/api", crate::bridge_api::router(bridge_state))
+        .nest("/api", crate::ipfs_api::router(ipfs_state))
+        .nest("/api/offchain", crate::offchain_api::router())
+        .nest("/api/debt", crate::debt_api::router())
+        .nest("/api/bonding", crate::bonding_api::router())
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
-    info!("Health server listening on http://{addr}");
+    info!("Oracle API server listening on http://{addr}");
 
     let listener = TcpListener::bind(&addr).await?;
     axum::serve(listener, app).await?;
@@ -64,11 +89,47 @@ mod tests {
     use tower::util::ServiceExt;
 
     fn test_app() -> Router {
-        let state = Arc::new(ServerState);
+        let bridge_state = Arc::new(crate::bridge_api::BridgeState::new());
+        let ipfs_state = Arc::new(crate::ipfs_api::IpfsState {
+            config: crate::ipfs::IpfsConfig {
+                pinata_api_key: None,
+                pinata_api_secret: None,
+                web3_storage_token: None,
+            },
+        });
+        let rollup_state = Arc::new(crate::rollup_api::RollupState::new(std::time::Duration::from_secs(30)));
+        let oracle_state = Arc::new(
+            crate::oracle_api::OracleApiState::new(&crate::config::Config {
+                rpc_url: "https://soroban-testnet.stellar.org".to_string(),
+                horizon_url: "https://horizon-testnet.stellar.org".to_string(),
+                contract_id: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM".to_string(),
+                oracle_secret_key: "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                ipfs_gateway: "https://ipfs.io".to_string(),
+                network_passphrase: "Test SDF Network ; September 2015".to_string(),
+                timeout_secs: 30,
+                sentry_dsn: None,
+                metrics_port: 9090,
+                oracle_asset_symbol: "XLM".to_string(),
+                oracle_quote_symbol: "USD".to_string(),
+                oracle_refresh_secs: 15,
+                oracle_max_staleness_secs: 90,
+                oracle_max_variance_pct: 5.0,
+                oracle_coingecko_url: "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd".to_string(),
+                oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT".to_string(),
+                oracle_kraken_url: "https://api.kraken.com/0/public/Ticker?pair=XLMUSD".to_string(),
+                foreign_rpc_url: None,
+                foreign_bridge_address: None,
+                node_id: 1,
+            })
+            .expect("oracle state should build in test"),
+        );
         Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics_handler))
-            .with_state(state)
+            .merge(crate::bridge_api::router(bridge_state))
+            .merge(crate::ipfs_api::router(ipfs_state))
+            .merge(crate::rollup_api::router(rollup_state))
+            .merge(crate::oracle_api::router(oracle_state))
     }
 
     #[tokio::test]
@@ -124,5 +185,21 @@ mod tests {
         assert_eq!(json["status"], "ok");
         assert_eq!(json["service"], "pifp-oracle");
         assert!(json["version"].is_string());
+    }
+
+    #[tokio::test]
+    async fn test_tx_diagnostics_not_found() {
+        let app = test_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/tx/diagnostics/unknown")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

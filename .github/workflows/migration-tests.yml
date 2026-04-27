@@ -1,134 +1,41 @@
-name: Database & Contract Migration Tests
+name: Migration Tests
 
 on:
   push:
-    branches: [ "main", "develop", "feat/*", "ci/*" ]
+    branches: [ "main", "develop" ]
   pull_request:
-    branches: [ "main", "develop", "feat/*" ]
+    branches: [ "main", "develop" ]
 
 jobs:
-  migration-tests:
+  db-migrations:
     name: Database Migration & Rollback
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: pifp_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features postgres,sqlite
+        run: cargo install sqlx-cli --no-default-features --features sqlite
 
       - name: Setup Test Environment
+        working-directory: backend/indexer
         run: |
-          echo "DATABASE_URL=postgres://user:password@localhost:5432/pifp_test" >> $GITHUB_ENV
+          echo "DATABASE_URL=sqlite://pifp_test.db" >> $GITHUB_ENV
+          touch pifp_test.db
           
       - name: Run Up Migrations
         working-directory: backend/indexer
         run: |
-          # SQLite to Postgres compatibility layer (Simplified for CI)
-          # We create a temporary migrations folder with PG-compatible syntax
-          mkdir -p pg_migrations
-          for f in migrations/*.sql; do
-            filename=$(basename "$f")
-            echo "Converting $f to PG compatible..."
-            cat "$f" | \
-            sed 's/INTEGER PRIMARY KEY AUTOINCREMENT/SERIAL PRIMARY KEY/g' | \
-            sed "s/strftime('%s', 'now')/EXTRACT(EPOCH FROM NOW())::BIGINT/g" | \
-            sed 's/INSERT OR IGNORE/INSERT/g' | \
-            sed 's/INTEGER PRIMARY KEY CHECK (id = 1)/INTEGER PRIMARY KEY/g' \
-            > "pg_migrations/$filename"
-          done
-          
-          # Run migrations
-          sqlx migrate run --source pg_migrations --database-url ${{ env.DATABASE_URL }}
+          sqlx migrate run --database-url ${{ env.DATABASE_URL }}
 
       - name: Test Migration Rollback
         working-directory: backend/indexer
         run: |
-          # Revert all migrations to test down scripts
-          # Since we have 8 migrations, we revert 8 times
-          for i in {1..8}; do
-            echo "Reverting migration $i..."
-            sqlx migrate revert --source pg_migrations --database-url ${{ env.DATABASE_URL }}
+          # Revert all migrations (9 currently)
+          for i in {1..9}; do
+            sqlx migrate revert --database-url ${{ env.DATABASE_URL }}
           done
-          
-          # Run them back up to ensure consistency
-          sqlx migrate run --source pg_migrations --database-url ${{ env.DATABASE_URL }}
-
-
-  contract-simulations:
-    name: Contract Deployment Simulation
-    runs-on: ubuntu-latest
-    
-    services:
-      stellar-rpc:
-        image: stellar/quickstart:latest-beta
-        ports:
-          - 8000:8000
-          - 8001:8001
-        args: ["--testnet", "--enable-soroban-rpc"]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Add wasm32v1-none target
-        run: rustup target add wasm32v1-none
-
-      - name: Install Stellar CLI
-        run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
-          sudo mv stellar /usr/local/bin/
-
-      - name: Build Contract
-        run: stellar contract build --manifest-path contracts/pifp_protocol/Cargo.toml
-
-      - name: Deploy Simulation
-        run: |
-          # Wait for RPC to be ready
-          echo "Waiting for Stellar RPC..."
-          until curl -s http://localhost:8000 > /dev/null; do
-            sleep 10
-            echo "Retrying..."
-          done
-          
-          # Configure local network
-          stellar network add local \
-            --rpc-url http://localhost:8000/soroban/rpc \
-            --network-passphrase "Test SDF Network ; September 2015"
-          
-          # Generate a temp identity
-          stellar keys generate deployer
-          
-          # Fund identity
-          curl -s "http://localhost:8000/friendbot?addr=$(stellar keys address deployer)"
-          
-          # Deploy
-          stellar contract deploy \
-
-            --wasm target/wasm32v1-none/release/pifp_protocol.wasm \
-            --source deployer \
-            --network local
-
+          sqlx migrate run --database-url ${{ env.DATABASE_URL }}

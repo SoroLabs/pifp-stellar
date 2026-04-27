@@ -45,9 +45,15 @@ struct Web3StorageResponse {
 }
 
 pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
+    // Attempt local pinning first if it's considered "primary" or fallback
+    if let Ok(cid) = pin_locally(data.clone()).await {
+        info!(cid = %cid, "Pinned locally");
+        return Ok(cid);
+    }
+
     if config.pinata_api_key.is_some() && config.pinata_api_secret.is_some() {
         info!("Attempting to pin via Pinata");
-        match pin_with_retry(data.clone(), config, pin_via_pinata).await {
+        match pin_with_retry_pinata(data.clone(), config).await {
             Ok(cid) => {
                 info!(cid = %cid, "Pinned via Pinata");
                 return Ok(cid);
@@ -60,7 +66,7 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
 
     if config.web3_storage_token.is_some() {
         info!("Attempting to pin via Web3.Storage");
-        match pin_with_retry(data, config, pin_via_web3_storage).await {
+        match pin_with_retry_web3_storage(data, config).await {
             Ok(cid) => {
                 info!(cid = %cid, "Pinned via Web3.Storage");
                 return Ok(cid);
@@ -77,27 +83,23 @@ pub async fn pin_file(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
     ))
 }
 
-async fn pin_with_retry<F, Fut>(
-    data: Vec<u8>,
-    config: &IpfsConfig,
-    pin_fn: F,
-) -> Result<String>
-where
-    F: Fn(Vec<u8>, &IpfsConfig, Client) -> Fut,
-    Fut: std::future::Future<Output = Result<String>>,
-{
+async fn pin_with_retry_pinata(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
     let mut last_err = OracleError::Network("No attempts made".to_string());
 
     for attempt in 0..MAX_RETRIES {
         if attempt > 0 {
             let backoff = BASE_BACKOFF_MS * (1 << (attempt - 1));
-            warn!(attempt, backoff_ms = backoff, "Retrying IPFS pin after backoff");
+            warn!(
+                attempt,
+                backoff_ms = backoff,
+                "Retrying IPFS pin after backoff"
+            );
             tokio::time::sleep(Duration::from_millis(backoff)).await;
         }
 
         let client = build_client()?;
 
-        match pin_fn(data.clone(), config, client).await {
+        match pin_via_pinata(data.clone(), config, client).await {
             Ok(cid) => return Ok(cid),
             Err(e) => {
                 warn!(attempt, error = %e, "IPFS pin attempt failed");
@@ -109,7 +111,31 @@ where
     Err(last_err)
 }
 
-async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> Result<String> {
+async fn pin_with_retry_web3_storage(data: Vec<u8>, config: &IpfsConfig) -> Result<String> {
+    let mut last_err = OracleError::Network("No attempts made".to_string());
+
+    for attempt in 0..MAX_RETRIES {
+        if attempt > 0 {
+            let backoff = BASE_BACKOFF_MS * (1 << (attempt - 1));
+            warn!(attempt, backoff_ms = backoff, "Retrying IPFS pin after backoff");
+            tokio::time::sleep(Duration::from_millis(backoff)).await;
+        }
+
+        let client = build_client()?;
+
+        match pin_via_web3_storage(data.clone(), config, client).await {
+            Ok(cid) => return Ok(cid),
+            Err(e) => {
+                warn!(attempt, error = %e, "IPFS pin attempt failed");
+                last_err = e;
+            }
+        }
+    }
+
+    Err(last_err)
+}
+
+async fn pin_via_pinata(data: Vec<u8>, config: IpfsConfig, client: Client) -> Result<String> {
     let api_key = config
         .pinata_api_key
         .as_deref()
@@ -153,7 +179,7 @@ async fn pin_via_pinata(data: Vec<u8>, config: &IpfsConfig, client: Client) -> R
 
 async fn pin_via_web3_storage(
     data: Vec<u8>,
-    config: &IpfsConfig,
+    config: IpfsConfig,
     client: Client,
 ) -> Result<String> {
     let token = config
@@ -184,6 +210,36 @@ async fn pin_via_web3_storage(
         .map_err(|e| OracleError::Network(format!("Failed to parse Web3.Storage response: {e}")))?;
 
     Ok(web3_resp.cid)
+}
+
+pub async fn pin_locally(data: Vec<u8>) -> Result<String> {
+    info!("Attempting to pin locally");
+    let client = build_client()?;
+    let part = Part::bytes(data)
+        .file_name("upload.bin")
+        .mime_str("application/octet-stream")
+        .map_err(|e| OracleError::Network(format!("Failed to build multipart part: {e}")))?;
+
+    let form = Form::new().part("file", part);
+
+    let response = client
+        .post("http://localhost:5001/api/v0/add")
+        .multipart(form)
+        .send()
+        .await
+        .map_err(|e| OracleError::Network(format!("Local IPFS request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(OracleError::Network("Local IPFS node not reachable or returned error".to_string()));
+    }
+
+    let json: serde_json::Value = response.json().await
+        .map_err(|e| OracleError::Network(format!("Failed to parse local IPFS response: {e}")))?;
+
+    let cid = json["Hash"].as_str()
+        .ok_or_else(|| OracleError::Network("No Hash in local IPFS response".to_string()))?;
+
+    Ok(cid.to_string())
 }
 
 fn build_client() -> Result<Client> {

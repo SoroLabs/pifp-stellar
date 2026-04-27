@@ -10,6 +10,7 @@ name = "indexer"
 path = "src/main.rs"
 
 [dependencies]
+actix = "0.13"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "postgres", "macros", "migrate"] }
@@ -28,20 +29,28 @@ hex = "0.4"
 tokio-util = "0.7"
 ed25519-dalek = { version = "2", features = ["serde", "rand_core"] }
 stellar-strkey = "0.0.16"
-redis = { version = "1.1", features = ["tokio-comp"] }
+redis = { version = "1.2", features = ["tokio-comp"] }
 hmac = "0.13"
 sha2 = "0.11"
 async-trait = "0.1"
 prometheus = { version = "0.14", features = ["process"] }
 lazy_static = "1"
+sysinfo = "0.38"
+tract-onnx = "0.22"
+stellar-xdr = { version = "25.0.0", features = ["std"] }
 governor = { version = "0.10", features = ["dashmap"] }
 dashmap = "6"
+# GraphQL
+async-graphql = { version = "7.0", features = ["chrono", "dataloader"] }
+async-graphql-axum = "7.0"
+
 # Sentry error tracking
-sentry = { version = "0.34", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
-sentry-tracing = "0.34"
+sentry = { version = "0.47", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls"] }
+sentry-tracing = "0.47"
 tower = "0.5"
+futures-util = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-rand = "0.8"
-axum-test = "19.1.1"
+rand = "0.10"
+axum-test = "20.0.0"

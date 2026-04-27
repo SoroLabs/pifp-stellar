@@ -149,6 +149,17 @@ mod tests {
             network_passphrase: String::new(),
             sentry_dsn: None,
             metrics_port: 9090,
+            foreign_rpc_url: None,
+            foreign_bridge_address: None,
+            node_id: 1,
+            oracle_asset_symbol: "XLM".to_string(),
+            oracle_quote_symbol: "USD".to_string(),
+            oracle_refresh_secs: 15,
+            oracle_max_staleness_secs: 90,
+            oracle_max_variance_pct: 5.0,
+            oracle_coingecko_url: String::new(),
+            oracle_binance_url: String::new(),
+            oracle_kraken_url: String::new(),
         };
 
         // Use a CID that definitely doesn't exist

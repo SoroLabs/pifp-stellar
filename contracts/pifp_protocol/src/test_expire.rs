@@ -49,6 +49,7 @@ fn test_expire_completed_project_panics() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Move to Completed
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
     ctx.jump_time(86_400); // grace period
@@ -66,6 +67,7 @@ fn test_expire_active_project_success() {
 
     // Deposit to make it Active
     sac.mint(&ctx.admin, &1000);
+    ctx.mock_deposit_auth(&ctx.admin, project.id, &token.address, 1000i128);
     ctx.client
         .deposit(&project.id, &ctx.admin, &token.address, &1000);
 

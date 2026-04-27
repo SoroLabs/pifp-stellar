@@ -15,6 +15,7 @@ fn test_get_project_not_found() {
 fn test_deposit_on_nonexistent_project() {
     let ctx = TestContext::new();
     let token = ctx.generate_address();
+    ctx.mock_deposit_auth(&ctx.manager, 42, &token, 100i128);
     ctx.client.deposit(&42, &ctx.manager, &token, &100i128);
 }
 
@@ -32,6 +33,7 @@ fn test_verify_already_completed_project() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // First verification succeeds.
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 
@@ -39,7 +41,8 @@ fn test_verify_already_completed_project() {
     ctx.jump_time(86_400); // grace period
     ctx.client.claim_funds(&project.id);
 
-    // Second verification must fail with MilestoneAlreadyReleased or similar.
+    // Second verification must fail with MilestoneAlreadyReleased (Error #3).
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
@@ -78,7 +81,7 @@ fn test_register_deadline_too_far_in_future_fails() {
     let ctx = TestContext::new();
     let tokens = Vec::from_array(&ctx.env, [ctx.generate_address()]);
     let too_far_deadline = ctx.env.ledger().timestamp() + 200_000_000;
-    
+
     let proof_hash = ctx.dummy_proof();
     let metadata_uri = ctx.dummy_metadata_uri();
     let mut milestones = Vec::new(&ctx.env);
@@ -88,7 +91,7 @@ fn test_register_deadline_too_far_in_future_fails() {
         proof_hash: proof_hash.clone(),
     });
 
-    ctx.client.register_project(
+    ctx.mock_auth(&ctx.manager, "register_project", (
         &ctx.manager,
         &tokens,
         &1000i128,
@@ -100,6 +103,27 @@ fn test_register_deadline_too_far_in_future_fails() {
         &0u32,
         &Vec::new(&ctx.env),
         &0u32,
+    ));
+    ctx.client.register_project(
+        &ctx.manager,
+        &tokens,
+        &1000i128,
+        &proof_hash,
+        &metadata_uri,
+        &too_far_deadline,
+        &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&ctx.env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&ctx.env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&ctx.env),
+        &0u32,
     );
 }
 
@@ -109,6 +133,7 @@ fn test_verify_wrong_proof_hash_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let wrong_proof = BytesN::from_array(&ctx.env, &[0xffu8; 32]);
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, &wrong_proof));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &wrong_proof);
 }
@@ -126,7 +151,9 @@ fn test_register_empty_tokens_fails() {
 fn test_verify_when_paused_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
+    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
@@ -146,6 +173,7 @@ fn test_expire_completed_project_fails_with_invalid_transition() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Complete the project.
+    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
     ctx.jump_time(86_400); // grace period
@@ -162,6 +190,7 @@ fn test_deposit_unaccepted_token_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let rogue_token = ctx.generate_address();
+    ctx.mock_deposit_auth(&ctx.manager, project.id, &rogue_token, 100i128);
     ctx.client.deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
 }
 
@@ -172,9 +201,12 @@ fn test_admin_cannot_cancel_project() {
     let (project, token, sac) = ctx.setup_project(500);
     let donator = ctx.generate_address();
     let other_admin = ctx.generate_address();
+    ctx.mock_auth(&ctx.admin, "grant_role", (&ctx.admin, &other_admin, crate::Role::Admin));
     ctx.client.grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
     sac.mint(&donator, &600i128);
+    ctx.mock_deposit_auth(&donator, project.id, &token.address, 600i128);
     ctx.client.deposit(&project.id, &donator, &token.address, &600i128);
+    ctx.mock_auth(&other_admin, "cancel_project", (&other_admin, project.id));
     ctx.client.cancel_project(&other_admin, &project.id);
 }
 
@@ -183,5 +215,6 @@ fn test_admin_cannot_cancel_project() {
 fn test_cancel_non_active_project_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
+    ctx.mock_auth(&ctx.manager, "cancel_project", (&ctx.manager, project.id));
     ctx.client.cancel_project(&ctx.manager, &project.id);
 }

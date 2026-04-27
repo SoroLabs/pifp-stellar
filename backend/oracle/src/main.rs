@@ -1,16 +1,38 @@
 mod chain;
 mod config;
+mod dkg;
+mod did;
 mod errors;
 mod health;
+mod mempool;
 mod metrics;
+mod mpc;
 mod notifications;
+mod tss;
 mod verifier;
+mod wasm_debug;
+mod observer;
+mod bridge_api;
+mod ipfs_api;
+mod ipfs;
+pub(crate) mod state_proof;
+pub(crate) mod offchain_api;
+pub(crate) mod debt_graph;
+pub(crate) mod debt_api;
+pub(crate) mod bonding_curve;
+pub(crate) mod bonding_api;
 
 use std::sync::Arc;
 
+use crate::bridge_api::BridgeState;
+use crate::ipfs_api::IpfsState;
+use crate::ipfs::IpfsConfig;
+use crate::oracle_api::OracleApiState;
+use crate::observer::BridgeObserver;
+use crate::rollup_api::RollupState;
+
 use clap::Parser;
 use sentry::{self, protocol::Event};
-use sentry_tracing;
 use tokio::sync::Semaphore;
 use tracing::{error, info, warn};
 use tracing_subscriber::{prelude::*, EnvFilter};
@@ -18,6 +40,7 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 use crate::config::Config;
 use crate::errors::{OracleError, Result};
 use crate::metrics::OracleMetrics;
+use crate::tx_diagnostics::TxDiagnosticsStore;
 
 const MAX_CONCURRENT_PROOFS: usize = 5;
 
@@ -56,16 +79,11 @@ struct Cli {
 fn redact_sensitive_data(mut event: Event<'static>) -> Event<'static> {
     event.request = None;
     event.user = None;
-    event.extra = None;
-    event.tags = event
-        .tags
-        .map(|mut t| {
-            t.retain(|k, _| {
-                let key = k.to_ascii_lowercase();
-                !key.contains("auth") && !key.contains("token") && !key.contains("password")
-            });
-            t
-        });
+    event.extra.clear();
+    event.tags.retain(|k, _| {
+        let key = k.to_ascii_lowercase();
+        !key.contains("auth") && !key.contains("token") && !key.contains("password")
+    });
     event
 }
 
@@ -92,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
         ))
     });
 
-    sentry::integrations::panic::register_panic_handler();
+    // sentry::integrations::panic::register_panic_handler();
 
     tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
@@ -101,8 +119,34 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let metrics = Arc::new(OracleMetrics::new());
+    let diagnostics_store = Arc::new(TxDiagnosticsStore::new());
+    
+    // Initialize Bridge and IPFS states
+    let bridge_state = Arc::new(BridgeState::new());
+    let ipfs_state = Arc::new(IpfsState {
+        config: IpfsConfig::from_env(),
+    });
+    let rollup_state = Arc::new(RollupState::new(std::time::Duration::from_secs(15)));
+
+    // Start Bridge Observer in the background if configured
+    let observer_config = Arc::clone(&config);
+    // let observer_bridge_state = Arc::clone(&bridge_state);
+    
+    // In a real scenario, we'd load the node's secret share from DKG
+    // For now, we'll use a dummy signer if node_id > 0
+    let signer = None; // Simplified for this task
+
+    let observer = Arc::new(BridgeObserver::new(observer_config, signer));
+    tokio::spawn(async move {
+        if let Err(e) = observer.run().await {
+            error!("Bridge observer failed: {}", e);
+        }
+    });
+
     if cli.serve {
-        health::serve(config.metrics_port).await?;
+        rollup_state.clone().start_settlement_loop();
+        let oracle_state = Arc::new(OracleApiState::new(config.as_ref())?);
+        health::serve(config.metrics_port, bridge_state, ipfs_state, rollup_state, oracle_state).await?;
         return Ok(());
     }
 
@@ -118,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
         MAX_CONCURRENT_PROOFS
     );
 
-    process_batch(tasks, config, cli.dry_run, metrics).await;
+    process_batch(tasks, config, cli.dry_run, metrics, diagnostics_store).await;
     Ok(())
 }
 
@@ -174,6 +218,7 @@ async fn process_batch(
     config: Arc<Config>,
     dry_run: bool,
     metrics: Arc<OracleMetrics>,
+    diagnostics_store: Arc<TxDiagnosticsStore>,
 ) {
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_PROOFS));
     let mut handles = Vec::with_capacity(tasks.len());
@@ -182,10 +227,11 @@ async fn process_batch(
         let config = Arc::clone(&config);
         let semaphore = Arc::clone(&semaphore);
         let metrics = Arc::clone(&metrics);
+        let diagnostics_store = Arc::clone(&diagnostics_store);
 
         let handle = tokio::spawn(async move {
             let _permit = semaphore.acquire().await.expect("semaphore closed");
-            process_single_proof(task, config, dry_run, metrics).await
+            process_single_proof(task, config, dry_run, metrics, diagnostics_store).await
         });
         handles.push(handle);
     }
@@ -219,6 +265,7 @@ async fn process_single_proof(
     config: Arc<Config>,
     dry_run: bool,
     metrics: Arc<OracleMetrics>,
+    diagnostics_store: Arc<TxDiagnosticsStore>,
 ) -> std::result::Result<(u64, Option<String>), (u64, String)> {
     let project_id = task.project_id;
     metrics.verifications_total.inc();
@@ -258,7 +305,9 @@ async fn process_single_proof(
 
     let tx_hash = {
         let _timer = metrics.chain_submit_duration_seconds.start_timer();
-        match chain::submit_verification(&config, project_id, proof_hash).await {
+        match chain::submit_verification(&config, project_id, proof_hash, Some(&diagnostics_store))
+            .await
+        {
             Ok(hash) => hash,
             Err(e) => {
                 metrics.verification_errors_total.inc();

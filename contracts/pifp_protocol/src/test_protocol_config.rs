@@ -1,6 +1,9 @@
 use crate::test_utils::{create_token, dummy_metadata_uri, dummy_proof, setup_test};
 use crate::Role;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
+    token, Address, Vec, IntoVal
+};
 
 #[test]
 fn test_update_protocol_config_success() {
@@ -8,6 +11,17 @@ fn test_update_protocol_config_success() {
     let recipient = Address::generate(&env);
 
     // Init sets admin as SuperAdmin
+    env.mock_auths(&[
+        MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "update_protocol_config",
+                args: (&admin, &recipient, 500u32).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.update_protocol_config(&admin, &recipient, &500); // 5%
 
     // No direct getter, but we can verify it works by running a release
@@ -20,6 +34,17 @@ fn test_update_protocol_config_unauthorized() {
     let stranger = Address::generate(&env);
     let recipient = Address::generate(&env);
 
+    env.mock_auths(&[
+        MockAuth {
+            address: &stranger,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "update_protocol_config",
+                args: (&stranger, &recipient, 500u32).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.update_protocol_config(&stranger, &recipient, &500);
 }
 
@@ -29,6 +54,17 @@ fn test_update_protocol_config_invalid_bps() {
     let (env, client, admin) = setup_test();
     let recipient = Address::generate(&env);
 
+    env.mock_auths(&[
+        MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "update_protocol_config",
+                args: (&admin, &recipient, 1001u32).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.update_protocol_config(&admin, &recipient, &1001); // > 10%
 }
 
@@ -45,29 +81,118 @@ fn test_verify_and_release_with_fees() {
     let accepted_tokens = Vec::from_array(&env, [token.address.clone()]);
 
     // Setup roles
+    env.mock_auths(&[
+        MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "grant_role",
+                args: (&admin, &creator, Role::ProjectManager).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.grant_role(&admin, &creator, &Role::ProjectManager);
+    env.mock_auths(&[
+        MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "grant_role",
+                args: (&admin, &oracle, Role::Oracle).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.grant_role(&admin, &oracle, &Role::Oracle);
-
+    
     // Set 5% fee
+    env.mock_auths(&[
+        MockAuth {
+            address: &admin,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "update_protocol_config",
+                args: (&admin, &fee_recipient, 500u32).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.update_protocol_config(&admin, &fee_recipient, &500);
 
-    let proof_hash = dummy_proof(&env);
-    let project = client.register_project(
-        &creator,
-        &accepted_tokens,
-        &1000,
-        &proof_hash,
-        &dummy_metadata_uri(&env),
-        &(env.ledger().timestamp() + 10000),
-        &false,
-        &0u32,
-    );
+     let milestones = Vec::new(&env);
+     let proof_hash = dummy_proof(&env);
+     env.mock_auths(&[
+         MockAuth {
+             address: &creator,
+             invoke: &MockAuthInvoke {
+                 contract: &client.address,
+                 fn_name: "register_project",
+                 args: (
+                     &creator,
+                     &accepted_tokens,
+                     1000i128,
+                     &proof_hash,
+                     dummy_metadata_uri(&env),
+                     env.ledger().timestamp() + 10000,
+                     false,
+                     &milestones,
+                     0u32,
+                     Vec::new(&env),
+                     0u32,
+                 ).into_val(&env),
+                 sub_invocations: &[],
+             },
+         },
+     ]);
+     let project = client.register_project(
+         &creator,
+         &accepted_tokens,
+         &1000,
+         &proof_hash,
+         &dummy_metadata_uri(&env),
+         &(env.ledger().timestamp() + 10000),
+         &false,
+         &milestones,
+         &0u32,
+         &Vec::new(&env),
+         &0u32,
+     );
 
     // Deposit 1000 tokens
     token_sac.mint(&donor, &1000);
+    env.mock_auths(&[
+        MockAuth {
+            address: &donor,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "deposit",
+                args: (project.id, &donor, &token.address, 1000i128).into_val(&env),
+                sub_invocations: &[
+                    MockAuthInvoke {
+                        contract: &token.address,
+                        fn_name: "transfer",
+                        args: (&donor, &client.address, 1000i128).into_val(&env),
+                        sub_invocations: &[],
+                    }
+                ],
+            },
+        },
+    ]);
     client.deposit(&project.id, &donor, &token.address, &1000);
 
     // Verify proof and wait grace period
+    env.mock_auths(&[
+        MockAuth {
+            address: &oracle,
+            invoke: &MockAuthInvoke {
+                contract: &client.address,
+                fn_name: "verify_proof",
+                args: (&oracle, project.id, &proof_hash).into_val(&env),
+                sub_invocations: &[],
+            },
+        },
+    ]);
     client.verify_proof(&oracle, &project.id, &proof_hash);
 
     // Advance time past 24h grace period
@@ -112,6 +237,17 @@ fn test_verify_and_release_zero_fee() {
         &dummy_metadata_uri(&env),
         &(env.ledger().timestamp() + 10000),
         &false,
+        &{
+            let mut ms = soroban_sdk::Vec::new(&env);
+            ms.push_back(crate::types::Milestone {
+                label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &soroban_sdk::Vec::new(&env),
         &0u32,
     );
 

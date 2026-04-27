@@ -2,77 +2,45 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop", "feat/*" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop", "feat/*" ]
 
 env:
-  MANIFEST_PATH: contracts/pifp_protocol/Cargo.toml
+  CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test and Lint
+  validate-and-test:
+    name: Lint & Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install Rust Toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          components: clippy, rustfmt
+          components: rustfmt, clippy
 
-      - name: Cache Cargo Registry & Build Artifacts
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
       - name: Check Formatting
-        run: cargo fmt --manifest-path ${{ env.MANIFEST_PATH }} -- --check
+        run: cargo fmt --all -- --check
 
-      - name: Run Clippy
-        run: cargo clippy --manifest-path ${{ env.MANIFEST_PATH }} -- -D warnings
+      - name: Lint with Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run Tests
-        run: cargo test --manifest-path ${{ env.MANIFEST_PATH }}
+        run: cargo test --workspace
 
-  coverage:
-    name: Coverage
+  wasm-build:
+    name: Build & Upload WASM
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo Registry & Build Artifacts
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install cargo-tarpaulin
-        run: cargo binstall cargo-tarpaulin --no-confirm
-
-      - name: Run Tarpaulin
-        run: cargo tarpaulin --out Xml --all-features --workspace
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: cobertura.xml
-          fail_ci_if_error: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  build:
-    name: Build WASM
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Install Rust Toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -80,15 +48,20 @@ jobs:
       - name: Add wasm32v1-none target
         run: rustup target add wasm32v1-none
 
-      - name: Cache Cargo Registry & Build Artifacts
+      - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
       - name: Install Stellar CLI
         run: |
-          wget https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
+          wget -q https://github.com/stellar/stellar-cli/releases/download/v25.1.0/stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
           tar -xzf stellar-cli-25.1.0-x86_64-unknown-linux-gnu.tar.gz
           sudo mv stellar /usr/local/bin/
-          stellar --version
 
       - name: Build Smart Contract
-        run: stellar contract build --manifest-path ${{ env.MANIFEST_PATH }}
+        run: stellar contract build --manifest-path contracts/pifp_protocol/Cargo.toml
+
+      - name: Upload WASM
+        uses: actions/upload-artifact@v7
+        with:
+          name: pifp-protocol-wasm
+          path: target/wasm32v1-none/release/pifp_protocol.wasm

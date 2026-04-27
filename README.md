@@ -135,6 +135,35 @@ cd backend/indexer
 cargo run
 ```
 
+#### Execution Engine
+
+The execution engine watches live pool snapshots over WebSocket, searches for
+profitable multi-hop routes with Bellman-Ford, and produces a fee-bump plan for
+next-ledger submission:
+
+```bash
+cargo run -p pifp-execution-engine -- --snapshot-file path/to/snapshots.json
+```
+
+#### Formal Verification
+
+Before an upgrade is deployed, the formal verifier can symbolically inspect the
+proposed Soroban WASM and reject binaries that violate the protocol invariant
+profile:
+
+```bash
+cargo run -p pifp-formal-verifier -- --wasm target/wasm32-unknown-unknown/release/pifp_protocol.wasm
+```
+
+#### DAG Resolution
+
+Incoming transaction intents can be dependency-analyzed and partitioned into
+parallel Soroban submission layers:
+
+```bash
+cargo run -p pifp-dag-resolver -- --intents intents.json
+```
+
 ### Database Backup & Restore
 
 Automated backup system for the indexer database with support for AWS S3 and Google Cloud Storage:

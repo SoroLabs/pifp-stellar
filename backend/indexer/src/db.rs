@@ -1,7 +1,7 @@
 //! Database layer — migrations, queries, and cursor management.
 
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use tracing::info;
 
 use crate::errors::Result;
@@ -17,22 +17,15 @@ pub struct GlobalStats {
     pub updated_at: i64,
 }
 
-/// Establish a SQLite connection pool and run pending migrations.
-pub async fn init_pool(database_url: &str) -> Result<SqlitePool> {
-    // Make sure the file is created if it doesn't exist yet.
-    let url = if database_url.starts_with("sqlite:") {
-        database_url.to_string()
-    } else {
-        format!("sqlite:{database_url}")
-    };
-
-    let pool = SqlitePoolOptions::new()
-        .max_connections(5)
-        .connect(&url)
+/// Establish a PostgreSQL connection pool and run pending migrations.
+pub async fn init_pool(database_url: &str) -> Result<PgPool> {
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(database_url)
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
-    info!("Database migrations applied successfully");
+    info!("PostgreSQL migrations applied successfully");
     Ok(pool)
 }
 
@@ -42,7 +35,7 @@ pub async fn init_pool(database_url: &str) -> Result<SqlitePool> {
 
 /// Read the last-seen ledger from the cursor row.
 /// Returns `0` when no cursor has been persisted yet.
-pub async fn get_last_ledger(pool: &SqlitePool) -> Result<i64> {
+pub async fn get_last_ledger(pool: &PgPool) -> Result<i64> {
     let row: Option<(i64,)> = sqlx::query_as("SELECT last_ledger FROM indexer_cursor WHERE id = 1")
         .fetch_optional(pool)
         .await?;
@@ -51,11 +44,11 @@ pub async fn get_last_ledger(pool: &SqlitePool) -> Result<i64> {
 
 /// Persist the last-seen ledger (and optionally a pagination cursor string).
 pub async fn save_cursor(
-    pool: &SqlitePool,
+    pool: &PgPool,
     last_ledger: i64,
     last_cursor: Option<&str>,
 ) -> Result<()> {
-    sqlx::query("UPDATE indexer_cursor SET last_ledger = ?1, last_cursor = ?2 WHERE id = 1")
+    sqlx::query("UPDATE indexer_cursor SET last_ledger = $1, last_cursor = $2 WHERE id = 1")
         .bind(last_ledger)
         .bind(last_cursor)
         .execute(pool)
@@ -64,7 +57,7 @@ pub async fn save_cursor(
 }
 
 /// Read back the raw cursor string (used to resume pagination mid-ledger).
-pub async fn get_cursor_string(pool: &SqlitePool) -> Result<Option<String>> {
+pub async fn get_cursor_string(pool: &PgPool) -> Result<Option<String>> {
     let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT last_cursor FROM indexer_cursor WHERE id = 1")
             .fetch_optional(pool)
@@ -80,22 +73,23 @@ pub async fn get_cursor_string(pool: &SqlitePool) -> Result<Option<String>> {
 /// `(ledger, tx_hash, event_type, project_id)` tuple are silently ignored
 /// to make the indexer idempotent.
 #[allow(dead_code)]
-pub async fn insert_events(pool: &SqlitePool, events: &[PifpEvent]) -> Result<usize> {
+pub async fn insert_events(pool: &PgPool, events: &[PifpEvent]) -> Result<usize> {
     Ok(insert_events_with_new(pool, events).await?.len())
 }
 
 /// Persist a batch and return only events that were newly inserted.
 pub async fn insert_events_with_new(
-    pool: &SqlitePool,
+    pool: &PgPool,
     events: &[PifpEvent],
 ) -> Result<Vec<PifpEvent>> {
     let mut inserted_events = Vec::new();
     for ev in events {
         let rows_affected = sqlx::query(
             r#"
-            INSERT OR IGNORE INTO events
+            INSERT INTO events
                 (event_type, project_id, actor, amount, ledger, timestamp, contract_id, tx_hash, extra_data)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT DO NOTHING
             "#,
         )
         .bind(&ev.event_type)
@@ -113,14 +107,23 @@ pub async fn insert_events_with_new(
 
         if rows_affected > 0 {
             inserted_events.push(ev.clone());
+            
+            // Real-time notification for GraphQL Subscriptions
+            let payload = serde_json::to_string(ev).unwrap_or_default();
+            sqlx::query("SELECT pg_notify('events', $1)")
+                .bind(payload)
+                .execute(pool)
+                .await?;
+
             // Update Project Registry for life-cycle tracking
             if let Some(id) = &ev.project_id {
                 match ev.event_type.as_str() {
                     "project_created" => {
                         sqlx::query(
                             r#"
-                            INSERT OR IGNORE INTO projects (project_id, creator, goal, primary_token, created_ledger)
-                            VALUES (?1, ?2, ?3, ?4, ?5)
+                            INSERT INTO projects (project_id, creator, goal, primary_token, created_ledger)
+                            VALUES ($1, $2, $3, $4, $5)
+                            ON CONFLICT DO NOTHING
                             "#,
                         )
                         .bind(id)
@@ -132,21 +135,21 @@ pub async fn insert_events_with_new(
                         .await?;
                     }
                     "project_active" => {
-                        sqlx::query("UPDATE projects SET status = 'Active' WHERE project_id = ?1")
+                        sqlx::query("UPDATE projects SET status = 'Active' WHERE project_id = $1")
                             .bind(id)
                             .execute(pool)
                             .await?;
                     }
                     "project_verified" => {
                         sqlx::query(
-                            "UPDATE projects SET status = 'Completed' WHERE project_id = ?1",
+                            "UPDATE projects SET status = 'Completed' WHERE project_id = $1",
                         )
                         .bind(id)
                         .execute(pool)
                         .await?;
                     }
                     "project_expired" => {
-                        sqlx::query("UPDATE projects SET status = 'Expired' WHERE project_id = ?1")
+                        sqlx::query("UPDATE projects SET status = 'Expired' WHERE project_id = $1")
                             .bind(id)
                             .execute(pool)
                             .await?;
@@ -642,6 +645,96 @@ pub async fn get_project_history(
     Ok(rows)
 }
 
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct DonorRecord {
+    pub address: String,
+    pub total_donated: String,
+    pub donation_count: i64,
+    pub first_donation_ledger: i64,
+    pub last_donation_ledger: i64,
+    pub first_donation_timestamp: i64,
+    pub last_donation_timestamp: i64,
+}
+
+/// Fetch donors for a specific project with pagination and consistent sorting.
+/// Returns donors sorted by total donated amount (descending), then by first donation timestamp (ascending).
+pub async fn get_project_donors(
+    pool: &SqlitePool,
+    project_id: &str,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<DonorRecord>> {
+    let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64)>(
+        r#"
+        SELECT 
+            actor as address,
+            COALESCE(SUM(CAST(amount AS INTEGER)), 0) as total_donated,
+            COUNT(*) as donation_count,
+            MIN(ledger) as first_donation_ledger,
+            MAX(ledger) as last_donation_ledger,
+            MIN(timestamp) as first_donation_timestamp,
+            MAX(timestamp) as last_donation_timestamp
+        FROM events
+        WHERE project_id = ?1 
+          AND event_type = 'project_funded'
+          AND actor IS NOT NULL
+        GROUP BY actor
+        ORDER BY total_donated DESC, first_donation_timestamp ASC, address ASC
+        LIMIT ?2 OFFSET ?3
+        "#,
+    )
+    .bind(project_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+
+    // Convert to DonorRecord structs
+    let donors = rows
+        .into_iter()
+        .map(
+            |(
+                address,
+                total_donated,
+                donation_count,
+                first_donation_ledger,
+                last_donation_ledger,
+                first_donation_timestamp,
+                last_donation_timestamp,
+            )| {
+                DonorRecord {
+                    address,
+                    total_donated: total_donated.to_string(),
+                    donation_count,
+                    first_donation_ledger,
+                    last_donation_ledger,
+                    first_donation_timestamp,
+                    last_donation_timestamp,
+                }
+            },
+        )
+        .collect();
+
+    Ok(donors)
+}
+
+/// Get the total count of unique donors for a specific project.
+pub async fn get_project_donors_count(pool: &SqlitePool, project_id: &str) -> Result<i64> {
+    let row: (i64,) = sqlx::query_as(
+        r#"
+        SELECT COUNT(DISTINCT actor)
+        FROM events
+        WHERE project_id = ?1 
+          AND event_type = 'project_funded'
+          AND actor IS NOT NULL
+        "#,
+    )
+    .bind(project_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0)
+}
+
 // ─────────────────────────────────────────────────────────
 // Quorum management
 // ─────────────────────────────────────────────────────────
@@ -822,12 +915,24 @@ mod tests {
         ).execute(&pool).await.unwrap();
         sqlx::query("INSERT INTO project_stats (id, total_projects, total_tvl, total_donors, completed_projects, failed_projects) VALUES (1, 0, '0', 0, 0, 0);").execute(&pool).await.unwrap();
 
+        // FTS5 virtual table + triggers (mirrors migration 007)
         sqlx::query(
-            "CREATE TABLE projects (project_id TEXT PRIMARY KEY, creator TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Funding', goal TEXT NOT NULL, primary_token TEXT NOT NULL, created_ledger INTEGER NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
+            "CREATE TABLE IF NOT EXISTS projects (
+                project_id TEXT PRIMARY KEY,
+                creator TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'Funding',
+                goal TEXT NOT NULL DEFAULT '0',
+                primary_token TEXT NOT NULL DEFAULT '',
+                created_ledger INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT ''
+            );",
         )
         .execute(&pool)
         .await
         .unwrap();
+
         sqlx::query("CREATE INDEX idx_projects_status ON projects (status);")
             .execute(&pool)
             .await
@@ -856,26 +961,14 @@ mod tests {
             "CREATE TABLE unique_donors (address TEXT PRIMARY KEY, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')));",
         ).execute(&pool).await.unwrap();
 
-        // FTS5 virtual table + triggers (mirrors migration 007)
-        sqlx::query(
-            "CREATE TABLE IF NOT EXISTS projects (
-                project_id TEXT PRIMARY KEY,
-                creator TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'Funding',
-                goal TEXT NOT NULL DEFAULT '0',
-                primary_token TEXT NOT NULL DEFAULT '',
-                created_ledger INTEGER NOT NULL DEFAULT 0,
-                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-                title TEXT NOT NULL DEFAULT '',
-                description TEXT NOT NULL DEFAULT ''
-            );",
-        ).execute(&pool).await.unwrap();
-
         sqlx::query(
             "CREATE VIRTUAL TABLE IF NOT EXISTS projects_fts USING fts5(
                 title, description, content='projects', content_rowid='rowid'
             );",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         sqlx::query(
             "CREATE TRIGGER IF NOT EXISTS projects_fts_insert
@@ -883,7 +976,10 @@ mod tests {
                     INSERT INTO projects_fts (rowid, title, description)
                     VALUES (new.rowid, new.title, new.description);
                 END;",
-        ).execute(&pool).await.unwrap();
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         pool
     }
@@ -1312,8 +1408,20 @@ mod tests {
     #[tokio::test]
     async fn test_search_returns_matching_project() {
         let pool = setup_test_db().await;
-        insert_project(&pool, "1", "Solar Power Initiative", "Bringing solar energy to rural areas").await;
-        insert_project(&pool, "2", "Wind Turbine Project", "Harnessing wind energy for clean power").await;
+        insert_project(
+            &pool,
+            "1",
+            "Solar Power Initiative",
+            "Bringing solar energy to rural areas",
+        )
+        .await;
+        insert_project(
+            &pool,
+            "2",
+            "Wind Turbine Project",
+            "Harnessing wind energy for clean power",
+        )
+        .await;
 
         let results = search_projects(&pool, "Solar", 20, 0).await.unwrap();
         assert_eq!(results.len(), 1);
@@ -1350,5 +1458,154 @@ mod tests {
         let results = search_projects(&pool, "solar", 20, 0).await.unwrap();
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].project_id, "2"); // title match ranks first
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Insert funding events for different donors
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("1000")
+            .bind(100i64)
+            .bind(1000i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_2")
+            .bind("500")
+            .bind(101i64)
+            .bind(1001i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Second donation from donor_1
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("300")
+            .bind(102i64)
+            .bind(1002i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let donors = get_project_donors(&pool, project_id, 10, 0).await.unwrap();
+        assert_eq!(donors.len(), 2);
+
+        // Should be sorted by total donated amount (descending)
+        assert_eq!(donors[0].address, "donor_1");
+        assert_eq!(donors[0].total_donated, "1300");
+        assert_eq!(donors[0].donation_count, 2);
+        assert_eq!(donors[0].first_donation_ledger, 100);
+        assert_eq!(donors[0].last_donation_ledger, 102);
+
+        assert_eq!(donors[1].address, "donor_2");
+        assert_eq!(donors[1].total_donated, "500");
+        assert_eq!(donors[1].donation_count, 1);
+        assert_eq!(donors[1].first_donation_ledger, 101);
+        assert_eq!(donors[1].last_donation_ledger, 101);
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors_count() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Initially no donors
+        let count = get_project_donors_count(&pool, project_id).await.unwrap();
+        assert_eq!(count, 0);
+
+        // Add some funding events
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("1000")
+            .bind(100i64)
+            .bind(1000i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_2")
+            .bind("500")
+            .bind(101i64)
+            .bind(1001i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Multiple donations from same donor should count as 1
+        sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+            .bind("project_funded")
+            .bind(project_id)
+            .bind("donor_1")
+            .bind("300")
+            .bind(102i64)
+            .bind(1002i64)
+            .bind("contract_1")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let count = get_project_donors_count(&pool, project_id).await.unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_project_donors_pagination() {
+        let pool = setup_test_db().await;
+        let project_id = "test_project";
+
+        // Add multiple donors
+        for i in 1..=5 {
+            sqlx::query("INSERT INTO events (event_type, project_id, actor, amount, ledger, timestamp, contract_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+                .bind("project_funded")
+                .bind(project_id)
+                .bind(format!("donor_{}", i))
+                .bind((i * 100).to_string())
+                .bind(i as i64)
+                .bind(i as i64)
+                .bind("contract_1")
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        // Test first page
+        let donors_page1 = get_project_donors(&pool, project_id, 2, 0).await.unwrap();
+        assert_eq!(donors_page1.len(), 2);
+        assert_eq!(donors_page1[0].address, "donor_5"); // Highest amount
+        assert_eq!(donors_page1[1].address, "donor_4");
+
+        // Test second page
+        let donors_page2 = get_project_donors(&pool, project_id, 2, 2).await.unwrap();
+        assert_eq!(donors_page2.len(), 2);
+        assert_eq!(donors_page2[0].address, "donor_3");
+        assert_eq!(donors_page2[1].address, "donor_2");
+
+        // Test third page
+        let donors_page3 = get_project_donors(&pool, project_id, 2, 4).await.unwrap();
+        assert_eq!(donors_page3.len(), 1);
+        assert_eq!(donors_page3[0].address, "donor_1"); // Lowest amount
     }
 }

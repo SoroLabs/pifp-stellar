@@ -1,0 +1,18 @@
+[package]
+name = "pifp-sequencer"
+version = "0.1.0"
+edition = "2021"
+description = "Minimal ZK-rollup sequencer backend for PIFP"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hex = "0.4"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+
+[dev-dependencies]
+rand = "0.8"

@@ -17,6 +17,7 @@ use tracing::warn;
 /// Slack's incoming webhook API accepts a JSON body with at minimum a `text`
 /// field.  We keep the payload simple and human-readable so it renders well
 /// in both the Slack UI and any log aggregator that captures the raw JSON.
+#[allow(dead_code)]
 #[derive(Debug, Serialize)]
 struct SlackMessage {
     text: String,
@@ -47,6 +48,7 @@ struct SlackMessage {
 ///     notify_verification_failure(&project_id, &proof_cid, &err),
 /// ).await;
 /// ```
+#[allow(dead_code)]
 pub async fn notify_verification_failure(
     project_id: &str,
     proof_cid: &str,
@@ -91,6 +93,7 @@ pub async fn notify_verification_failure(
 ///
 /// Any delivery failure is logged as a warning but **never propagated**.
 /// This is the recommended call-site pattern for the verification pipeline.
+#[allow(dead_code)]
 pub async fn alert_verification_failure(project_id: &str, proof_cid: &str, error_msg: &str) {
     use tokio::time::{timeout, Duration};
 
@@ -154,7 +157,10 @@ mod tests {
         std::env::remove_var("SLACK_WEBHOOK_URL");
 
         let result = notify_verification_failure("1", "QmAbc", "some error").await;
-        assert!(result.is_ok(), "should silently skip when env var is absent");
+        assert!(
+            result.is_ok(),
+            "should silently skip when env var is absent"
+        );
     }
 
     #[tokio::test]
@@ -175,7 +181,10 @@ mod tests {
             .mock("POST", "/webhook")
             .with_status(200)
             .with_body("ok")
-            .match_header("content-type", mockito::Matcher::Regex("application/json".to_string()))
+            .match_header(
+                "content-type",
+                mockito::Matcher::Regex("application/json".to_string()),
+            )
             .match_body(mockito::Matcher::AllOf(vec![
                 mockito::Matcher::Regex("Project ID".to_string()),
                 mockito::Matcher::Regex("QmMockCID".to_string()),

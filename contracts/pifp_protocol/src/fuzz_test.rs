@@ -1,8 +1,12 @@
+#![allow(dead_code, unused_variables)]
 extern crate std;
 use std::vec::Vec;
 
 use proptest::prelude::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, token, Address, Bytes, BytesN, Env, Vec as SorobanVec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Bytes, BytesN, Env, Vec as SorobanVec,
+};
 
 use crate::invariants_checker::*;
 pub use crate::types::ProjectStatus;
@@ -42,7 +46,7 @@ fn register<'a>(
     proof_hash: &BytesN<32>,
     deadline: u64,
 ) -> crate::types::Project {
-    let empty_oracles: SorobanVec<Address> = SorobanVec::new(env);
+    let _empty_oracles: SorobanVec<Address> = SorobanVec::new(env);
     client.register_project(
         creator,
         tokens,
@@ -51,7 +55,17 @@ fn register<'a>(
         &dummy_metadata_uri(env),
         &deadline,
         &false,
-        &empty_oracles,
+        &{
+            let mut ms = SorobanVec::new(env);
+            ms.push_back(crate::types::Milestone {
+                label: BytesN::from_array(env, &[0u8; 32]),
+                amount_bps: 10000,
+                proof_hash: proof_hash.clone(),
+            });
+            ms
+        },
+        &0u32,
+        &SorobanVec::new(env),
         &0u32,
     )
 }
@@ -83,7 +97,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -113,7 +130,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -142,7 +162,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         check_all_project_invariants(&env, &project);
@@ -177,7 +200,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let donator = Address::generate(&env);
@@ -217,7 +243,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let sac = token::StellarAssetClient::new(&env, &token_client.address);
@@ -276,7 +305,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let oracle = Address::generate(&env);
@@ -311,7 +343,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let oracle = Address::generate(&env);
@@ -345,18 +380,21 @@ proptest! {
         for _ in 0..n {
             let creator = Address::generate(&env);
             client.grant_role(&admin, &creator, &Role::ProjectManager);
+let p = client.register_project(
+    &creator,
+    &tokens,
+    &1000,
+    &proof_hash,
+    &dummy_metadata_uri(&env),
+    &deadline,
+    &false,
+    &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+    &0u32,
+    &SorobanVec::new(&env),
+    &0u32,
+);
+projects.push(p);
 
-            let p = client.register_project(
-                &creator,
-                &tokens,
-                &1000,
-                &proof_hash,
-                &dummy_metadata_uri(&env),
-                &deadline,
-                &false,
-        &0u32,
-            );
-            projects.push(p);
         }
 
         let mut soroban_projects = SorobanVec::new(&env);
@@ -394,7 +432,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let donator = Address::generate(&env);
@@ -430,7 +471,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
 
         let oracle = Address::generate(&env);
@@ -475,7 +519,10 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
-        &0u32,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
+            &0u32,
         );
         check_all_project_invariants(&env, &project);
         assert_eq!(project.status, ProjectStatus::Funding);
@@ -564,6 +611,9 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
             &0u32,
         );
 
@@ -644,6 +694,9 @@ proptest! {
             &dummy_metadata_uri(&env),
             &deadline,
             &false,
+            &{ let mut ms = SorobanVec::new(&env); ms.push_back(crate::types::Milestone { label: BytesN::from_array(&env, &[0u8; 32]), amount_bps: 10000, proof_hash: proof_hash.clone() }); ms },
+            &0u32,
+            &SorobanVec::new(&env),
             &0u32,
         );
 

@@ -1,0 +1,34 @@
+.trace-flamegraph {
+    border: 1px solid #dce5ea;
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 1rem;
+}
+
+.trace-flamegraph-header h3 {
+    margin: 0;
+    color: #0f2430;
+}
+
+.trace-flamegraph-header p {
+    margin: 0.4rem 0 0;
+    color: #385c69;
+}
+
+.trace-flamegraph-canvas {
+    margin-top: 1rem;
+    width: 100%;
+    min-height: 360px;
+}
+
+.trace-flamegraph-footer {
+    margin-top: 0.8rem;
+    font-size: 0.9rem;
+    color: #355560;
+}
+
+.trace-flamegraph .d3-flame-graph-tip {
+    font-size: 0.8rem;
+    border-radius: 10px;
+    border: 1px solid #0f2430;
+}

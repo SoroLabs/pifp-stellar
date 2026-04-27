@@ -18,10 +18,13 @@
 use std::{
     future::Future,
     net::IpAddr,
-    num::NonZeroU32,
     pin::Pin,
-    sync::Arc,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     task::{Context, Poll},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use axum::{
@@ -29,100 +32,133 @@ use axum::{
     extract::ConnectInfo,
     http::{Request, Response, StatusCode},
 };
-use governor::{
-    clock::{Clock, DefaultClock},
-    middleware::NoOpMiddleware,
-    state::keyed::DefaultKeyedStateStore,
-    Quota, RateLimiter,
-};
+use dashmap::DashMap;
 use serde_json::json;
 use tower::{Layer, Service};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// Default quota: 100 requests per 60-second window.
 pub const DEFAULT_REQUESTS_PER_MINUTE: u32 = 100;
 
-// ── Store abstraction (seam for Redis migration) ──────────────────────────────
+// ── Store abstraction ─────────────────────────────────────────────────────────
 
-/// Abstracts the rate-limit state store.
-///
-/// `Ok(remaining)` → request is within quota, `remaining` is an estimate of
-/// how many more calls are allowed right now.
-/// `Err(wait_secs)` → quota exceeded; caller should wait this many seconds.
 pub trait RateLimiterStore: Send + Sync + 'static {
     fn check(&self, key: IpAddr) -> Result<u32, u64>;
+    fn update_metrics(&self, cpu_usage: f64, mem_usage: f64);
+    fn get_quota(&self) -> u32;
 }
 
-// ── In-memory store ───────────────────────────────────────────────────────────
+// ── Adaptive Token Bucket (PID Controlled) ──────────────────────────────────
 
-type GovernorLimiter =
-    RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock, NoOpMiddleware>;
-
-pub struct InMemoryStore {
-    limiter: GovernorLimiter,
-    quota_per_minute: u32,
-    clock: DefaultClock,
+struct TokenBucket {
+    tokens: AtomicU64,
+    last_refill: AtomicU64, // Unix timestamp in millis
 }
 
-impl InMemoryStore {
+pub struct AdaptiveStore {
+    buckets: DashMap<IpAddr, TokenBucket>,
+    base_rate: f64,          // tokens per second
+    current_rate: AtomicU64, // fixed-point
+    target_cpu: f64,
+    pid_kp: f64,
+    pid_ki: f64,
+    pid_kd: f64,
+    integral: AtomicU64,   // fixed-point
+    last_error: AtomicU64, // fixed-point
+}
+
+impl AdaptiveStore {
     pub fn new(requests_per_minute: u32) -> Self {
-        let rpm = NonZeroU32::new(requests_per_minute).expect("quota must be > 0");
-        let quota = Quota::per_minute(rpm);
+        let base_rate = requests_per_minute as f64 / 60.0;
+        let _now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         Self {
-            limiter: RateLimiter::keyed(quota),
-            quota_per_minute: requests_per_minute,
-            clock: DefaultClock::default(),
+            buckets: DashMap::new(),
+            base_rate,
+            current_rate: AtomicU64::new(base_rate.to_bits()),
+            target_cpu: 0.7,
+            pid_kp: 0.5,
+            pid_ki: 0.1,
+            pid_kd: 0.05,
+            integral: AtomicU64::new(0),
+            last_error: AtomicU64::new(0),
         }
+    }
+
+    fn get_current_rate(&self) -> f64 {
+        f64::from_bits(self.current_rate.load(Ordering::Relaxed))
     }
 }
 
-impl RateLimiterStore for InMemoryStore {
+impl RateLimiterStore for AdaptiveStore {
     fn check(&self, key: IpAddr) -> Result<u32, u64> {
-        match self.limiter.check_key(&key) {
-            Ok(_snapshot) => {
-                // Estimate remaining without consuming additional tokens:
-                // try check_key_n for decreasing n until one succeeds.
-                // This is a read-only probe — we don't call check_key again.
-                let remaining =
-                    estimate_remaining(&self.limiter, key, self.quota_per_minute);
-                Ok(remaining)
-            }
-            Err(not_until) => {
-                let wait = not_until
-                    .wait_time_from(self.clock.now())
-                    .as_secs()
-                    .max(1);
-                Err(wait)
-            }
-        }
-    }
-}
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let rate = self.get_current_rate();
 
-/// Estimate how many more requests would be accepted right now without
-/// consuming any tokens.
-///
-/// `governor`'s `check_key_n` is non-destructive when it returns `Err`
-/// (the cell is not modified on failure).  We binary-search downward from
-/// `quota` to find the largest `n` that would still be accepted.
-fn estimate_remaining(limiter: &GovernorLimiter, key: IpAddr, quota: u32) -> u32 {
-    if quota == 0 {
-        return 0;
-    }
-    let mut lo = 0u32;
-    let mut hi = quota;
-    while lo < hi {
-        let mid = lo + (hi - lo + 1) / 2;
-        // SAFETY: mid >= 1 because lo starts at 0 and we add at least 1.
-        let n = NonZeroU32::new(mid).unwrap();
-        // check_key_n does NOT modify state on Err — safe to probe.
-        if limiter.check_key_n(&key, n).is_ok() {
-            lo = mid;
-        } else {
-            hi = mid - 1;
+        let entry = self.buckets.entry(key).or_insert_with(|| TokenBucket {
+            tokens: AtomicU64::new((rate * 60.0 * 1000.0).round() as u64),
+            last_refill: AtomicU64::new(now),
+        });
+
+        let bucket = entry.value();
+
+        let result = bucket
+            .tokens
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                let last = bucket.last_refill.load(Ordering::Acquire);
+                let elapsed_ms = now.saturating_sub(last);
+                let refill = (elapsed_ms as f64 * rate).round() as u64; // rate is per sec, elapsed is ms
+
+                let next_tokens = (current + refill).min((rate * 60.0 * 1000.0).round() as u64);
+                if next_tokens >= 1000 {
+                    // If we use tokens, we update the timestamp to now.
+                    // In fetch_update closure we can't easily update another atomic.
+                    Some(next_tokens - 1000)
+                } else {
+                    None
+                }
+            });
+
+        match result {
+            Ok(_) => {
+                bucket.last_refill.store(now, Ordering::Release);
+                Ok(1) // Simplified remaining
+            }
+            Err(_) => {
+                let wait_secs = (1.0 / rate).ceil() as u64;
+                Err(wait_secs)
+            }
         }
     }
-    lo
+
+    fn update_metrics(&self, cpu_usage: f64, _mem_usage: f64) {
+        let error = self.target_cpu - cpu_usage;
+        let prev_error = self.last_error.load(Ordering::Relaxed) as f64 / 1000.0;
+        let prev_integral = self.integral.load(Ordering::Relaxed) as f64 / 1000.0;
+
+        let integral = (prev_integral + error).clamp(-1.0, 1.0);
+        let derivative = error - prev_error;
+
+        let adjustment =
+            (self.pid_kp * error) + (self.pid_ki * integral) + (self.pid_kd * derivative);
+        let new_rate = (self.base_rate * (1.0 + adjustment)).max(1.0 / 60.0); // Min 1 req/min
+
+        self.current_rate
+            .store(new_rate.to_bits(), Ordering::Relaxed);
+        self.integral
+            .store((integral * 1000.0) as u64, Ordering::Relaxed);
+        self.last_error
+            .store((error * 1000.0) as u64, Ordering::Relaxed);
+    }
+
+    fn get_quota(&self) -> u32 {
+        (self.get_current_rate() * 60.0) as u32
+    }
 }
 
 // ── Layer ─────────────────────────────────────────────────────────────────────
@@ -130,19 +166,17 @@ fn estimate_remaining(limiter: &GovernorLimiter, key: IpAddr, quota: u32) -> u32
 #[derive(Clone)]
 pub struct RateLimitLayer {
     store: Arc<dyn RateLimiterStore>,
-    quota: u32,
-    window_secs: u64,
 }
 
 impl RateLimitLayer {
-    pub fn new(store: Arc<dyn RateLimiterStore>, quota: u32, window_secs: u64) -> Self {
-        Self { store, quota, window_secs }
+    pub fn new(store: Arc<dyn RateLimiterStore>) -> Self {
+        Self { store }
     }
 
-    /// Convenience constructor using the default in-memory store.
-    pub fn in_memory(requests_per_minute: u32) -> Self {
-        let store = Arc::new(InMemoryStore::new(requests_per_minute));
-        Self::new(store, requests_per_minute, 60)
+    #[allow(dead_code)]
+    pub fn adaptive(requests_per_minute: u32) -> Self {
+        let store = Arc::new(AdaptiveStore::new(requests_per_minute));
+        Self::new(store)
     }
 }
 
@@ -153,8 +187,6 @@ impl<S> Layer<S> for RateLimitLayer {
         RateLimitMiddleware {
             inner,
             store: Arc::clone(&self.store),
-            quota: self.quota,
-            window_secs: self.window_secs,
         }
     }
 }
@@ -165,8 +197,6 @@ impl<S> Layer<S> for RateLimitLayer {
 pub struct RateLimitMiddleware<S> {
     inner: S,
     store: Arc<dyn RateLimiterStore>,
-    quota: u32,
-    window_secs: u64,
 }
 
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
@@ -181,25 +211,33 @@ where
     type Error = S::Error;
     type Future = BoxFuture<Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), <S as Service<Request<Body>>>::Error>> {
+    fn poll_ready(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), <S as Service<Request<Body>>>::Error>> {
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> BoxFuture<Result<Response<Body>, <S as Service<Request<Body>>>::Error>> {
+    fn call(
+        &mut self,
+        req: Request<Body>,
+    ) -> BoxFuture<Result<Response<Body>, <S as Service<Request<Body>>>::Error>> {
         let store = Arc::clone(&self.store);
-        let quota = self.quota;
-        let window_secs = self.window_secs;
         let client_ip = extract_ip(&req);
         let mut inner = self.inner.clone();
 
         Box::pin(async move {
+            let quota = store.get_quota();
             match store.check(client_ip) {
                 Ok(remaining) => {
                     let mut resp = inner.call(req).await?;
                     let h = resp.headers_mut();
-                    h.insert("x-ratelimit-limit",   quota.to_string().parse().unwrap());
-                    h.insert("x-ratelimit-remaining", remaining.to_string().parse().unwrap());
-                    h.insert("x-ratelimit-reset",   window_secs.to_string().parse().unwrap());
+                    h.insert("x-ratelimit-limit", quota.to_string().parse().unwrap());
+                    h.insert(
+                        "x-ratelimit-remaining",
+                        remaining.to_string().parse().unwrap(),
+                    );
+                    h.insert("x-ratelimit-reset", "60".parse().unwrap());
                     Ok(resp)
                 }
                 Err(wait_secs) => {
@@ -211,9 +249,9 @@ where
                     let resp = Response::builder()
                         .status(StatusCode::TOO_MANY_REQUESTS)
                         .header("content-type", "application/json")
-                        .header("x-ratelimit-limit",     quota.to_string())
+                        .header("x-ratelimit-limit", quota.to_string())
                         .header("x-ratelimit-remaining", "0")
-                        .header("x-ratelimit-reset",     wait_secs.to_string())
+                        .header("x-ratelimit-reset", wait_secs.to_string())
                         .body(Body::from(body))
                         .unwrap();
 
@@ -224,10 +262,7 @@ where
     }
 }
 
-// ── IP extraction ─────────────────────────────────────────────────────────────
-
 fn extract_ip(req: &Request<Body>) -> IpAddr {
-    // 1. X-Forwarded-For (first entry — closest client behind a proxy)
     if let Some(xff) = req.headers().get("x-forwarded-for") {
         if let Ok(val) = xff.to_str() {
             if let Some(first) = val.split(',').next() {
@@ -238,15 +273,10 @@ fn extract_ip(req: &Request<Body>) -> IpAddr {
         }
     }
 
-    // 2. ConnectInfo set by axum::serve (requires make_into_service_with_connect_info)
-    if let Some(ConnectInfo(addr)) = req
-        .extensions()
-        .get::<ConnectInfo<std::net::SocketAddr>>()
-    {
+    if let Some(ConnectInfo(addr)) = req.extensions().get::<ConnectInfo<std::net::SocketAddr>>() {
         return addr.ip();
     }
 
-    // 3. Fallback: loopback (e.g. in tests without ConnectInfo)
     IpAddr::from([127, 0, 0, 1])
 }
 
@@ -265,8 +295,8 @@ mod tests {
     fn test_app(limit: u32) -> TestServer {
         let app = Router::new()
             .route("/", get(ok_handler))
-            .layer(RateLimitLayer::in_memory(limit));
-        TestServer::new(app).unwrap()
+            .layer(RateLimitLayer::adaptive(limit));
+        TestServer::new(app)
     }
 
     /// Sends `limit` requests (all must succeed) then asserts the next one

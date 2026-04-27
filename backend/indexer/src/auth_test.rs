@@ -8,8 +8,8 @@
 
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
-use stellar_strkey::ed25519::PublicKey as StellarPublicKey;
 use std::sync::atomic::{AtomicU8, Ordering};
+use stellar_strkey::ed25519::PublicKey as StellarPublicKey;
 
 use crate::middleware::auth::{verify_profile_signature, AuthError};
 

@@ -7,6 +7,10 @@ use tracing::{debug, info, warn};
 
 use crate::config::Config;
 use crate::errors::{OracleError, Result};
+use crate::tx_diagnostics::{build_failed_tx_diagnostics, TxDiagnosticsStore};
+
+const TX_STATUS_MAX_POLLS: usize = 15;
+const TX_STATUS_POLL_INTERVAL_SECS: u64 = 2;
 
 /// Submit a verify_and_release transaction to the PIFP contract.
 ///
@@ -27,6 +31,7 @@ pub async fn submit_verification(
     config: &Config,
     project_id: u64,
     proof_hash: [u8; 32],
+    diagnostics_store: Option<&TxDiagnosticsStore>,
 ) -> Result<String> {
     info!(
         "Building verify_and_release transaction for project {}",
@@ -54,6 +59,7 @@ pub async fn submit_verification(
     // Step 2: Submit transaction to network
     info!("Submitting transaction to network...");
     let tx_hash = submit_transaction(config, &params, &oracle_keypair).await?;
+    poll_transaction_until_terminal(config, &tx_hash, diagnostics_store).await?;
 
     Ok(tx_hash)
 }
@@ -201,6 +207,75 @@ async fn submit_transaction(
         .ok_or_else(|| OracleError::Transaction("No transaction hash in response".to_string()))?;
 
     Ok(tx_hash.to_string())
+}
+
+async fn poll_transaction_until_terminal(
+    config: &Config,
+    tx_hash: &str,
+    diagnostics_store: Option<&TxDiagnosticsStore>,
+) -> Result<()> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(config.timeout_secs))
+        .build()
+        .map_err(|e| OracleError::Network(format!("Failed to create HTTP client: {e}")))?;
+
+    for _ in 0..TX_STATUS_MAX_POLLS {
+        let request_body = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTransaction",
+            "params": {
+                "hash": tx_hash
+            }
+        });
+
+        let response = client
+            .post(&config.rpc_url)
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| OracleError::Network(format!("getTransaction request failed: {e}")))?;
+
+        let response_json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| OracleError::Network(format!("Failed to parse getTransaction response: {e}")))?;
+
+        if let Some(error) = response_json.get("error") {
+            return Err(OracleError::Transaction(format!(
+                "getTransaction failed for {tx_hash}: {error}"
+            )));
+        }
+
+        let status = response_json
+            .get("result")
+            .and_then(|v| v.get("status"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("UNKNOWN");
+
+        if status.eq_ignore_ascii_case("SUCCESS") {
+            info!("Transaction {tx_hash} confirmed successfully");
+            return Ok(());
+        }
+
+        if status.eq_ignore_ascii_case("FAILED") {
+            let diagnostics = build_failed_tx_diagnostics(tx_hash, &response_json, "getTransaction");
+            if let Some(store) = diagnostics_store {
+                store.upsert(diagnostics.clone());
+            }
+            return Err(OracleError::ContractError(format!(
+                "Transaction {tx_hash} failed: {}",
+                diagnostics.protocol_issue
+            )));
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(TX_STATUS_POLL_INTERVAL_SECS)).await;
+    }
+
+    Err(OracleError::Transaction(format!(
+        "Transaction {tx_hash} did not reach a terminal status after {} polls",
+        TX_STATUS_MAX_POLLS
+    )))
 }
 
 /// Parse contract error from simulation response.
