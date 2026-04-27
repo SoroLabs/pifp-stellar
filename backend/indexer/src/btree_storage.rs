@@ -42,7 +42,10 @@ pub struct StateEntry {
 impl StateEntry {
     /// Composite B-Tree key: `ledger_seq || contract_id || key_xdr`.
     pub fn btree_key(&self) -> String {
-        format!("{:020}:{}:{}", self.ledger_seq, self.contract_id, self.key_xdr)
+        format!(
+            "{:020}:{}:{}",
+            self.ledger_seq, self.contract_id, self.key_xdr
+        )
     }
 
     /// Serialise to a compact binary blob (bincode-style via JSON for now;
@@ -71,7 +74,10 @@ impl Wal {
             .append(true)
             .read(true)
             .open(path.as_ref())?;
-        Ok(Self { file, path: path.as_ref().to_owned() })
+        Ok(Self {
+            file,
+            path: path.as_ref().to_owned(),
+        })
     }
 
     /// Append a frame: `[4-byte len][payload bytes]`.
@@ -140,18 +146,10 @@ impl MemIndex {
         self.data.get(key)
     }
 
-    fn range(
-        &self,
-        from_ledger: u64,
-        to_ledger: u64,
-        contract_id: &str,
-    ) -> Vec<&StateEntry> {
+    fn range(&self, from_ledger: u64, to_ledger: u64, contract_id: &str) -> Vec<&StateEntry> {
         let lo = format!("{:020}:{}:", from_ledger, contract_id);
         let hi = format!("{:020}:{}:\u{FFFF}", to_ledger, contract_id);
-        self.data
-            .range(lo..=hi)
-            .map(|(_, v)| v)
-            .collect()
+        self.data.range(lo..=hi).map(|(_, v)| v).collect()
     }
 
     fn len(&self) -> usize {
@@ -213,7 +211,10 @@ impl BTreeStorageEngine {
         g.index.insert(entry);
         g.dirty += 1;
         if g.dirty >= g.checkpoint_interval {
-            debug!("BTreeStorageEngine: checkpointing WAL ({} entries)", g.dirty);
+            debug!(
+                "BTreeStorageEngine: checkpointing WAL ({} entries)",
+                g.dirty
+            );
             // In production this would flush pages to an SST file.
             g.wal.truncate()?;
             g.dirty = 0;
@@ -229,12 +230,7 @@ impl BTreeStorageEngine {
 
     /// Range scan over `[from_ledger, to_ledger]` for a given contract.
     /// Returns entries sorted by ledger sequence ascending.
-    pub fn scan(
-        &self,
-        from_ledger: u64,
-        to_ledger: u64,
-        contract_id: &str,
-    ) -> Vec<StateEntry> {
+    pub fn scan(&self, from_ledger: u64, to_ledger: u64, contract_id: &str) -> Vec<StateEntry> {
         self.inner
             .read()
             .unwrap()
@@ -263,7 +259,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn ts() -> i64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
     }
 
     fn entry(ledger: u64, contract: &str, key: &str, value: &str) -> StateEntry {
@@ -304,7 +303,9 @@ mod tests {
         let dir = tempdir();
         {
             let engine = BTreeStorageEngine::open(&dir).unwrap();
-            engine.put(entry(42, "CXYZ", "key", "recovered_value")).unwrap();
+            engine
+                .put(entry(42, "CXYZ", "key", "recovered_value"))
+                .unwrap();
         }
         // Re-open — should recover from WAL.
         let engine2 = BTreeStorageEngine::open(&dir).unwrap();

@@ -223,17 +223,15 @@ pub async fn get_project_donors(
     );
 
     match (total_count_result, donors_result) {
-        (Ok(total_donors), Ok(donors)) => {
-            (
-                StatusCode::OK,
-                Json(DonorsResponse {
-                    project_id,
-                    total_donors,
-                    donors,
-                }),
-            )
-                .into_response()
-        }
+        (Ok(total_donors), Ok(donors)) => (
+            StatusCode::OK,
+            Json(DonorsResponse {
+                project_id,
+                total_donors,
+                donors,
+            }),
+        )
+            .into_response(),
         (Err(e), _) | (_, Err(e)) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!(ErrorResponse {

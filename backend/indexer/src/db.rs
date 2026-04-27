@@ -685,20 +685,33 @@ pub async fn get_project_donors(
     .bind(offset)
     .fetch_all(pool)
     .await?;
-    
+
     // Convert to DonorRecord structs
-    let donors = rows.into_iter().map(|(address, total_donated, donation_count, first_donation_ledger, last_donation_ledger, first_donation_timestamp, last_donation_timestamp)| {
-        DonorRecord {
-            address,
-            total_donated: total_donated.to_string(),
-            donation_count,
-            first_donation_ledger,
-            last_donation_ledger,
-            first_donation_timestamp,
-            last_donation_timestamp,
-        }
-    }).collect();
-    
+    let donors = rows
+        .into_iter()
+        .map(
+            |(
+                address,
+                total_donated,
+                donation_count,
+                first_donation_ledger,
+                last_donation_ledger,
+                first_donation_timestamp,
+                last_donation_timestamp,
+            )| {
+                DonorRecord {
+                    address,
+                    total_donated: total_donated.to_string(),
+                    donation_count,
+                    first_donation_ledger,
+                    last_donation_ledger,
+                    first_donation_timestamp,
+                    last_donation_timestamp,
+                }
+            },
+        )
+        .collect();
+
     Ok(donors)
 }
 
