@@ -52,7 +52,36 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 pub enum ServerMessage<'a> {
     Connected { message: &'static str },
     Event { payload: &'a PifpEvent },
+    /// Transaction status update for pending transactions.
+    TransactionUpdate { payload: &'a TransactionUpdate },
     Pong,
+}
+
+/// Transaction status update payload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionUpdate {
+    /// The transaction hash being updated.
+    pub tx_hash: String,
+    /// Current status of the transaction.
+    pub status: TransactionStatus,
+    /// Optional project ID if this tx is related to a project.
+    pub project_id: Option<String>,
+    /// Ledger number when status changed.
+    pub ledger: i64,
+    /// Error message if status is failed.
+    pub error_message: Option<String>,
+}
+
+/// Transaction status enum.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionStatus {
+    /// Transaction has been submitted, pending confirmation.
+    Pending,
+    /// Transaction was confirmed on-chain.
+    Confirmed,
+    /// Transaction failed or was reverted.
+    Failed,
 }
 
 /// Inbound message envelope received from clients.
@@ -121,18 +150,27 @@ impl Filter {
 pub struct WsState {
     /// Broadcast sender — the in-memory event queue.
     pub tx: broadcast::Sender<Arc<PifpEvent>>,
+    /// Broadcast sender for transaction updates (separate channel for priority).
+    pub tx_updates: broadcast::Sender<Arc<TransactionUpdate>>,
 }
 
 impl WsState {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(BROADCAST_CAPACITY);
-        Self { tx }
+        let (tx_updates, _) = broadcast::channel(BROADCAST_CAPACITY);
+        Self { tx, tx_updates }
     }
 
     /// Enqueue an event for all connected clients.
     /// Silently drops if there are no subscribers (expected at startup).
     pub fn broadcast_event(&self, event: &PifpEvent) {
         let _ = self.tx.send(Arc::new(event.clone()));
+    }
+
+    /// Enqueue a transaction status update for all connected clients.
+    /// This provides low-latency updates for pending transactions.
+    pub fn broadcast_transaction_update(&self, update: &TransactionUpdate) {
+        let _ = self.tx_updates.send(Arc::new(update.clone()));
     }
 }
 
@@ -154,7 +192,8 @@ pub async fn run(addr: String, state: WsState) {
         };
 
         let rx = state.tx.subscribe();
-        tokio::spawn(handle_connection(ws_stream, peer_addr, rx));
+        let tx_rx = state.tx_updates.subscribe();
+        tokio::spawn(handle_connection(ws_stream, peer_addr, rx, tx_rx));
     }
 }
 
@@ -164,6 +203,7 @@ async fn handle_connection(
     ws_stream: tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>,
     peer: SocketAddr,
     mut rx: broadcast::Receiver<Arc<PifpEvent>>,
+    mut tx_rx: broadcast::Receiver<Arc<TransactionUpdate>>,
 ) {
     info!("WebSocket client connected: {peer}");
 
@@ -253,6 +293,31 @@ async fn handle_connection(
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         warn!("Client {peer} lagged by {n} messages — disconnecting");
+                        break;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+
+            // ── Transaction status updates ─────────────────────────────────
+            tx_result = tx_rx.recv() => {
+                match tx_result {
+                    Ok(update) => {
+                        match serde_json::to_string(&ServerMessage::TransactionUpdate { payload: &update }) {
+                            Ok(json) => {
+                                if write
+                                    .send(Message::Text(Utf8Bytes::from(json)))
+                                    .await
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Err(e) => error!("Failed to serialise transaction update: {e}"),
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Client {peer} lagged by {n} tx updates — disconnecting");
                         break;
                     }
                     Err(broadcast::error::RecvError::Closed) => break,

@@ -16,8 +16,9 @@ export type EventKind =
   | 'role_set'
   | 'role_del'
   | 'protocol_paused'
-  | 'protocol_unpaused'
-  | 'unknown';
+  | 'protocol_unpaused'  | 'tx_pending'
+  | 'tx_confirmed'
+  | 'tx_failed'  | 'unknown';
 
 // ─── Core event payload ───────────────────────────────────────────────────────
 
@@ -39,7 +40,25 @@ export interface PifpEvent {
 export type ServerMessage =
   | { type: 'connected'; message: string }
   | { type: 'event'; payload: PifpEvent }
+  | { type: 'transaction_update'; payload: TransactionUpdate }
   | { type: 'pong' };
+
+/** Transaction status update payload. */
+export interface TransactionUpdate {
+  /** The transaction hash being updated. */
+  tx_hash: string;
+  /** Current status of the transaction. */
+  status: TransactionStatus;
+  /** Optional project ID if this tx is related to a project. */
+  project_id?: string;
+  /** Ledger number when status changed. */
+  ledger: number;
+  /** Error message if status is failed. */
+  error_message?: string;
+}
+
+/** Transaction status enum. */
+export type TransactionStatus = 'pending' | 'confirmed' | 'failed';
 
 /** Messages the client sends to the server. */
 export type ClientMessage =

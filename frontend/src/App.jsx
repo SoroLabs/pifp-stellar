@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import { WebSocketProvider } from './context/WebSocketContext'
+import { TransactionProvider } from './context/TransactionContext'
 import { DidWallet } from './components/DidWallet'
 import { ZkProver } from './components/ZkProver'
 import { BridgeWatcher } from './components/BridgeWatcher'
@@ -43,7 +44,9 @@ function App() {
   return (
     <ApolloProvider client={client}>
       <WebSocketProvider>
-        <AppContent />
+        <TransactionProvider>
+          <AppContent />
+        </TransactionProvider>
       </WebSocketProvider>
     </ApolloProvider>
   )

@@ -17,25 +17,26 @@ import React, {
   useEffect,
   useRef,
   useState,
-} from 'react';
+} from "react";
 import type {
   ClientMessage,
   ConnectionStatus,
   PifpEvent,
   ServerMessage,
   SubscriptionFilter,
-} from '../types/events';
+  TransactionUpdate,
+} from "../types/events";
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const WS_URL =
-  (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:9001';
+  (import.meta.env.VITE_WS_URL as string | undefined) ?? "ws://localhost:9001";
 
 const HEARTBEAT_MS = 25_000;
 const INITIAL_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
-const LEADER_CHANNEL = 'pifp-ws-leader';
-const EVENT_CHANNEL = 'pifp-ws-events';
+const LEADER_CHANNEL = "pifp-ws-leader";
+const EVENT_CHANNEL = "pifp-ws-events";
 
 // ─── Context value ────────────────────────────────────────────────────────────
 
@@ -48,14 +49,19 @@ export interface WebSocketContextValue {
   lastEvent: PifpEvent | null;
   /** Register a listener that fires for every incoming event. Returns a cleanup fn. */
   addListener: (fn: (event: PifpEvent) => void) => () => void;
+  /** Register a listener for transaction status updates. Returns a cleanup fn. */
+  addTransactionListener: (
+    fn: (update: TransactionUpdate) => void,
+  ) => () => void;
 }
 
 export const WebSocketContext = createContext<WebSocketContextValue>({
-  status: 'disconnected',
+  status: "disconnected",
   isLeader: false,
   setFilter: () => {},
   lastEvent: null,
   addListener: () => () => {},
+  addTransactionListener: () => () => {},
 });
 
 export const useWebSocket = () => useContext(WebSocketContext);
@@ -65,7 +71,7 @@ export const useWebSocket = () => useContext(WebSocketContext);
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [isLeader, setIsLeader] = useState(false);
   const [lastEvent, setLastEvent] = useState<PifpEvent | null>(null);
 
@@ -75,6 +81,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listenersRef = useRef<Set<(e: PifpEvent) => void>>(new Set());
+  const txListenersRef = useRef<Set<(e: TransactionUpdate) => void>>(new Set());
   const leaderChannelRef = useRef<BroadcastChannel | null>(null);
   const eventChannelRef = useRef<BroadcastChannel | null>(null);
   const isLeaderRef = useRef(false);
@@ -83,6 +90,11 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const emit = useCallback((event: PifpEvent) => {
     setLastEvent(event);
     listenersRef.current.forEach((fn) => fn(event));
+  }, []);
+
+  // ── Emit transaction update to all registered listeners ───────────────────
+  const emitTransactionUpdate = useCallback((update: TransactionUpdate) => {
+    txListenersRef.current.forEach((fn) => fn(update));
   }, []);
 
   // ── Send a message to the server (no-op if not connected) ─────────────────
@@ -94,7 +106,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ── Apply the current filter to the server ─────────────────────────────────
   const applyFilter = useCallback(() => {
-    send({ type: 'subscribe', ...filterRef.current });
+    send({ type: "subscribe", ...filterRef.current });
   }, [send]);
 
   // ── Stop heartbeat ─────────────────────────────────────────────────────────
@@ -109,7 +121,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const startHeartbeat = useCallback(() => {
     stopHeartbeat();
     heartbeatTimerRef.current = setInterval(() => {
-      send({ type: 'ping' });
+      send({ type: "ping" });
     }, HEARTBEAT_MS);
   }, [send]);
 
@@ -121,12 +133,12 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       wsRef.current = null;
     }
 
-    setStatus('connecting');
+    setStatus("connecting");
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      setStatus('connected');
+      setStatus("connected");
       backoffRef.current = INITIAL_BACKOFF_MS;
       applyFilter();
       startHeartbeat();
@@ -140,20 +152,23 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      if (msg.type === 'event') {
+      if (msg.type === "event") {
         emit(msg.payload);
         // Relay to follower tabs.
         eventChannelRef.current?.postMessage(msg.payload);
+      } else if (msg.type === "transaction_update") {
+        // Emit transaction updates to listeners.
+        emitTransactionUpdate(msg.payload);
       }
     };
 
     ws.onerror = () => {
-      setStatus('error');
+      setStatus("error");
     };
 
     ws.onclose = () => {
       stopHeartbeat();
-      setStatus('disconnected');
+      setStatus("disconnected");
       wsRef.current = null;
 
       // Exponential backoff reconnect.
@@ -175,7 +190,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       wsRef.current.close();
       wsRef.current = null;
     }
-    setStatus('disconnected');
+    setStatus("disconnected");
   }, []);
 
   // ── Leader election via BroadcastChannel ──────────────────────────────────
@@ -194,23 +209,23 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Simple leader election: announce candidacy; if no existing leader
     // responds within 100 ms, claim leadership.
-    leaderCh.postMessage({ type: 'candidate' });
+    leaderCh.postMessage({ type: "candidate" });
 
     const claimTimer = setTimeout(() => {
       isLeaderRef.current = true;
       setIsLeader(true);
-      leaderCh.postMessage({ type: 'leader' });
+      leaderCh.postMessage({ type: "leader" });
       connect();
     }, 100);
 
     leaderCh.onmessage = (e: MessageEvent<{ type: string }>) => {
-      if (e.data.type === 'leader' && !isLeaderRef.current) {
+      if (e.data.type === "leader" && !isLeaderRef.current) {
         // Another tab is already the leader — stay as follower.
         clearTimeout(claimTimer);
       }
-      if (e.data.type === 'candidate' && isLeaderRef.current) {
+      if (e.data.type === "candidate" && isLeaderRef.current) {
         // Respond to new tabs so they know a leader exists.
-        leaderCh.postMessage({ type: 'leader' });
+        leaderCh.postMessage({ type: "leader" });
       }
     };
 
@@ -243,9 +258,26 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
+  const addTransactionListener = useCallback(
+    (fn: (update: TransactionUpdate) => void) => {
+      txListenersRef.current.add(fn);
+      return () => {
+        txListenersRef.current.delete(fn);
+      };
+    },
+    [],
+  );
+
   return (
     <WebSocketContext.Provider
-      value={{ status, isLeader, setFilter, lastEvent, addListener }}
+      value={{
+        status,
+        isLeader,
+        setFilter,
+        lastEvent,
+        addListener,
+        addTransactionListener,
+      }}
     >
       {children}
     </WebSocketContext.Provider>

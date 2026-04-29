@@ -3,6 +3,7 @@ import { createMachine } from 'xstate';
 import { useMachine } from '@xstate/react';
 import { motion } from 'framer-motion';
 import { usePifpEvents } from '../hooks/usePifpEvents';
+import { useTransactions } from '../context/TransactionContext';
 
 /**
  * Trade state machine.
@@ -30,6 +31,9 @@ export function OptimisticTradeUI() {
   const [pendingTxHash, setPendingTxHash] = useState(null);
   const [state, send] = useMachine(tradeMachine);
   const timeoutRef = useRef(null);
+  
+  // Use TransactionContext for real-time transaction status updates
+  const { addPending, getPendingByHash } = useTransactions();
 
   // Subscribe only to events relevant to trade confirmation / failure.
   const { events } = usePifpEvents({
@@ -62,6 +66,29 @@ export function OptimisticTradeUI() {
     }
   }, [events, pendingTxHash, state, send]);
 
+  // Also check TransactionContext for real-time tx status updates
+  useEffect(() => {
+    if (!pendingTxHash) return;
+    
+    const checkTxStatus = () => {
+      const pendingTx = getPendingByHash(pendingTxHash);
+      if (!pendingTx) return;
+      
+      if (pendingTx.status === 'confirmed') {
+        clearTimeout(timeoutRef.current);
+        send('CONFIRM');
+      } else if (pendingTx.status === 'failed') {
+        clearTimeout(timeoutRef.current);
+        send('REJECT');
+        setBalance((b) => b + 100);
+      }
+    };
+    
+    // Poll for status changes (WebSocket will update the context)
+    const interval = setInterval(checkTxStatus, 1000);
+    return () => clearInterval(interval);
+  }, [pendingTxHash, getPendingByHash, send]);
+
   const handleSubmit = () => {
     // Optimistically deduct balance before on-chain confirmation.
     setBalance((b) => b - 100);
@@ -69,6 +96,14 @@ export function OptimisticTradeUI() {
     const mockTxHash = `0x${Math.random().toString(16).slice(2, 18)}`;
     setPendingTxHash(mockTxHash);
     send('SUBMIT');
+
+    // Register with TransactionContext for real-time updates
+    addPending({
+      id: '', // Will be generated
+      txHash: mockTxHash,
+      amount: 100,
+      type: 'trade',
+    });
 
     // Safety timeout: roll back if no confirmation arrives in time.
     timeoutRef.current = setTimeout(() => {
