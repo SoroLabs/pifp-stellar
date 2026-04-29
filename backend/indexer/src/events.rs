@@ -33,6 +33,12 @@ pub enum EventKind {
     ProtocolPaused,
     /// Protocol was unpaused (`unpaused` topic).
     ProtocolUnpaused,
+    /// Transaction submitted, pending confirmation (`tx_pending` topic).
+    TxPending,
+    /// Transaction confirmed on-chain (`tx_confirmed` topic).
+    TxConfirmed,
+    /// Transaction failed or reverted (`tx_failed` topic).
+    TxFailed,
     /// An event from this contract that we don't recognise yet.
     Unknown,
 }
@@ -53,6 +59,9 @@ impl EventKind {
             "role_del" => Self::RoleDel,
             "paused" => Self::ProtocolPaused,
             "unpaused" => Self::ProtocolUnpaused,
+            "tx_pending" => Self::TxPending,
+            "tx_confirmed" => Self::TxConfirmed,
+            "tx_failed" => Self::TxFailed,
             _ => Self::Unknown,
         }
     }
@@ -72,6 +81,9 @@ impl EventKind {
             Self::RoleDel => "role_del",
             Self::ProtocolPaused => "protocol_paused",
             Self::ProtocolUnpaused => "protocol_unpaused",
+            Self::TxPending => "tx_pending",
+            Self::TxConfirmed => "tx_confirmed",
+            Self::TxFailed => "tx_failed",
             Self::Unknown => "unknown",
         }
     }
