@@ -209,3 +209,19 @@ pub struct DepositRequest {
     pub token: Address,
     pub amount: i128,
 }
+
+/// A single entry in a `batch_register_projects` call.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectRegistrationRequest {
+    pub accepted_tokens: Vec<Address>,
+    pub goal: i128,
+    pub proof_hash: BytesN<32>,
+    pub metadata_uri: Bytes,
+    pub deadline: u64,
+    pub is_private: bool,
+    pub milestones: Vec<Milestone>,
+    pub categories: u32,
+    pub authorized_oracles: Vec<Address>,
+    pub threshold: u32,
+}
