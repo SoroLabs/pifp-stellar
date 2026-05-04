@@ -15,7 +15,8 @@ import client from './graphql/client'
 import { GET_PROJECTS } from './graphql/queries'
 import RealtimeActivity from './components/RealtimeActivity'
 import BondingCurveSimulator from './components/BondingCurveSimulator'
-
+import { OTCInterface } from './components/OTCInterface'
+import { Zap } from 'lucide-react'
 
 const API_BASE = (import.meta.env.VITE_INDEXER_API_URL || 'http://localhost:8080').replace(/\/$/, '')
 const ORACLE_API = 'http://localhost:9090/api/offchain'
@@ -28,7 +29,7 @@ const SORT_FIELDS = [
   { value: 'status', label: 'Status' },
 ]
 
-function compareBigIntLike(a, b) {
+function compareBigIntLike(a: any, b: any) {
   try {
     const aBig = BigInt(a ?? 0)
     const bBig = BigInt(b ?? 0)
@@ -54,7 +55,8 @@ function App() {
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard')
-  const [projects, setProjects] = useState([])
+  const [projects, setProjects] = useState<any[]>([])
+  const [isLoadingRest, setIsLoadingRest] = useState(false)
   const [error, setError] = useState('')
   const [oracleModalOpen, setOracleModalOpen] = useState(false)
 
@@ -78,6 +80,11 @@ function AppContent() {
     },
     skip: activeTab !== 'dashboard'
   })
+
+  // OTC States
+  const [roomId, setRoomId] = useState('')
+  const [isInitiator, setIsInitiator] = useState(true)
+  const [isJoined, setIsJoined] = useState(false)
 
   useEffect(() => {
     if (data?.projects) {
@@ -202,6 +209,12 @@ function AppContent() {
           onClick={() => setActiveTab('tokenomics')}
         >
           Tokenomics
+        </button>
+        <button 
+          className={activeTab === 'otc' ? 'active' : ''} 
+          onClick={() => setActiveTab('otc')}
+        >
+          OTC Trade (P2P)
         </button>
       </nav>
 
@@ -373,6 +386,112 @@ function AppContent() {
       {activeTab === 'ipfs' && <IpfsUploader />}
       {activeTab === 'debt' && <DebtVisualizer />}
       {activeTab === 'tokenomics' && <BondingCurveSimulator />}
+      
+      {activeTab === 'otc' && (
+        <div className="otc-setup-container">
+          {!isJoined ? (
+            <div className="otc-join-card">
+              <Zap size={48} color="#3b82f6" />
+              <h2>Join OTC Negotiation</h2>
+              <p>Direct peer-to-peer off-chain negotiation for Soroban assets. Secure, zero-knowledge signaling.</p>
+              <div className="join-form">
+                <input 
+                  placeholder="Enter Room ID (e.g. trade-123)" 
+                  value={roomId} 
+                  onChange={e => setRoomId(e.target.value)} 
+                />
+                <div className="role-selector">
+                    <button 
+                        className={isInitiator ? 'active' : ''} 
+                        onClick={() => setIsInitiator(true)}
+                    >Initiator</button>
+                    <button 
+                        className={!isInitiator ? 'active' : ''} 
+                        onClick={() => setIsInitiator(false)}
+                    >Receiver</button>
+                </div>
+                <button 
+                  className="join-btn"
+                  onClick={() => roomId && setIsJoined(true)}
+                >
+                  Enter Negotiation Room
+                </button>
+              </div>
+            </div>
+          ) : (
+            <OTCInterface roomId={roomId} isInitiator={isInitiator} />
+          )}
+        </div>
+      )}
+
+      <style>{`
+        .otc-setup-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 600px;
+        }
+        .otc-join-card {
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid #334155;
+            text-align: center;
+            max-width: 450px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .otc-join-card h2 { margin: 0; color: white; }
+        .otc-join-card p { color: #94a3b8; font-size: 14px; }
+        .join-form {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .join-form input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .role-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .role-selector button {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #94a3b8;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .role-selector button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+        .join-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .join-btn:hover { background: #2563eb; transform: translateY(-1px); }
+      `}</style>
     </main>
   )
 }
