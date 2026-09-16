@@ -29,3 +29,7 @@ keeper/data/tasks.json
 
 # Backup configuration (contains sensitive credentials)
 scripts/.env.backup
+
+# Scratch and build logs
+cargo_out.txt
+scratch/

@@ -1,20 +1,37 @@
 import './globals.css'
-import LedgerHeartbeat from '@/components/LedgerHeartbeat'
-import PredictivePrefetchProvider from '@/components/PredictivePrefetchProvider'
+import Navbar from '@/components/Navbar'
+import Footer from '@/components/Footer'
 import ServiceWorkerRegistration from '@/components/ServiceWorkerRegistration'
+import PredictivePrefetchProvider from '@/components/PredictivePrefetchProvider'
+import LedgerHeartbeat from '@/components/LedgerHeartbeat'
+import { AppProvider } from '@/context/AppContext'
+import WalletModal from '@/components/WalletModal'
+import CreateProjectModal from '@/components/CreateProjectModal'
+import ToastContainer from '@/components/ToastContainer'
 
 export const metadata = {
-  title: 'PIFP Predictive App Router',
-  description: 'Predictive prefetching and RSC cache orchestration demo'
+  title: 'PIFP Stellar - Public Impact Funding Protocol',
+  description: 'Verifiable milestone-based crowdfunding secured by Soroban smart contracts on the Stellar network.'
 }
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
-        <ServiceWorkerRegistration />
-        <LedgerHeartbeat />
-        <PredictivePrefetchProvider>{children}</PredictivePrefetchProvider>
+        <AppProvider>
+          <ServiceWorkerRegistration />
+          <LedgerHeartbeat />
+          <PredictivePrefetchProvider>
+            <Navbar />
+            <main>
+              {children}
+            </main>
+            <Footer />
+            <WalletModal />
+            <CreateProjectModal />
+            <ToastContainer />
+          </PredictivePrefetchProvider>
+        </AppProvider>
       </body>
     </html>
   )

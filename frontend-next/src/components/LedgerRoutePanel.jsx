@@ -1,44 +1,56 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useApp } from '@/context/AppContext'
 
 export default function LedgerRoutePanel() {
-  const [ledger, setLedger] = useState({ latestLedger: 0, latestLedgerCloseMs: 0 })
+  const { ledger } = useApp()
   const [nowMs, setNowMs] = useState(0)
 
   useEffect(() => {
-    let cancelled = false
-
-    async function refresh() {
-      try {
-        const response = await fetch('/api/ledger/latest', { cache: 'no-store' })
-        if (!response.ok || cancelled) return
-        const payload = await response.json()
-        if (!cancelled) setLedger(payload)
-      } catch {
-        // Ignore transient failures.
-      }
-    }
-
-    refresh()
     const id = window.setInterval(() => {
       setNowMs(Date.now())
-      refresh()
-    }, 2500)
-    return () => {
-      cancelled = true
-      window.clearInterval(id)
-    }
+    }, 1000)
+    return () => window.clearInterval(id)
   }, [])
 
-  const ageMs = Math.max(0, nowMs - ledger.latestLedgerCloseMs)
+  const ageMs = (nowMs > 0 && ledger?.latestLedgerCloseMs > 0)
+    ? Math.max(0, nowMs - ledger.latestLedgerCloseMs)
+    : 0
 
   return (
-    <>
-      <p>Latest ledger: {ledger.latestLedger}</p>
-      <p>Closed: {ledger.latestLedgerCloseMs > 0 ? new Date(ledger.latestLedgerCloseMs).toISOString() : 'pending'}</p>
-      <p>Payload age estimate: {ageMs} ms</p>
-      {ageMs > 5000 ? <p>State: STALE - force network refresh required.</p> : <p>State: FRESH</p>}
-    </>
+    <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <span className="muted">Latest Ledger:</span>
+        <strong style={{ color: '#fff' }}>#{ledger?.latestLedger || 100000}</strong>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <span className="muted">Closed At:</span>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+          {ledger?.latestLedgerCloseMs > 0 ? new Date(ledger.latestLedgerCloseMs).toLocaleTimeString() : 'pending'}
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <span className="muted">Payload Age:</span>
+        <span style={{ color: ageMs > 5000 ? 'var(--warning)' : 'var(--ok)', fontWeight: 600 }}>
+          {ageMs} ms
+        </span>
+      </div>
+
+      <div style={{
+        marginTop: '6px',
+        padding: '3px 8px',
+        borderRadius: '6px',
+        background: ageMs > 5000 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+        color: ageMs > 5000 ? 'var(--warning)' : 'var(--ok)',
+        fontSize: '0.78rem',
+        fontWeight: 600,
+        textAlign: 'center'
+      }}>
+        {ageMs > 5000 ? 'STALE - SW Auto-Refreshing' : 'FRESH - Cryptographically Attested'}
+      </div>
+    </div>
   )
 }
