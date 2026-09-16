@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_ecdsa_partial_signer_roundtrip() {
-        use rand::rngs::OsRng;
+        use k256::elliptic_curve::rand_core::OsRng;
         let key = SigningKey::random(&mut OsRng);
         let bytes: [u8; 32] = key.to_bytes().into();
         let signer = EcdsaPartialSigner::from_scalar(1, &bytes).unwrap();

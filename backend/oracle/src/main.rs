@@ -21,6 +21,9 @@ pub(crate) mod state_proof;
 mod tss;
 mod verifier;
 mod wasm_debug;
+mod oracle_api;
+mod rollup_api;
+mod tx_diagnostics;
 
 use std::sync::Arc;
 

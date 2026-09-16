@@ -99,7 +99,7 @@ async fn pin_with_retry_pinata(data: Vec<u8>, config: &IpfsConfig) -> Result<Str
 
         let client = build_client()?;
 
-        match pin_via_pinata(data.clone(), config, client).await {
+        match pin_via_pinata(data.clone(), config.clone(), client).await {
             Ok(cid) => return Ok(cid),
             Err(e) => {
                 warn!(attempt, error = %e, "IPFS pin attempt failed");
@@ -127,7 +127,7 @@ async fn pin_with_retry_web3_storage(data: Vec<u8>, config: &IpfsConfig) -> Resu
 
         let client = build_client()?;
 
-        match pin_via_web3_storage(data.clone(), config, client).await {
+        match pin_via_web3_storage(data.clone(), config.clone(), client).await {
             Ok(cid) => return Ok(cid),
             Err(e) => {
                 warn!(attempt, error = %e, "IPFS pin attempt failed");

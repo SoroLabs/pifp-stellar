@@ -118,7 +118,7 @@ pub fn verify_proof(root: &str, leaf: &str, proof: &MerkleProof) -> bool {
 
         hasher.update(left);
         hasher.update(right);
-        current_hash = hasher.finalize().into();
+        current_hash = hasher.finalize().to_vec();
     }
 
     hex::encode(current_hash) == root

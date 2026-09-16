@@ -23,12 +23,12 @@ pub struct IpfsState {
     pub config: IpfsConfig,
 }
 
-pub fn router() -> Router<Arc<crate::health::ServerState>> {
-    Router::new().route("/ipfs/upload", post(upload_file))
+pub fn router(state: Arc<IpfsState>) -> Router {
+    Router::new().route("/ipfs/upload", post(upload_file)).with_state(state)
 }
 
 async fn upload_file(
-    State(state): State<Arc<crate::health::ServerState>>,
+    State(state): State<Arc<IpfsState>>,
     mut multipart: Multipart,
 ) -> std::result::Result<Json<UploadResponse>, (StatusCode, Json<UploadErrorResponse>)> {
     let mut file_data = Vec::new();

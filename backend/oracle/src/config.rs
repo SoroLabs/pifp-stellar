@@ -41,14 +41,16 @@ pub struct Config {
     /// Foreign bridge contract address
     pub foreign_bridge_address: Option<String>,
 
-    /// Port for the metrics and health server
-    pub metrics_port: u16,
-
-    /// Node ID for threshold signatures (1-based)
     pub node_id: usize,
 
-    /// Port for metrics and health endpoints
-    pub metrics_port: u16,
+    pub oracle_asset_symbol: String,
+    pub oracle_quote_symbol: String,
+    pub oracle_refresh_secs: u64,
+    pub oracle_max_staleness_secs: u64,
+    pub oracle_max_variance_pct: f64,
+    pub oracle_coingecko_url: String,
+    pub oracle_binance_url: String,
+    pub oracle_kraken_url: String,
 }
 
 impl Config {

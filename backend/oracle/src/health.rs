@@ -5,6 +5,7 @@ use axum::{
     response::IntoResponse,
     routing::get,
     Json, Router,
+    extract::Path,
 };
 use serde::Serialize;
 use tokio::net::TcpListener;
@@ -13,6 +14,11 @@ use tracing::info;
 
 use crate::metrics;
 use crate::tx_diagnostics::TxDiagnosticsStore;
+
+#[derive(Serialize)]
+struct ApiErrorResponse {
+    error: String,
+}
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -39,10 +45,10 @@ async fn metrics_handler() -> impl IntoResponse {
 }
 
 async fn get_tx_diagnostics(
-    State(state): State<Arc<ServerState>>,
-    axum::extract::Path(hash): axum::extract::Path<String>,
+    Path(hash): Path<String>,
 ) -> impl IntoResponse {
-    if let Some(payload) = state.diagnostics.get(&hash) {
+    let store = TxDiagnosticsStore::new();
+    if let Some(payload) = store.get(&hash) {
         return (StatusCode::OK, Json(payload)).into_response();
     }
 
@@ -69,10 +75,11 @@ pub async fn serve(
         .route("/api/v1/tx/diagnostics/:hash", get(get_tx_diagnostics))
         .nest("/api", crate::bridge_api::router(bridge_state))
         .nest("/api", crate::ipfs_api::router(ipfs_state))
+        .nest("/api", crate::rollup_api::router(rollup_state))
+        .nest("/api", crate::oracle_api::router(oracle_state))
         .nest("/api/offchain", crate::offchain_api::router())
         .nest("/api/debt", crate::debt_api::router())
-        .nest("/api/bonding", crate::bonding_api::router())
-        .with_state(state);
+        .nest("/api/bonding", crate::bonding_api::router());
 
     let addr = format!("0.0.0.0:{port}");
     info!("Oracle API server listening on http://{addr}");
