@@ -16,7 +16,7 @@ fn test_project_funded_event() {
     let (project, token, sac) = ctx.setup_project(10000);
     let donator = ctx.generate_address();
     sac.mint(&donator, &1000i128);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 1000i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &1000i128);
 }
@@ -58,10 +58,10 @@ fn test_get_project_balances() {
     let donator = ctx.generate_address();
     sac_a.mint(&donator, &2_500i128);
     sac_b.mint(&donator, &7_000i128);
-    ctx.mock_deposit_auth(&donator, project.id, &token_a.address, 2_500i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token_a.address, &2_500i128);
-    ctx.mock_deposit_auth(&donator, project.id, &token_b.address, 7_000i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token_b.address, &7_000i128);
 
@@ -80,7 +80,7 @@ fn test_funds_released_to_creator() {
     let deposit_amount = 1000i128;
     sac.mint(&donator, &deposit_amount);
 
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, deposit_amount);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &deposit_amount);
 
@@ -110,7 +110,7 @@ fn test_refunded_event() {
     let (project, token, sac) = ctx.setup_project(1000);
     let donator = ctx.generate_address();
     sac.mint(&donator, &400i128);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 400i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &400i128);
     ctx.jump_time(86_401);

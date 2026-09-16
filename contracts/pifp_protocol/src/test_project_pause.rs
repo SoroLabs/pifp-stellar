@@ -39,7 +39,7 @@ fn test_deposit_fails_when_project_paused() {
     sac.mint(&donator, &500);
     ctx.mock_auth(&ctx.admin, "pause_project", (&ctx.admin, project.id));
     ctx.client.pause_project(&ctx.admin, &project.id);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 }
@@ -52,7 +52,7 @@ fn test_verify_and_release_fails_when_project_paused() {
     let donator = ctx.generate_address();
 
     sac.mint(&donator, &500);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 

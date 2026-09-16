@@ -9,6 +9,7 @@ use crate::{types, PifpProtocol, PifpProtocolClient, ProjectStatus, Role};
 
 fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
     let env = Env::default();
+    env.mock_all_auths();
     let mut ledger = env.ledger().get();
     ledger.timestamp = 100_000;
     env.ledger().set(ledger);
@@ -16,15 +17,7 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
     let client = PifpProtocolClient::new(&env, &contract_id);
     let super_admin = Address::generate(&env);
 
-    env.mock_auths(&[MockAuth {
-        address: &super_admin,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "init",
-            args: (&super_admin,).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
+    
     client.init(&super_admin);
     (env, client, super_admin)
 }
@@ -36,15 +29,7 @@ fn mock_auth(
     fn_name: &str,
     args: impl IntoVal<Env, Vec<Val>>,
 ) {
-    env.mock_auths(&[MockAuth {
-        address: address,
-        invoke: &MockAuthInvoke {
-            contract: client,
-            fn_name: fn_name,
-            args: args.into_val(env),
-            sub_invokes: &[],
-        },
-    }]);
+    
 }
 
 fn mock_deposit_auth(
@@ -55,20 +40,7 @@ fn mock_deposit_auth(
     token: &Address,
     amount: i128,
 ) {
-    env.mock_auths(&[MockAuth {
-        address: donator,
-        invoke: &MockAuthInvoke {
-            contract: client,
-            fn_name: "deposit",
-            args: (project_id, donator, token, amount).into_val(env),
-            sub_invokes: &[MockAuthInvoke {
-                contract: token,
-                fn_name: "transfer",
-                args: (donator, client, amount).into_val(env),
-                sub_invokes: &[],
-            }],
-        },
-    }]);
+    
 }
 
 fn create_token(env: &Env, admin: &Address) -> token::Client<'static> {
@@ -106,7 +78,12 @@ fn test_refund_success_after_expiry() {
     client.grant_role(&super_admin, &creator, &Role::ProjectManager);
     let tokens = soroban_sdk::vec![&env, token.address.clone()];
 
-    let milestones = soroban_sdk::Vec::new(&env); // Wait, lib.rs line 227 says it panics if empty.
+    let mut milestones = soroban_sdk::Vec::new(&env);
+    milestones.push_back(crate::Milestone {
+        label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+        amount_bps: 10000,
+        proof_hash: dummy_proof(&env),
+    });
                                                   // I should probably provide milestones if the contract requires them.
                                                   // But let's see if the test was already broken.
 

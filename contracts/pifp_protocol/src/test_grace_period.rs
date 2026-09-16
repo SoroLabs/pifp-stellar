@@ -31,7 +31,7 @@ fn test_claim_funds_after_grace_period_succeeds() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &1000);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 1000i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &1000);
 
@@ -196,7 +196,7 @@ fn test_claim_funds_permissionless() {
 
     let donator = ctx.generate_address();
     sac.mint(&donator, &500);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 500i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &500);
 

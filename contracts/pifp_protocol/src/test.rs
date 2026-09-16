@@ -273,7 +273,7 @@ fn test_project_manager_can_register() {
         &vec![&env, token.clone()],
         &1_000_000i128,
         &dummy_proof(&env),
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -306,7 +306,7 @@ fn test_admin_can_register_project() {
         &vec![&env, token.clone()],
         &500_000i128,
         &dummy_proof(&env),
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -336,7 +336,7 @@ fn test_super_admin_can_register_project() {
         &vec![&env, token.clone()],
         &100i128,
         &dummy_proof(&env),
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -369,7 +369,7 @@ fn test_no_role_cannot_register_project() {
         &vec![&env, token.clone()],
         &1_000i128,
         &dummy_proof(&env),
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -401,7 +401,7 @@ fn test_auditor_cannot_register_project() {
         &vec![&env, token.clone()],
         &1_000i128,
         &dummy_proof(&env),
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -447,7 +447,7 @@ fn test_verify_and_release_by_oracle() {
         &vec![&env, token.clone()],
         &100i128,
         &proof,
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -460,7 +460,7 @@ fn test_verify_and_release_by_oracle() {
     client.verify_proof(&oracle, &project.id, &proof);
 
     let completed = client.get_project(&project.id);
-    assert_eq!(completed.status, crate::ProjectStatus::Completed);
+    assert_eq!(completed.status, crate::ProjectStatus::Verified);
 }
 
 #[test]
@@ -488,7 +488,7 @@ fn test_non_oracle_cannot_verify() {
         &vec![&env, token.clone()],
         &100i128,
         &proof,
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,
@@ -527,7 +527,7 @@ fn test_verify_wrong_proof_panics() {
         &vec![&env, token.clone()],
         &100i128,
         &proof,
-        &soroban_sdk::Bytes::new(&env),
+        &soroban_sdk::Bytes::from_slice(&env, b"dummycid"),
         &future_deadline(&env),
         &false,
         &milestones,

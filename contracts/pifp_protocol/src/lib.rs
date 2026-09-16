@@ -263,7 +263,6 @@ impl PifpProtocol {
     }
 
     pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
-        caller.require_auth();
         rbac::require_admin_or_above(&env, &caller);
         rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
     }
@@ -359,9 +358,6 @@ impl PifpProtocol {
         threshold: u32,
     ) -> Project {
         if milestones.is_empty() {
-            panic_with_error!(&env, Error::InvalidGoal);
-        }
-        if milestones.is_empty() {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
         milestones::validate_milestone_set(&env, &milestones);
@@ -445,6 +441,7 @@ impl PifpProtocol {
         project_id: u64,
         submitted_proof_hash: BytesN<32>,
     ) {
+        Self::require_not_paused(&env);
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);

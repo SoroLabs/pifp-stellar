@@ -71,7 +71,7 @@ fn test_expire_active_project_success() {
 
     // Deposit to make it Active
     sac.mint(&ctx.admin, &1000);
-    ctx.mock_deposit_auth(&ctx.admin, project.id, &token.address, 1000i128);
+    
     ctx.client
         .deposit(&project.id, &ctx.admin, &token.address, &1000);
 

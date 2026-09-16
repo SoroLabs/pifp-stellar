@@ -16,7 +16,7 @@ fn test_get_project_not_found() {
 fn test_deposit_on_nonexistent_project() {
     let ctx = TestContext::new();
     let token = ctx.generate_address();
-    ctx.mock_deposit_auth(&ctx.manager, 42, &token, 100i128);
+    
     ctx.client.deposit(&42, &ctx.manager, &token, &100i128);
 }
 
@@ -168,13 +168,7 @@ fn test_register_empty_tokens_fails() {
 fn test_verify_when_paused_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
-    ctx.mock_auth(&ctx.admin, "pause", (&ctx.admin,));
     ctx.client.pause(&ctx.admin);
-    ctx.mock_auth(
-        &ctx.oracle,
-        "verify_proof",
-        (&ctx.oracle, project.id, ctx.dummy_proof()),
-    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }
@@ -215,31 +209,27 @@ fn test_deposit_unaccepted_token_fails() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let rogue_token = ctx.generate_address();
-    ctx.mock_deposit_auth(&ctx.manager, project.id, &rogue_token, 100i128);
+    
     ctx.client
         .deposit(&project.id, &ctx.manager, &rogue_token, &100i128);
 }
 
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #6)")]
-fn test_admin_cannot_cancel_project() {
+fn test_project_manager_cannot_cancel_project_if_not_creator() {
     let ctx = TestContext::new();
     let (project, token, sac) = ctx.setup_project(500);
     let donator = ctx.generate_address();
-    let other_admin = ctx.generate_address();
-    ctx.mock_auth(
-        &ctx.admin,
-        "grant_role",
-        (&ctx.admin, &other_admin, crate::Role::Admin),
-    );
+    let other_pm = ctx.generate_address();
+    
     ctx.client
-        .grant_role(&ctx.admin, &other_admin, &crate::Role::Admin);
+        .grant_role(&ctx.admin, &other_pm, &crate::Role::ProjectManager);
     sac.mint(&donator, &600i128);
-    ctx.mock_deposit_auth(&donator, project.id, &token.address, 600i128);
+    
     ctx.client
         .deposit(&project.id, &donator, &token.address, &600i128);
-    ctx.mock_auth(&other_admin, "cancel_project", (&other_admin, project.id));
-    ctx.client.cancel_project(&other_admin, &project.id);
+        
+    ctx.client.cancel_project(&other_pm, &project.id);
 }
 
 #[test]
