@@ -1,7 +1,7 @@
 //! Profile storage — CRUD for off-chain user identity metadata.
 
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 
 use crate::errors::Result;
 
@@ -22,7 +22,7 @@ pub struct ProfileUpdate {
 }
 
 pub async fn upsert_profile(
-    pool: &SqlitePool,
+    pool: &PgPool,
     address: &str,
     update: &ProfileUpdate,
 ) -> Result<Profile> {
@@ -47,7 +47,7 @@ pub async fn upsert_profile(
     get_profile(pool, address).await.map(|p| p.unwrap())
 }
 
-pub async fn get_profile(pool: &SqlitePool, address: &str) -> Result<Option<Profile>> {
+pub async fn get_profile(pool: &PgPool, address: &str) -> Result<Option<Profile>> {
     let row = sqlx::query_as::<_, Profile>(
         "SELECT address, nickname, bio, avatar_url, updated_at FROM profiles WHERE address = ?1",
     )
@@ -57,7 +57,7 @@ pub async fn get_profile(pool: &SqlitePool, address: &str) -> Result<Option<Prof
     Ok(row)
 }
 
-pub async fn delete_profile(pool: &SqlitePool, address: &str) -> Result<bool> {
+pub async fn delete_profile(pool: &PgPool, address: &str) -> Result<bool> {
     let res = sqlx::query("DELETE FROM profiles WHERE address = ?1")
         .bind(address)
         .execute(pool)

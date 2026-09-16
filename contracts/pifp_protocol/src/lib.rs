@@ -56,7 +56,6 @@ pub mod events;
 pub mod invariants_checker;
 mod milestones;
 pub mod rbac;
-pub mod rbac;
 mod storage;
 mod types;
 
@@ -67,7 +66,6 @@ mod rbac_test;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
-mod test_batch_deposit;
 #[cfg(test)]
 mod test_batch_deposit;
 #[cfg(test)]
@@ -83,7 +81,6 @@ mod test_events;
 #[cfg(test)]
 mod test_expire;
 #[cfg(test)]
-mod test_grace_period;
 #[cfg(test)]
 mod test_grace_period;
 #[cfg(test)]
@@ -93,7 +90,6 @@ mod test_protocol_config;
 #[cfg(test)]
 mod test_reclaim;
 #[cfg(test)]
-mod test_reentrancy;
 #[cfg(test)]
 mod test_reentrancy;
 #[cfg(test)]
@@ -107,42 +103,19 @@ use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
 pub use rbac::Role;
-pub use rbac::Role;
 use storage::{
     clear_oracle_agreement, drain_token_balance, get_and_increment_project_id, get_protocol_config,
     is_whitelisted, load_project_pair, save_project, save_project_config, save_project_state,
     set_protocol_config,
 };
-use storage::{get_and_increment_project_id, load_project, save_project};
+
 pub use types::{
     DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
     ProjectState, ProtocolConfig,
 };
-pub use types::{Project, ProjectStatus};
 
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
-    ProjectCount,
-    Project(u64),
-    // OracleKey removed — oracle is now just an address with Role::Oracle.
-}
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    ProjectNotFound = 1,
-    MilestoneNotFound = 2,
-    MilestoneAlreadyReleased = 3,
-    InsufficientBalance = 4,
-    InvalidMilestones = 5,
-    NotAuthorized = 6,
-    GoalMismatch = 7,
-    // New in RBAC integration:
-    AlreadyInitialized = 8,
-    RoleNotFound = 9,
-}
+
 
 #[contract]
 pub struct PifpProtocol;
@@ -459,64 +432,14 @@ impl PifpProtocol {
         project
     }
 
-    pub fn verify_proof(
-        env: Env,
-        oracle: Address,
-        project_id: u64,
-        submitted_proof_hash: BytesN<32>,
-    ) {
-        Self::require_not_paused(&env);
-        project
-    }
 
-    /// Retrieve a project by its ID.
-    pub fn get_project(env: Env, id: u64) -> Project {
-        load_project(&env, id)
-    }
-
-    /// Deposit funds into a project.
-    ///
-    /// Anyone may donate — no role required.
-    pub fn deposit(env: Env, project_id: u64, donator: Address, amount: i128) {
-        donator.require_auth();
-
-        let mut project = Self::get_project(env.clone(), project_id);
-
-        let token_client = token::Client::new(&env, &project.token);
-        token_client.transfer(&donator, &env.current_contract_address(), &amount);
-
-        project.balance += amount;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Project(project_id), &project);
-
-        env.events().publish(
-            (Symbol::new(&env, "donation_received"), project_id),
-            (donator, amount),
-        );
-    }
-
-    /// Grant the Oracle role to `oracle`.
-    ///
-    /// Replaces the original `set_oracle(admin, oracle)`.
-    /// - `caller` must hold `SuperAdmin` or `Admin`.
-    ///
-    /// If an address already holds the Oracle role, calling this with a new
-    /// address will grant Oracle to the new one; the old one retains its role
-    /// unless explicitly revoked. If you want a single oracle, revoke the old
-    /// one first, then call `set_oracle`.
-    pub fn set_oracle(env: Env, caller: Address, oracle: Address) {
-        caller.require_auth();
-        rbac::require_admin_or_above(&env, &caller);
-        rbac::grant_role(&env, &caller, &oracle, Role::Oracle);
-    }
 
     /// Verify proof of impact and release funds to the creator.
     ///
     /// - Only an address with the `Oracle` role may call this.
     /// - The project must be in `Funding` or `Active` status.
     /// - `submitted_proof_hash` must match the project's `proof_hash`.
-    pub fn verify_and_release(
+    pub fn verify_proof(
         env: Env,
         oracle: Address,
         project_id: u64,
@@ -947,12 +870,6 @@ impl PifpProtocol {
         events::emit_deadline_extended(&env, project_id, old, new_deadline);
     }
 
-    pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, proof_hash: BytesN<32>) {
-        Self::verify_proof(env.clone(), oracle, project_id, proof_hash);
-        // We can't immediately claim_funds because of GRACE_PERIOD.
-        // But for tests that don't care about the final release state, this works.
-    }
-
     fn require_not_paused(env: &Env) {
         if storage::is_paused(env) {
             panic_with_error!(env, Error::ProtocolPaused);
@@ -963,22 +880,5 @@ impl PifpProtocol {
         if state.paused {
             panic_with_error!(env, Error::ProjectPaused);
         }
-        let mut project = load_project(&env, project_id);
-
-        match project.status {
-            ProjectStatus::Funding | ProjectStatus::Active => {}
-            ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectNotFound),
-        }
-
-        if submitted_proof_hash != project.proof_hash {
-            panic_with_error!(&env, Error::GoalMismatch);
-        }
-
-        project.status = ProjectStatus::Completed;
-        save_project(&env, &project);
-
-        env.events()
-            .publish((symbol_short!("verified"),), project_id);
     }
 }

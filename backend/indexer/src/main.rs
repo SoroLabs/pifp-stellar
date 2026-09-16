@@ -167,7 +167,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ─── REST API ─────────────────────────────────────────
     let api_state = Arc::new(api::ApiState {
-        pool,
+        pool: pool.clone(),
         cache,
         cache_ttl_top_projects_secs: config.cache_ttl_top_projects_secs,
         cache_ttl_active_projects_count_secs: config.cache_ttl_active_projects_count_secs,

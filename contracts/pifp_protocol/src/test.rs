@@ -16,8 +16,8 @@
 #![cfg(test)]
 
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, BytesN, Env,
+    testutils::{Address as _, Events, Ledger, MockAuth, MockAuthInvoke},
+    vec, Address, BytesN, Env, IntoVal, String, Symbol, Val, Vec,
 };
 
 use crate::{Error, PifpProtocol, PifpProtocolClient, Role};
@@ -260,12 +260,26 @@ fn test_project_manager_can_register() {
 
     client.grant_role(&super_admin, &pm, &Role::ProjectManager);
 
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: dummy_proof(&env),
+        },
+    ];
     let project = client.register_project(
         &pm,
-        &token,
+        &vec![&env, token.clone()],
         &1_000_000i128,
         &dummy_proof(&env),
+        &soroban_sdk::Bytes::new(&env),
         &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
     );
 
     assert_eq!(project.creator, pm);
@@ -279,12 +293,26 @@ fn test_admin_can_register_project() {
     let token = Address::generate(&env);
 
     client.grant_role(&super_admin, &admin, &Role::Admin);
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: dummy_proof(&env),
+        },
+    ];
     let project = client.register_project(
         &admin,
-        &token,
+        &vec![&env, token.clone()],
         &500_000i128,
         &dummy_proof(&env),
+        &soroban_sdk::Bytes::new(&env),
         &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
     );
 
     assert_eq!(project.creator, admin);
@@ -295,12 +323,26 @@ fn test_super_admin_can_register_project() {
     let (env, client, super_admin) = setup_with_init();
     let token = Address::generate(&env);
 
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: dummy_proof(&env),
+        },
+    ];
     let project = client.register_project(
         &super_admin,
-        &token,
+        &vec![&env, token.clone()],
         &100i128,
         &dummy_proof(&env),
+        &soroban_sdk::Bytes::new(&env),
         &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
     );
 
     assert_eq!(project.creator, super_admin);
@@ -314,12 +356,26 @@ fn test_no_role_cannot_register_project() {
     let token = Address::generate(&env);
 
     // Must panic — no role assigned
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: dummy_proof(&env),
+        },
+    ];
     client.register_project(
         &nobody,
-        &token,
+        &vec![&env, token.clone()],
         &1_000i128,
         &dummy_proof(&env),
+        &soroban_sdk::Bytes::new(&env),
         &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
     );
 }
 
@@ -332,12 +388,26 @@ fn test_auditor_cannot_register_project() {
 
     client.grant_role(&super_admin, &auditor, &Role::Auditor);
     // Auditor is read-only — must panic
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: dummy_proof(&env),
+        },
+    ];
     client.register_project(
         &auditor,
-        &token,
+        &vec![&env, token.clone()],
         &1_000i128,
         &dummy_proof(&env),
+        &soroban_sdk::Bytes::new(&env),
         &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
     );
 }
 
@@ -364,10 +434,30 @@ fn test_verify_and_release_by_oracle() {
     client.grant_role(&super_admin, &pm, &Role::ProjectManager);
     client.set_oracle(&super_admin, &oracle);
 
-    let project = client.register_project(&pm, &token, &100i128, &proof, &future_deadline(&env));
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: proof.clone(),
+        },
+    ];
+    let project = client.register_project(
+        &pm,
+        &vec![&env, token.clone()],
+        &100i128,
+        &proof,
+        &soroban_sdk::Bytes::new(&env),
+        &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
+    );
 
     // Should succeed — oracle has the Oracle role
-    client.verify_and_release(&oracle, &project.id, &proof);
+    client.verify_proof(&oracle, &project.id, &proof);
 
     let completed = client.get_project(&project.id);
     assert_eq!(completed.status, crate::ProjectStatus::Completed);
@@ -385,10 +475,30 @@ fn test_non_oracle_cannot_verify() {
     client.grant_role(&super_admin, &pm, &Role::ProjectManager);
     // impostor has no Oracle role
 
-    let project = client.register_project(&pm, &token, &100i128, &proof, &future_deadline(&env));
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: proof.clone(),
+        },
+    ];
+    let project = client.register_project(
+        &pm,
+        &vec![&env, token.clone()],
+        &100i128,
+        &proof,
+        &soroban_sdk::Bytes::new(&env),
+        &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
+    );
 
     // Must panic — impostor lacks Oracle role
-    client.verify_and_release(&impostor, &project.id, &proof);
+    client.verify_proof(&impostor, &project.id, &proof);
 }
 
 #[test]
@@ -404,10 +514,30 @@ fn test_verify_wrong_proof_panics() {
     client.grant_role(&super_admin, &pm, &Role::ProjectManager);
     client.set_oracle(&super_admin, &oracle);
 
-    let project = client.register_project(&pm, &token, &100i128, &proof, &future_deadline(&env));
+    let milestones = vec![
+        &env,
+        crate::Milestone {
+            label: soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
+            amount_bps: 10000,
+            proof_hash: proof.clone(),
+        },
+    ];
+    let project = client.register_project(
+        &pm,
+        &vec![&env, token.clone()],
+        &100i128,
+        &proof,
+        &soroban_sdk::Bytes::new(&env),
+        &future_deadline(&env),
+        &false,
+        &milestones,
+        &0u32,
+        &Vec::<Address>::new(&env),
+        &0u32,
+    );
 
     // Wrong proof hash — must panic
-    client.verify_and_release(&oracle, &project.id, &bad_proof);
+    client.verify_proof(&oracle, &project.id, &bad_proof);
 }
 
 // ─── 7. deposit: no role required ────────────────────────

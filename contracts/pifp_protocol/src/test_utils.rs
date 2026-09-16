@@ -63,7 +63,7 @@ impl TestContext {
                 contract: &contract_id,
                 fn_name: "init",
                 args: (&admin,).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.init(&admin);
@@ -74,7 +74,7 @@ impl TestContext {
                 contract: &contract_id,
                 fn_name: "grant_role",
                 args: (&admin, &oracle, Role::Oracle).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.grant_role(&admin, &oracle, &Role::Oracle);
@@ -85,7 +85,7 @@ impl TestContext {
                 contract: &contract_id,
                 fn_name: "grant_role",
                 args: (&admin, &manager, Role::ProjectManager).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
@@ -147,9 +147,9 @@ impl TestContext {
                 &deadline,
                 &is_private,
                 &milestones,
-                &0u32,                // categories
-                &Vec::new(&self.env), // authorized_oracles
-                &0u32,                // threshold
+                &0u32,                       // categories
+                &Vec::<Address>::new(&self.env), // authorized_oracles
+                &0u32,                       // threshold
             ),
         );
 
@@ -196,30 +196,25 @@ impl TestContext {
                 contract: &self.client.address,
                 fn_name: fn_name,
                 args: args.into_val(&self.env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
     }
 
-    pub fn mock_auth_with_sub_invocations(
+    pub fn mock_auth_with_sub_invokes(
         &self,
         address: &Address,
         fn_name: &str,
         args: impl IntoVal<Env, Vec<Val>>,
-        sub_invocations: Vec<MockAuthInvoke>,
+        sub_invokes: std::vec::Vec<MockAuthInvoke>,
     ) {
-        let mut sub_inv_refs = std::vec::Vec::new();
-        for i in 0..sub_invocations.len() {
-            sub_inv_refs.push(sub_invocations.get(i).unwrap());
-        }
-
         self.env.mock_auths(&[MockAuth {
             address: address,
             invoke: &MockAuthInvoke {
                 contract: &self.client.address,
                 fn_name: fn_name,
                 args: args.into_val(&self.env),
-                sub_invocations: &sub_inv_refs,
+                sub_invokes: &sub_invokes,
             },
         }]);
     }
@@ -237,11 +232,11 @@ impl TestContext {
                 contract: &self.client.address,
                 fn_name: "deposit",
                 args: (project_id, donator, token, amount).into_val(&self.env),
-                sub_invocations: &[MockAuthInvoke {
+                sub_invokes: &[MockAuthInvoke {
                     contract: token,
                     fn_name: "transfer",
                     args: (donator, &self.client.address, amount).into_val(&self.env),
-                    sub_invocations: &[],
+                    sub_invokes: &[],
                 }],
             },
         }]);

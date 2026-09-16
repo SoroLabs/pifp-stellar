@@ -1,6 +1,7 @@
 extern crate std;
 
-use crate::test_utils::TestContext;
+use crate::{test_utils::*, PifpProtocolClient};
+use soroban_sdk::Address;
 use soroban_sdk::{BytesN, Vec};
 
 #[test]
@@ -112,7 +113,7 @@ fn test_register_deadline_too_far_in_future_fails() {
             &false,
             &milestones,
             &0u32,
-            &Vec::new(&ctx.env),
+            &Vec::<Address>::new(&ctx.env),
             &0u32,
         ),
     );

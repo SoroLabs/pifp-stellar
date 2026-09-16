@@ -92,7 +92,7 @@ pub async fn run(state: Arc<IndexerState>) {
 /// Returns `(next_start_ledger, next_cursor)`.
 #[allow(clippy::too_many_arguments)]
 async fn poll_once(
-    pool: &SqlitePool,
+    pool: &PgPool,
     client: &Client,
     config: &Config,
     providers: &ProviderManager,

@@ -159,7 +159,7 @@ pub async fn insert_events_with_new(pool: &PgPool, events: &[PifpEvent]) -> Resu
 }
 
 /// Incrementally update the global project statistics based on the observed event.
-pub async fn update_global_stats(pool: &SqlitePool, event: &PifpEvent) -> Result<()> {
+pub async fn update_global_stats(pool: &PgPool, event: &PifpEvent) -> Result<()> {
     let mut tx = pool.begin().await?;
 
     match event.event_type.as_str() {
@@ -220,7 +220,7 @@ pub async fn update_global_stats(pool: &SqlitePool, event: &PifpEvent) -> Result
 }
 
 /// Fetch the pre-calculated global statistics.
-pub async fn get_global_stats(pool: &SqlitePool) -> Result<GlobalStats> {
+pub async fn get_global_stats(pool: &PgPool) -> Result<GlobalStats> {
     let stats = sqlx::query_as::<_, GlobalStats>("SELECT * FROM project_stats WHERE id = 1")
         .fetch_one(pool)
         .await?;
@@ -256,17 +256,17 @@ pub struct NewWebhookRegistration {
 }
 
 pub async fn create_webhook(
-    pool: &SqlitePool,
+    pool: &PgPool,
     input: &NewWebhookRegistration,
 ) -> Result<WebhookRegistration> {
     let mut tx = pool.begin().await?;
     let enabled = true;
-    let insert_res = sqlx::query("INSERT INTO webhooks (url, secret, enabled) VALUES (?1, ?2, 1)")
+    let row: (i64,) = sqlx::query_as("INSERT INTO webhooks (url, secret, enabled) VALUES ($1, $2, true) RETURNING id")
         .bind(&input.url)
         .bind(&input.secret)
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
-    let webhook_id = insert_res.last_insert_rowid();
+    let webhook_id = row.0;
 
     let mut event_types: Vec<String> = input
         .event_types
@@ -304,7 +304,7 @@ pub async fn create_webhook(
     })
 }
 
-pub async fn list_webhooks(pool: &SqlitePool) -> Result<Vec<WebhookRegistration>> {
+pub async fn list_webhooks(pool: &PgPool) -> Result<Vec<WebhookRegistration>> {
     let rows = sqlx::query_as::<_, (i64, String, i32, i64, String)>(
         r#"
         SELECT w.id, w.url, w.enabled, w.created_at, s.event_type
@@ -333,7 +333,7 @@ pub async fn list_webhooks(pool: &SqlitePool) -> Result<Vec<WebhookRegistration>
 }
 
 pub async fn get_webhooks_for_event(
-    pool: &SqlitePool,
+    pool: &PgPool,
     event_type: &str,
 ) -> Result<Vec<WebhookTarget>> {
     let rows = sqlx::query_as::<_, WebhookTarget>(
@@ -353,7 +353,7 @@ pub async fn get_webhooks_for_event(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn log_webhook_delivery_attempt(
-    pool: &SqlitePool,
+    pool: &PgPool,
     webhook_id: i64,
     event_type: &str,
     payload: &str,
@@ -385,7 +385,7 @@ pub async fn log_webhook_delivery_attempt(
 
 /// Count delivery attempts for a webhook. Useful for tests and diagnostics.
 #[cfg(test)]
-pub async fn count_webhook_deliveries(pool: &SqlitePool, webhook_id: i64) -> Result<i64> {
+pub async fn count_webhook_deliveries(pool: &PgPool, webhook_id: i64) -> Result<i64> {
     let row: (i64,) =
         sqlx::query_as("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = ?1")
             .bind(webhook_id)
@@ -401,7 +401,7 @@ pub async fn count_webhook_deliveries(pool: &SqlitePool, webhook_id: i64) -> Res
 /// Fetch all events for a given project, ordered by ledger ascending.
 #[allow(dead_code)]
 pub async fn get_events_for_project(
-    pool: &SqlitePool,
+    pool: &PgPool,
     project_id: &str,
 ) -> Result<Vec<EventRecord>> {
     let rows = sqlx::query_as::<_, EventRecord>(
@@ -420,7 +420,7 @@ pub async fn get_events_for_project(
 }
 
 /// Fetch all events, ordered by ledger ascending.
-pub async fn get_all_events(pool: &SqlitePool) -> Result<Vec<EventRecord>> {
+pub async fn get_all_events(pool: &PgPool) -> Result<Vec<EventRecord>> {
     let rows = sqlx::query_as::<_, EventRecord>(
         r#"
         SELECT id, event_type, project_id, actor, amount, ledger, timestamp,
@@ -442,7 +442,7 @@ pub struct TopProject {
 }
 
 /// Return top projects ranked by total funded amount from indexed funding events.
-pub async fn get_top_projects(pool: &SqlitePool, limit: u32) -> Result<Vec<TopProject>> {
+pub async fn get_top_projects(pool: &PgPool, limit: u32) -> Result<Vec<TopProject>> {
     let capped_limit = limit.clamp(1, 100) as i64;
     let rows = sqlx::query_as::<_, TopProject>(
         r#"
@@ -465,7 +465,7 @@ pub async fn get_top_projects(pool: &SqlitePool, limit: u32) -> Result<Vec<TopPr
 }
 
 /// Return the current number of active projects inferred from latest status events.
-pub async fn get_active_projects_count(pool: &SqlitePool) -> Result<i64> {
+pub async fn get_active_projects_count(pool: &PgPool) -> Result<i64> {
     let row: (i64,) = sqlx::query_as(
         r#"
         WITH status_events AS (
@@ -517,7 +517,7 @@ pub struct ProjectRecord {
 
 /// List projects with filtering and pagination.
 pub async fn list_projects(
-    pool: &SqlitePool,
+    pool: &PgPool,
     status: Option<String>,
     creator: Option<String>,
     categories: Option<Vec<String>>,
@@ -567,7 +567,7 @@ pub async fn list_projects(
 ///
 /// PostgreSQL equivalent would use `websearch_to_tsquery` + `ts_rank`.
 pub async fn search_projects(
-    pool: &SqlitePool,
+    pool: &PgPool,
     query: &str,
     limit: i64,
     offset: i64,
@@ -615,7 +615,7 @@ pub async fn search_projects(
 
 /// Fetch project history with pagination.
 pub async fn get_project_history(
-    pool: &SqlitePool,
+    pool: &PgPool,
     project_id: &str,
     limit: i64,
     offset: i64,
@@ -652,7 +652,7 @@ pub struct DonorRecord {
 /// Fetch donors for a specific project with pagination and consistent sorting.
 /// Returns donors sorted by total donated amount (descending), then by first donation timestamp (ascending).
 pub async fn get_project_donors(
-    pool: &SqlitePool,
+    pool: &PgPool,
     project_id: &str,
     limit: i64,
     offset: i64,
@@ -712,7 +712,7 @@ pub async fn get_project_donors(
 }
 
 /// Get the total count of unique donors for a specific project.
-pub async fn get_project_donors_count(pool: &SqlitePool, project_id: &str) -> Result<i64> {
+pub async fn get_project_donors_count(pool: &PgPool, project_id: &str) -> Result<i64> {
     let row: (i64,) = sqlx::query_as(
         r#"
         SELECT COUNT(DISTINCT actor)
@@ -733,7 +733,7 @@ pub async fn get_project_donors_count(pool: &SqlitePool, project_id: &str) -> Re
 // ─────────────────────────────────────────────────────────
 
 /// Get the global quorum threshold for proof verification.
-pub async fn get_quorum_threshold(pool: &SqlitePool) -> Result<u32> {
+pub async fn get_quorum_threshold(pool: &PgPool) -> Result<u32> {
     let row: Option<(i32,)> = sqlx::query_as("SELECT threshold FROM quorum_settings WHERE id = 1")
         .fetch_optional(pool)
         .await?;
@@ -741,7 +741,7 @@ pub async fn get_quorum_threshold(pool: &SqlitePool) -> Result<u32> {
 }
 
 /// Update the global quorum threshold.
-pub async fn set_quorum_threshold(pool: &SqlitePool, threshold: u32) -> Result<()> {
+pub async fn set_quorum_threshold(pool: &PgPool, threshold: u32) -> Result<()> {
     sqlx::query("UPDATE quorum_settings SET threshold = ?1 WHERE id = 1")
         .bind(threshold as i32)
         .execute(pool)
@@ -751,7 +751,7 @@ pub async fn set_quorum_threshold(pool: &SqlitePool, threshold: u32) -> Result<(
 
 /// Record an oracle vote for a specific project and proof hash.
 pub async fn record_vote(
-    pool: &SqlitePool,
+    pool: &PgPool,
     project_id: &str,
     oracle: &str,
     hash: &str,
@@ -783,7 +783,7 @@ pub struct VoteInfo {
 }
 
 /// Fetch the current quorum status for a project.
-pub async fn get_quorum_status(pool: &SqlitePool, project_id: &str) -> Result<QuorumStatus> {
+pub async fn get_quorum_status(pool: &PgPool, project_id: &str) -> Result<QuorumStatus> {
     let threshold = get_quorum_threshold(pool).await?;
 
     // Query to count matching votes per hash for the given project
@@ -816,8 +816,8 @@ pub async fn get_quorum_status(pool: &SqlitePool, project_id: &str) -> Result<Qu
 mod tests {
     use super::*;
 
-    async fn setup_test_db() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
+    async fn setup_test_db() -> PgPool {
+        let pool = PgPoolOptions::new()
             .connect("sqlite::memory:")
             .await
             .unwrap();
@@ -1385,7 +1385,7 @@ mod tests {
 
     // ── FTS search tests ──────────────────────────────────────────────
 
-    async fn insert_project(pool: &SqlitePool, id: &str, title: &str, description: &str) {
+    async fn insert_project(pool: &PgPool, id: &str, title: &str, description: &str) {
         sqlx::query(
             "INSERT INTO projects (project_id, creator, goal, primary_token, created_ledger, title, description)
              VALUES (?1, 'creator', '1000', 'token', 1, ?2, ?3)",

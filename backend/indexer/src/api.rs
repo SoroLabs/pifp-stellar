@@ -9,7 +9,7 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use tracing::info;
 
 use crate::cache::Cache;
@@ -20,7 +20,7 @@ use crate::profiles;
 
 #[derive(Clone)]
 pub struct ApiState {
-    pub pool: SqlitePool,
+    pub pool: PgPool,
     pub cache: Option<Cache>,
     pub cache_ttl_top_projects_secs: u64,
     pub cache_ttl_active_projects_count_secs: u64,

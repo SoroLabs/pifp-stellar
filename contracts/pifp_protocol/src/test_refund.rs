@@ -1,7 +1,7 @@
 extern crate std;
 
 use soroban_sdk::{
-    testutils::{Address as _, MockAuth, MockAuthInvoke},
+    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
     token, Address, Bytes, BytesN, Env, IntoVal, Val, Vec,
 };
 
@@ -22,7 +22,7 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address) {
             contract: &contract_id,
             fn_name: "init",
             args: (&super_admin,).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.init(&super_admin);
@@ -42,7 +42,7 @@ fn mock_auth(
             contract: client,
             fn_name: fn_name,
             args: args.into_val(env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
 }
@@ -61,11 +61,11 @@ fn mock_deposit_auth(
             contract: client,
             fn_name: "deposit",
             args: (project_id, donator, token, amount).into_val(env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: token,
                 fn_name: "transfer",
                 args: (donator, client, amount).into_val(env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);
@@ -125,7 +125,7 @@ fn test_refund_success_after_expiry() {
             false,
             &milestones,                 // milestones
             0u32,                        // categories
-            soroban_sdk::Vec::new(&env), // authorized_oracles
+            soroban_sdk::Vec::<Address>::new(&env), // authorized_oracles
             0u32,                        // threshold
         ),
     );

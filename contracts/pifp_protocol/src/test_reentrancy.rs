@@ -46,7 +46,7 @@ impl Ctx {
                 contract: &contract_id,
                 fn_name: "init",
                 args: (&admin,).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.init(&admin);
@@ -57,7 +57,7 @@ impl Ctx {
                 contract: &contract_id,
                 fn_name: "grant_role",
                 args: (&admin, &oracle, Role::Oracle).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.grant_role(&admin, &oracle, &Role::Oracle);
@@ -68,7 +68,7 @@ impl Ctx {
                 contract: &contract_id,
                 fn_name: "grant_role",
                 args: (&admin, &manager, Role::ProjectManager).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         client.grant_role(&admin, &manager, &Role::ProjectManager);
@@ -125,11 +125,11 @@ impl Ctx {
                     &false,
                     &milestones,
                     &0u32,
-                    &Vec::new(&self.env),
+                    &Vec::<Address>::new(&self.env),
                     &0u32,
                 )
                     .into_val(&self.env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             },
         }]);
         let p = self.client.register_project(
@@ -183,11 +183,11 @@ fn test_deposit_blocked_when_locked() {
             contract: &ctx.client.address,
             fn_name: "deposit",
             args: (project_id, &ctx.manager, &token.address, 500i128).into_val(&ctx.env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &token.address,
                 fn_name: "transfer",
                 args: (&ctx.manager, &ctx.client.address, 500i128).into_val(&ctx.env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);
@@ -217,11 +217,11 @@ fn test_verify_and_release_blocked_when_locked() {
             contract: &ctx.client.address,
             fn_name: "verify_and_release",
             args: (&ctx.oracle, project_id, ctx.dummy_proof()).into_val(&ctx.env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     ctx.client
-        .verify_and_release(&ctx.oracle, &project_id, &ctx.dummy_proof());
+        .verify_proof(&ctx.oracle, &project_id, &ctx.dummy_proof());
 }
 
 // ── refund blocked when locked ────────────────────────────────────────
@@ -250,7 +250,7 @@ fn test_refund_blocked_when_locked() {
             contract: &ctx.client.address,
             fn_name: "refund",
             args: (&ctx.manager, project_id, &token.address).into_val(&ctx.env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     ctx.client.refund(&ctx.manager, &project_id, &token.address);
@@ -271,11 +271,11 @@ fn test_lock_released_after_successful_deposit() {
             contract: &ctx.client.address,
             fn_name: "deposit",
             args: (project_id, &ctx.manager, &token.address, 500i128).into_val(&ctx.env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &token.address,
                 fn_name: "transfer",
                 args: (&ctx.manager, &ctx.client.address, 500i128).into_val(&ctx.env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);

@@ -1,6 +1,9 @@
 extern crate std;
 
-use soroban_sdk::{vec, Address, Bytes, BytesN, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
+    vec, Address, BytesN, Env, IntoVal, String, Vec,
+};
 
 use crate::{
     test_utils::TestContext,
@@ -68,7 +71,7 @@ fn test_batch_register_projects_success() {
     assert_eq!(projects.get(1).unwrap().id, 1);
 
     let events = env.events().all();
-    assert_eq!(events.len(), 2);
+    assert_eq!(events.events().len(), 2);
 }
 
 #[test]
@@ -118,12 +121,12 @@ fn test_batch_register_projects_atomicity() {
     requests.push_back(valid_request);
     requests.push_back(invalid_request);
 
-    let result = std::panic::catch_unwind(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         ctx.client.batch_register_projects(&ctx.manager, &requests);
-    });
+    }));
 
     assert!(result.is_err());
-    assert_eq!(env.events().all().len(), 0);
+    assert_eq!(env.events().all().events().len(), 0);
 
     let mut tokens = Vec::new(env);
     tokens.push_back(ctx.create_token().0.address.clone());

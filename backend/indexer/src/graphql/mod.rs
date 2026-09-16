@@ -1,6 +1,7 @@
 use crate::db;
 use crate::graphql::model::{Event, Project};
 use async_graphql::*;
+use async_graphql::http::GraphiQLSource;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
     extract::State,
@@ -116,6 +117,6 @@ pub fn router(pool: PgPool) -> Router {
 
     Router::new()
         .route("/graphql", get(graphiql).post(graphql_handler))
-        .route("/graphql/ws", GraphQLSubscription::new(schema.clone()))
+        .route("/graphql/ws", axum::routing::any_service(GraphQLSubscription::new(schema.clone())))
         .with_state(schema)
 }

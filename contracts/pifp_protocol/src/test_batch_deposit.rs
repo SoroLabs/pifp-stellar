@@ -26,7 +26,7 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
             contract: &contract_id,
             fn_name: "init",
             args: (&admin,).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.init(&admin);
@@ -37,7 +37,7 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
             contract: &contract_id,
             fn_name: "grant_role",
             args: (&admin, &oracle, Role::Oracle).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.grant_role(&admin, &oracle, &Role::Oracle);
@@ -48,7 +48,7 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
             contract: &contract_id,
             fn_name: "grant_role",
             args: (&admin, &manager, Role::ProjectManager).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.grant_role(&admin, &manager, &Role::ProjectManager);
@@ -98,11 +98,11 @@ fn register(
                 &false,
                 &milestones,
                 &0u32,          // categories
-                &Vec::new(env), // authorized_oracles
+                &Vec::<Address>::new(env), // authorized_oracles
                 &0u32,          // threshold
             )
                 .into_val(env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client
@@ -156,18 +156,18 @@ fn test_batch_deposit_funds_multiple_projects() {
             contract: &client.address,
             fn_name: "batch_deposit",
             args: (&donator, &deposits).into_val(&env),
-            sub_invocations: &[
+            sub_invokes: &[
                 MockAuthInvoke {
                     contract: &tok1.address,
                     fn_name: "transfer",
                     args: (&donator, &client.address, 500i128).into_val(&env),
-                    sub_invocations: &[],
+                    sub_invokes: &[],
                 },
                 MockAuthInvoke {
                     contract: &tok2.address,
                     fn_name: "transfer",
                     args: (&donator, &client.address, 800i128).into_val(&env),
-                    sub_invocations: &[],
+                    sub_invokes: &[],
                 },
             ],
         },
@@ -213,18 +213,18 @@ fn test_batch_deposit_reverts_on_invalid_amount() {
             contract: &client.address,
             fn_name: "batch_deposit",
             args: (&donator, &deposits).into_val(&env),
-            sub_invocations: &[
+            sub_invokes: &[
                 MockAuthInvoke {
                     contract: &tok1.address,
                     fn_name: "transfer",
                     args: (&donator, &client.address, 500i128).into_val(&env),
-                    sub_invocations: &[],
+                    sub_invokes: &[],
                 },
                 MockAuthInvoke {
                     contract: &tok2.address,
                     fn_name: "transfer",
                     args: (&donator, &client.address, 0i128).into_val(&env),
-                    sub_invocations: &[],
+                    sub_invokes: &[],
                 },
             ],
         },
@@ -247,7 +247,7 @@ fn test_batch_deposit_blocked_when_paused() {
             contract: &client.address,
             fn_name: "pause",
             args: (&admin,).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.pause(&admin);
@@ -266,11 +266,11 @@ fn test_batch_deposit_blocked_when_paused() {
             contract: &client.address,
             fn_name: "batch_deposit",
             args: (&donator, &deposits).into_val(&env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &tok1.address,
                 fn_name: "transfer",
                 args: (&donator, &client.address, 500i128).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);

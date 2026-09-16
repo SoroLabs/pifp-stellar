@@ -20,7 +20,7 @@ fn test_whitelist_funding_restricted() {
             contract: &client.address,
             fn_name: "grant_role",
             args: (&admin, &creator, Role::ProjectManager).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.grant_role(&admin, &creator, &Role::ProjectManager);
@@ -43,11 +43,11 @@ fn test_whitelist_funding_restricted() {
                 true,
                 &milestones,
                 0u32,
-                Vec::new(&env),
+                Vec::<Address>::new(&env),
                 0u32,
             )
                 .into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     let project = client.register_project(
@@ -72,11 +72,11 @@ fn test_whitelist_funding_restricted() {
             contract: &client.address,
             fn_name: "deposit",
             args: (project.id, &donor, &token.address, 500i128).into_val(&env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &token.address,
                 fn_name: "transfer",
                 args: (&donor, &client.address, 500i128).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);
@@ -125,7 +125,7 @@ fn test_whitelist_funding_allowed() {
             contract: &client.address,
             fn_name: "add_to_whitelist",
             args: (&creator, project.id, &donor).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.add_to_whitelist(&creator, &project.id, &donor);
@@ -138,11 +138,11 @@ fn test_whitelist_funding_allowed() {
             contract: &client.address,
             fn_name: "deposit",
             args: (project.id, &donor, &token.address, 500i128).into_val(&env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &token.address,
                 fn_name: "transfer",
                 args: (&donor, &client.address, 500i128).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);
@@ -192,7 +192,7 @@ fn test_whitelist_management_auth() {
             contract: &client.address,
             fn_name: "add_to_whitelist",
             args: (&stranger, project.id, &donor).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     let result = client.try_add_to_whitelist(&stranger, &project.id, &donor);
@@ -205,7 +205,7 @@ fn test_whitelist_management_auth() {
             contract: &client.address,
             fn_name: "add_to_whitelist",
             args: (&admin, project.id, &donor).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.add_to_whitelist(&admin, &project.id, &donor);
@@ -217,7 +217,7 @@ fn test_whitelist_management_auth() {
             contract: &client.address,
             fn_name: "remove_from_whitelist",
             args: (&creator, project.id, &donor).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.remove_from_whitelist(&creator, &project.id, &donor);

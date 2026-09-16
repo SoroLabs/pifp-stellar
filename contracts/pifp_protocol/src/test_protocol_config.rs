@@ -17,7 +17,7 @@ fn test_update_protocol_config_success() {
             contract: &client.address,
             fn_name: "update_protocol_config",
             args: (&admin, &recipient, 500u32).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.update_protocol_config(&admin, &recipient, &500); // 5%
@@ -38,7 +38,7 @@ fn test_update_protocol_config_unauthorized() {
             contract: &client.address,
             fn_name: "update_protocol_config",
             args: (&stranger, &recipient, 500u32).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.update_protocol_config(&stranger, &recipient, &500);
@@ -56,7 +56,7 @@ fn test_update_protocol_config_invalid_bps() {
             contract: &client.address,
             fn_name: "update_protocol_config",
             args: (&admin, &recipient, 1001u32).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.update_protocol_config(&admin, &recipient, &1001); // > 10%
@@ -81,7 +81,7 @@ fn test_verify_and_release_with_fees() {
             contract: &client.address,
             fn_name: "grant_role",
             args: (&admin, &creator, Role::ProjectManager).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.grant_role(&admin, &creator, &Role::ProjectManager);
@@ -91,7 +91,7 @@ fn test_verify_and_release_with_fees() {
             contract: &client.address,
             fn_name: "grant_role",
             args: (&admin, &oracle, Role::Oracle).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.grant_role(&admin, &oracle, &Role::Oracle);
@@ -103,7 +103,7 @@ fn test_verify_and_release_with_fees() {
             contract: &client.address,
             fn_name: "update_protocol_config",
             args: (&admin, &fee_recipient, 500u32).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.update_protocol_config(&admin, &fee_recipient, &500);
@@ -125,11 +125,11 @@ fn test_verify_and_release_with_fees() {
                 false,
                 &milestones,
                 0u32,
-                Vec::new(&env),
+                Vec::<Address>::new(&env),
                 0u32,
             )
                 .into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     let project = client.register_project(
@@ -154,11 +154,11 @@ fn test_verify_and_release_with_fees() {
             contract: &client.address,
             fn_name: "deposit",
             args: (project.id, &donor, &token.address, 1000i128).into_val(&env),
-            sub_invocations: &[MockAuthInvoke {
+            sub_invokes: &[MockAuthInvoke {
                 contract: &token.address,
                 fn_name: "transfer",
                 args: (&donor, &client.address, 1000i128).into_val(&env),
-                sub_invocations: &[],
+                sub_invokes: &[],
             }],
         },
     }]);
@@ -171,7 +171,7 @@ fn test_verify_and_release_with_fees() {
             contract: &client.address,
             fn_name: "verify_proof",
             args: (&oracle, project.id, &proof_hash).into_val(&env),
-            sub_invocations: &[],
+            sub_invokes: &[],
         },
     }]);
     client.verify_proof(&oracle, &project.id, &proof_hash);

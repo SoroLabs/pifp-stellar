@@ -16,7 +16,7 @@ const BASE_BACKOFF_MS: u64 = 500;
 
 #[derive(Clone)]
 pub struct DispatchContext {
-    pub pool: sqlx::SqlitePool,
+    pub pool: sqlx::PgPool,
     pub client: Client,
 }
 
@@ -89,7 +89,7 @@ pub async fn dispatch_event(ctx: DispatchContext, event: PifpEvent) {
 }
 
 async fn deliver_with_retry<S: WebhookSender + Sync>(
-    pool: &sqlx::SqlitePool,
+    pool: &sqlx::PgPool,
     sender: &S,
     target: &db::WebhookTarget,
     payload: &str,
@@ -158,7 +158,7 @@ pub fn sign_payload(secret: &str, payload: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::postgres::PgPoolOptions;
     use std::sync::Mutex;
 
     #[test]
@@ -185,8 +185,8 @@ mod tests {
         }
     }
 
-    async fn setup_delivery_db() -> sqlx::SqlitePool {
-        let pool = SqlitePoolOptions::new()
+    async fn setup_delivery_db() -> sqlx::PgPool {
+        let pool = PgPoolOptions::new()
             .connect("sqlite::memory:")
             .await
             .unwrap();
