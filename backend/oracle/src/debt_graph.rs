@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Edge {
@@ -32,17 +32,19 @@ impl DebtGraph {
             if let Some(cycle) = self.find_cycle() {
                 // Find minimum amount in the cycle
                 let min_amount = cycle.iter().map(|e| e.amount).min().unwrap_or(0);
-                if min_amount == 0 { break; }
+                if min_amount == 0 {
+                    break;
+                }
 
                 // Subtract min_amount from all edges in the cycle
                 for cycle_edge in cycle {
-                    if let Some(edge) = self.edges.iter_mut().find(|e| 
+                    if let Some(edge) = self.edges.iter_mut().find(|e| {
                         e.from == cycle_edge.from && e.to == cycle_edge.to && e.amount >= min_amount
-                    ) {
+                    }) {
                         edge.amount -= min_amount;
                     }
                 }
-                
+
                 // Remove zero-amount edges
                 self.edges.retain(|e| e.amount > 0);
             } else {
@@ -54,7 +56,9 @@ impl DebtGraph {
     fn find_cycle(&self) -> Option<Vec<Edge>> {
         let mut adj = HashMap::new();
         for edge in &self.edges {
-            adj.entry(edge.from.clone()).or_insert_with(Vec::new).push(edge);
+            adj.entry(edge.from.clone())
+                .or_insert_with(Vec::new)
+                .push(edge);
         }
 
         let nodes: Vec<_> = adj.keys().cloned().collect();
@@ -130,7 +134,13 @@ mod tests {
 
         graph.minimize_debt();
         assert_eq!(graph.edges.len(), 2);
-        assert!(graph.edges.iter().any(|e| e.from == "A" && e.to == "B" && e.amount == 50));
-        assert!(graph.edges.iter().any(|e| e.from == "B" && e.to == "C" && e.amount == 50));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|e| e.from == "A" && e.to == "B" && e.amount == 50));
+        assert!(graph
+            .edges
+            .iter()
+            .any(|e| e.from == "B" && e.to == "C" && e.amount == 50));
     }
 }

@@ -49,7 +49,11 @@ fn test_expire_completed_project_panics() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Move to Completed
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, ctx.dummy_proof()),
+    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
     ctx.jump_time(86_400); // grace period

@@ -1,10 +1,6 @@
-use axum::{
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{http::StatusCode, response::IntoResponse, Json};
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
 use std::collections::HashSet;
 
 #[derive(Debug, Deserialize)]
@@ -40,16 +36,12 @@ pub struct Claims {
     pub exp: usize,
 }
 
-pub async fn request_challenge(
-    Json(_payload): Json<ChallengeRequest>,
-) -> impl IntoResponse {
+pub async fn request_challenge(Json(_payload): Json<ChallengeRequest>) -> impl IntoResponse {
     // Simple credible abstraction of a challenge
     Json(serde_json::json!({ "challenge": "pifp-auth-nonce-99" }))
 }
 
-pub async fn issue_credential(
-    Json(payload): Json<IssueRequest>,
-) -> impl IntoResponse {
+pub async fn issue_credential(Json(payload): Json<IssueRequest>) -> impl IntoResponse {
     // Validate challenge (minimal check)
     if payload.challenge != "pifp-auth-nonce-99" {
         return (StatusCode::BAD_REQUEST, "Invalid challenge").into_response();
@@ -72,18 +64,17 @@ pub async fn issue_credential(
     }
 }
 
-pub async fn verify_credential(
-    Json(payload): Json<VerifyRequest>,
-) -> impl IntoResponse {
+pub async fn verify_credential(Json(payload): Json<VerifyRequest>) -> impl IntoResponse {
     let decoding_key = DecodingKey::from_secret("secret".as_ref());
-    let token_data = match decode::<Claims>(&payload.credential, &decoding_key, &Validation::default()) {
-        Ok(d) => d,
-        Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
-    };
+    let token_data =
+        match decode::<Claims>(&payload.credential, &decoding_key, &Validation::default()) {
+            Ok(d) => d,
+            Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+        };
 
     let requested: HashSet<String> = payload.requested_claims.into_iter().collect();
     let mut disclosed = serde_json::Map::new();
-    
+
     if let Some(subject) = token_data.claims.vc.credential_subject.as_object() {
         // 1. Direct Field Disclosure
         for field in &requested {
@@ -104,5 +95,6 @@ pub async fn verify_credential(
         "valid": true,
         "issuer": token_data.claims.iss,
         "disclosed": disclosed
-    })).into_response()
+    }))
+    .into_response()
 }

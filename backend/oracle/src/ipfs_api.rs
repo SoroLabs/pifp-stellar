@@ -1,3 +1,4 @@
+use crate::ipfs::{pin_file, IpfsConfig};
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
@@ -6,7 +7,6 @@ use axum::{
 };
 use serde::Serialize;
 use std::sync::Arc;
-use crate::ipfs::{pin_file, IpfsConfig};
 
 #[derive(Serialize)]
 pub struct UploadResponse {
@@ -24,8 +24,7 @@ pub struct IpfsState {
 }
 
 pub fn router() -> Router<Arc<crate::health::ServerState>> {
-    Router::new()
-        .route("/ipfs/upload", post(upload_file))
+    Router::new().route("/ipfs/upload", post(upload_file))
 }
 
 async fn upload_file(
@@ -34,18 +33,14 @@ async fn upload_file(
 ) -> std::result::Result<Json<UploadResponse>, (StatusCode, Json<UploadErrorResponse>)> {
     let mut file_data = Vec::new();
 
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(UploadErrorResponse {
-                    error: format!("Multipart error: {e}"),
-                }),
-            )
-        })?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(UploadErrorResponse {
+                error: format!("Multipart error: {e}"),
+            }),
+        )
+    })? {
         if let Some(name) = field.name() {
             if name == "file" {
                 file_data = field

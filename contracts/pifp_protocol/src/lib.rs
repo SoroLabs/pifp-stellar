@@ -56,9 +56,9 @@ pub mod events;
 pub mod invariants_checker;
 mod milestones;
 pub mod rbac;
+pub mod rbac;
 mod storage;
 mod types;
-pub mod rbac;
 
 #[cfg(test)]
 mod fuzz_test;
@@ -68,6 +68,10 @@ mod rbac_test;
 mod test;
 #[cfg(test)]
 mod test_batch_deposit;
+#[cfg(test)]
+mod test_batch_deposit;
+#[cfg(test)]
+mod test_batch_register;
 #[cfg(test)]
 mod test_deadline;
 #[cfg(test)]
@@ -81,6 +85,8 @@ mod test_expire;
 #[cfg(test)]
 mod test_grace_period;
 #[cfg(test)]
+mod test_grace_period;
+#[cfg(test)]
 mod test_project_pause;
 #[cfg(test)]
 mod test_protocol_config;
@@ -89,36 +95,30 @@ mod test_reclaim;
 #[cfg(test)]
 mod test_reentrancy;
 #[cfg(test)]
+mod test_reentrancy;
+#[cfg(test)]
 mod test_refund;
 #[cfg(test)]
 mod test_utils;
 #[cfg(test)]
 mod test_whitelist;
-#[cfg(test)]
-mod test_grace_period;
-#[cfg(test)]
-mod test_batch_deposit;
-#[cfg(test)]
-mod test_batch_register;
-#[cfg(test)]
-mod test_reentrancy;
 
 use crate::types::ProjectStatus;
 pub use errors::Error;
 pub use events::emit_funds_released;
+pub use rbac::Role;
 pub use rbac::Role;
 use storage::{
     clear_oracle_agreement, drain_token_balance, get_and_increment_project_id, get_protocol_config,
     is_whitelisted, load_project_pair, save_project, save_project_config, save_project_state,
     set_protocol_config,
 };
+use storage::{get_and_increment_project_id, load_project, save_project};
 pub use types::{
     DepositRequest, Milestone, OracleAgreement, Project, ProjectBalances, ProjectConfig,
     ProjectState, ProtocolConfig,
 };
-use storage::{get_and_increment_project_id, load_project, save_project};
 pub use types::{Project, ProjectStatus};
-pub use rbac::Role;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -132,16 +132,16 @@ pub enum DataKey {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    ProjectNotFound       = 1,
-    MilestoneNotFound     = 2,
+    ProjectNotFound = 1,
+    MilestoneNotFound = 2,
     MilestoneAlreadyReleased = 3,
-    InsufficientBalance   = 4,
-    InvalidMilestones     = 5,
-    NotAuthorized         = 6,
-    GoalMismatch          = 7,
+    InsufficientBalance = 4,
+    InvalidMilestones = 5,
+    NotAuthorized = 6,
+    GoalMismatch = 7,
     // New in RBAC integration:
-    AlreadyInitialized    = 8,
-    RoleNotFound          = 9,
+    AlreadyInitialized = 8,
+    RoleNotFound = 9,
 }
 
 #[contract]
@@ -385,7 +385,9 @@ impl PifpProtocol {
         authorized_oracles: Vec<Address>,
         threshold: u32,
     ) -> Project {
-        if milestones.is_empty() { panic_with_error!(&env, Error::InvalidGoal); }
+        if milestones.is_empty() {
+            panic_with_error!(&env, Error::InvalidGoal);
+        }
         if milestones.is_empty() {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
@@ -418,6 +420,7 @@ impl PifpProtocol {
         let oracle_count = authorized_oracles.len();
         if oracle_count > 0 && (threshold == 0 || threshold > oracle_count) {
             panic_with_error!(&env, Error::InvalidOracleConfig);
+        }
         if deadline <= env.ledger().timestamp() {
             panic_with_error!(&env, Error::InvalidMilestones);
         }
@@ -513,7 +516,12 @@ impl PifpProtocol {
     /// - Only an address with the `Oracle` role may call this.
     /// - The project must be in `Funding` or `Active` status.
     /// - `submitted_proof_hash` must match the project's `proof_hash`.
-    pub fn verify_and_release(env: Env, oracle: Address, project_id: u64, submitted_proof_hash: BytesN<32>) {
+    pub fn verify_and_release(
+        env: Env,
+        oracle: Address,
+        project_id: u64,
+        submitted_proof_hash: BytesN<32>,
+    ) {
         oracle.require_auth();
         // RBAC gate: caller must hold the Oracle role.
         rbac::require_oracle(&env, &oracle);
@@ -960,7 +968,7 @@ impl PifpProtocol {
         match project.status {
             ProjectStatus::Funding | ProjectStatus::Active => {}
             ProjectStatus::Completed => panic_with_error!(&env, Error::MilestoneAlreadyReleased),
-            ProjectStatus::Expired   => panic_with_error!(&env, Error::ProjectNotFound),
+            ProjectStatus::Expired => panic_with_error!(&env, Error::ProjectNotFound),
         }
 
         if submitted_proof_hash != project.proof_hash {

@@ -117,7 +117,11 @@ async fn pin_with_retry_web3_storage(data: Vec<u8>, config: &IpfsConfig) -> Resu
     for attempt in 0..MAX_RETRIES {
         if attempt > 0 {
             let backoff = BASE_BACKOFF_MS * (1 << (attempt - 1));
-            warn!(attempt, backoff_ms = backoff, "Retrying IPFS pin after backoff");
+            warn!(
+                attempt,
+                backoff_ms = backoff,
+                "Retrying IPFS pin after backoff"
+            );
             tokio::time::sleep(Duration::from_millis(backoff)).await;
         }
 
@@ -177,11 +181,7 @@ async fn pin_via_pinata(data: Vec<u8>, config: IpfsConfig, client: Client) -> Re
     Ok(pinata_resp.ipfs_hash)
 }
 
-async fn pin_via_web3_storage(
-    data: Vec<u8>,
-    config: IpfsConfig,
-    client: Client,
-) -> Result<String> {
+async fn pin_via_web3_storage(data: Vec<u8>, config: IpfsConfig, client: Client) -> Result<String> {
     let token = config
         .web3_storage_token
         .as_deref()
@@ -230,13 +230,18 @@ pub async fn pin_locally(data: Vec<u8>) -> Result<String> {
         .map_err(|e| OracleError::Network(format!("Local IPFS request failed: {e}")))?;
 
     if !response.status().is_success() {
-        return Err(OracleError::Network("Local IPFS node not reachable or returned error".to_string()));
+        return Err(OracleError::Network(
+            "Local IPFS node not reachable or returned error".to_string(),
+        ));
     }
 
-    let json: serde_json::Value = response.json().await
+    let json: serde_json::Value = response
+        .json()
+        .await
         .map_err(|e| OracleError::Network(format!("Failed to parse local IPFS response: {e}")))?;
 
-    let cid = json["Hash"].as_str()
+    let cid = json["Hash"]
+        .as_str()
         .ok_or_else(|| OracleError::Network("No Hash in local IPFS response".to_string()))?;
 
     Ok(cid.to_string())

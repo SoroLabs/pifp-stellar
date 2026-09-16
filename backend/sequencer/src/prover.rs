@@ -39,10 +39,7 @@ impl ExternalProverClient {
 impl ProverCoordinator for ExternalProverClient {
     fn prove_and_submit(&self, witness: &WitnessBatch) -> Result<BatchSubmission, String> {
         let started = Instant::now();
-        while started.elapsed().as_millis() < self.max_wait_ms as u128 {
-            thread::sleep(Duration::from_millis(self.poll_interval_ms));
-            break;
-        }
+        thread::sleep(Duration::from_millis(self.poll_interval_ms));
 
         if started.elapsed().as_millis() >= self.max_wait_ms as u128 {
             return Err("timed out waiting for external prover".to_string());
@@ -67,4 +64,3 @@ impl ProverCoordinator for ExternalProverClient {
         })
     }
 }
-

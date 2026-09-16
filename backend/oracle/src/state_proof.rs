@@ -1,5 +1,5 @@
-use sha2::{Sha256, Digest};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,22 +105,22 @@ impl StateMerkleTree {
 
 pub fn verify_proof(root: &str, leaf: &str, proof: &MerkleProof) -> bool {
     let mut current_hash = hex::decode(leaf).unwrap_or_default();
-    
+
     for sibling_hex in &proof.siblings {
         let sibling = hex::decode(sibling_hex).unwrap_or_default();
         let mut hasher = Sha256::new();
-        
+
         let (left, right) = if current_hash.as_slice() <= sibling.as_slice() {
             (current_hash, sibling)
         } else {
             (sibling, current_hash)
         };
-        
+
         hasher.update(left);
         hasher.update(right);
         current_hash = hasher.finalize().into();
     }
-    
+
     hex::encode(current_hash) == root
 }
 

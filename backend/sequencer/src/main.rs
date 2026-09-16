@@ -1,7 +1,4 @@
-use pifp_sequencer::{
-    prover::ExternalProverClient,
-    sequencer::Sequencer,
-};
+use pifp_sequencer::{prover::ExternalProverClient, sequencer::Sequencer};
 
 fn main() {
     let prover = ExternalProverClient::new(
@@ -14,4 +11,3 @@ fn main() {
         sequencer.balance_of("bootstrap")
     );
 }
-

@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::state_proof::{MerkleProof, StateMerkleTree};
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
@@ -7,7 +6,8 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use crate::state_proof::{StateMerkleTree, MerkleProof};
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Deserialize)]
 pub struct OffchainComputeParams {
@@ -27,9 +27,7 @@ pub fn router() -> Router<()> {
     Router::new().route("/compute", get(handle_offchain_compute))
 }
 
-async fn handle_offchain_compute(
-    Query(params): Query<OffchainComputeParams>,
-) -> impl IntoResponse {
+async fn handle_offchain_compute(Query(params): Query<OffchainComputeParams>) -> impl IntoResponse {
     // 1. Simulate fetching contract state from a "local snapshot"
     // In a real scenario, this would be fetched from Soroban RPC or a local DB
     let mut state = HashMap::new();
@@ -46,7 +44,10 @@ async fn handle_offchain_compute(
     // Example: Calculate the impact score or something heavy
     let total: u64 = state.get("total_donations").unwrap().parse().unwrap_or(0);
     let count: u64 = state.get("donor_count").unwrap().parse().unwrap_or(1);
-    let result = format!("Impact Score: {:.2}", (total as f64 * 0.8) + (count as f64 * 0.2));
+    let result = format!(
+        "Impact Score: {:.2}",
+        (total as f64 * 0.8) + (count as f64 * 0.2)
+    );
 
     // 4. Generate proofs for all state variables used
     let mut proofs = Vec::new();

@@ -11,8 +11,8 @@
 //!                    (peer discovery)    (RTT probing)    (Dijkstra routing)
 //! ```
 
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -195,7 +195,9 @@ impl LatencyMapper {
 
     /// Look up the latest RTT between two peers (directed).
     pub fn rtt(&self, from: &NodeId, to: &NodeId) -> Option<u32> {
-        self.measurements.get(&(from.clone(), to.clone())).map(|m| m.rtt_ms)
+        self.measurements
+            .get(&(from.clone(), to.clone()))
+            .map(|m| m.rtt_ms)
     }
 
     /// Return all edges as `(from, to, rtt_ms)` triples for graph algorithms.
@@ -220,9 +222,7 @@ impl TopologyGraph {
     pub fn build(mapper: &LatencyMapper) -> Self {
         let mut adj: HashMap<NodeId, Vec<(NodeId, u32)>> = HashMap::new();
         for (from, to, rtt) in mapper.edges() {
-            adj.entry(from.clone())
-                .or_default()
-                .push((to.clone(), rtt));
+            adj.entry(from.clone()).or_default().push((to.clone(), rtt));
         }
         Self { adj }
     }
@@ -265,11 +265,7 @@ impl TopologyGraph {
                                 .or_else(|| Some(nb.clone()))
                         };
                         *entry = (new_cost, hop.clone());
-                        heap.push(Reverse((
-                            new_cost,
-                            nb.hex(),
-                            hop.map(|h| h.hex()),
-                        )));
+                        heap.push(Reverse((new_cost, nb.hex(), hop.map(|h| h.hex()))));
                     }
                 }
             }
@@ -339,7 +335,11 @@ impl P2pDiscoveryService {
 
     /// Handle a newly discovered peer (e.g., received via a FindNode response).
     pub fn handle_discovered_peer(&self, peer: PeerInfo) {
-        debug!(peer = peer.node_id.hex(), addr = peer.addr, "peer discovered");
+        debug!(
+            peer = peer.node_id.hex(),
+            addr = peer.addr,
+            "peer discovered"
+        );
         self.router.write().unwrap().upsert_peer(peer);
     }
 
@@ -417,7 +417,10 @@ mod tests {
         let mut router = KademliaRouter::new(local.clone());
 
         for i in 0..10u8 {
-            router.upsert_peer(make_peer(&format!("peer-{i}"), &format!("/ip4/10.0.0.{i}/tcp/7777")));
+            router.upsert_peer(make_peer(
+                &format!("peer-{i}"),
+                &format!("/ip4/10.0.0.{i}/tcp/7777"),
+            ));
         }
 
         assert_eq!(router.peer_count(), 10);
@@ -446,7 +449,10 @@ mod tests {
         // Insert K+1 peers into the same bucket by using very similar keys.
         // We forcibly insert 21 peers and check total stays at most K+something.
         for i in 0..=K {
-            router.upsert_peer(make_peer(&format!("evict-{i:03}"), &format!("/ip4/1.1.1.{}/tcp/7777", i % 255)));
+            router.upsert_peer(make_peer(
+                &format!("evict-{i:03}"),
+                &format!("/ip4/1.1.1.{}/tcp/7777", i % 255),
+            ));
         }
         // Total peers ≤ K * bucket_count, and any single bucket ≤ K.
         assert!(router.peer_count() <= (K + 1));
@@ -480,9 +486,24 @@ mod tests {
 
         let mut mapper = LatencyMapper::default();
         let ts = SystemTime::now();
-        mapper.record(LatencyMeasurement { from: a.clone(), to: b.clone(), rtt_ms: 10, measured_at: ts });
-        mapper.record(LatencyMeasurement { from: b.clone(), to: c.clone(), rtt_ms: 5,  measured_at: ts });
-        mapper.record(LatencyMeasurement { from: a.clone(), to: c.clone(), rtt_ms: 30, measured_at: ts });
+        mapper.record(LatencyMeasurement {
+            from: a.clone(),
+            to: b.clone(),
+            rtt_ms: 10,
+            measured_at: ts,
+        });
+        mapper.record(LatencyMeasurement {
+            from: b.clone(),
+            to: c.clone(),
+            rtt_ms: 5,
+            measured_at: ts,
+        });
+        mapper.record(LatencyMeasurement {
+            from: a.clone(),
+            to: c.clone(),
+            rtt_ms: 30,
+            measured_at: ts,
+        });
 
         let graph = TopologyGraph::build(&mapper);
         let routes = graph.dijkstra(&a);
@@ -498,7 +519,12 @@ mod tests {
     fn p2p_service_bootstrap_and_discovery() {
         let local = NodeId::from_key(b"local");
         let peers: Vec<PeerInfo> = (0..5)
-            .map(|i| make_peer(&format!("boot-{i}"), &format!("/ip4/192.168.0.{i}/tcp/7777")))
+            .map(|i| {
+                make_peer(
+                    &format!("boot-{i}"),
+                    &format!("/ip4/192.168.0.{i}/tcp/7777"),
+                )
+            })
             .collect();
 
         let svc = P2pDiscoveryService::new(local, peers, Duration::from_secs(30));

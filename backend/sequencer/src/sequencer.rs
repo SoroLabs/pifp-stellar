@@ -138,4 +138,3 @@ impl<C: ProverCoordinator> Sequencer<C> {
 fn encode_hash(hash: Hash) -> String {
     format!("0x{}", hex::encode(hash))
 }
-

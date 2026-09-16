@@ -1,4 +1,4 @@
-﻿//! Configuration management for the Oracle service.
+//! Configuration management for the Oracle service.
 //!
 //! Loads all required settings from environment variables.
 
@@ -105,7 +105,9 @@ impl Config {
             oracle_max_staleness_secs: env_var("ORACLE_MAX_STALENESS_SECS")
                 .unwrap_or_else(|_| "90".to_string())
                 .parse()
-                .map_err(|_| OracleError::Config("Invalid ORACLE_MAX_STALENESS_SECS".to_string()))?,
+                .map_err(|_| {
+                    OracleError::Config("Invalid ORACLE_MAX_STALENESS_SECS".to_string())
+                })?,
 
             oracle_max_variance_pct: env_var("ORACLE_MAX_VARIANCE_PCT")
                 .unwrap_or_else(|_| "5.0".to_string())
@@ -208,10 +210,12 @@ mod tests {
             oracle_refresh_secs: 15,
             oracle_max_staleness_secs: 90,
             oracle_max_variance_pct: 5.0,
-            oracle_coingecko_url: "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd".to_string(),
-            oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT".to_string(),
+            oracle_coingecko_url:
+                "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd"
+                    .to_string(),
+            oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT"
+                .to_string(),
             oracle_kraken_url: "https://api.kraken.com/0/public/Ticker?pair=XLMUSD".to_string(),
         }
     }
 }
-

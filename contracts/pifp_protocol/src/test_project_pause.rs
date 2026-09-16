@@ -59,7 +59,11 @@ fn test_verify_and_release_fails_when_project_paused() {
     ctx.mock_auth(&ctx.admin, "pause_project", (&ctx.admin, project.id));
     ctx.mock_auth(&ctx.admin, "pause_project", (&ctx.admin, project.id));
     ctx.client.pause_project(&ctx.admin, &project.id);
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, ctx.dummy_proof()),
+    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 }

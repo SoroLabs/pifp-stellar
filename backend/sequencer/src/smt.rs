@@ -22,6 +22,12 @@ pub struct SparseMerkleTree {
     defaults: Vec<Hash>,
 }
 
+impl Default for SparseMerkleTree {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SparseMerkleTree {
     pub fn new() -> Self {
         let mut defaults = Vec::with_capacity(DEPTH + 1);
@@ -39,10 +45,7 @@ impl SparseMerkleTree {
     }
 
     pub fn root(&self) -> Hash {
-        *self
-            .nodes
-            .get(&(DEPTH, 0))
-            .unwrap_or(&self.defaults[DEPTH])
+        *self.nodes.get(&(DEPTH, 0)).unwrap_or(&self.defaults[DEPTH])
     }
 
     pub fn balance_of(&self, account: &str) -> u64 {
@@ -116,4 +119,3 @@ mod tests {
         assert_ne!(root0, root1);
     }
 }
-

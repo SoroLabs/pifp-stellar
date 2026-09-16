@@ -1,10 +1,6 @@
-use axum::{
-    extract::Query,
-    routing::get,
-    Json, Router,
-};
-use serde::{Deserialize, Serialize};
 use crate::bonding_curve::BondingCurve;
+use axum::{extract::Query, routing::get, Json, Router};
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct SimulationParams {
@@ -29,6 +25,5 @@ pub async fn simulate_trade(
 }
 
 pub fn router() -> Router {
-    Router::new()
-        .route("/simulate", get(simulate_trade))
+    Router::new().route("/simulate", get(simulate_trade))
 }

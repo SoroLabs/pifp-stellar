@@ -20,43 +20,37 @@ fn setup() -> (Env, PifpProtocolClient<'static>, Address, Address, Address) {
     let oracle = Address::generate(&env);
     let manager = Address::generate(&env);
 
-    env.mock_auths(&[
-        MockAuth {
-            address: &admin,
-            invoke: &MockAuthInvoke {
-                contract: &contract_id,
-                fn_name: "init",
-                args: (&admin,).into_val(&env),
-                sub_invocations: &[],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "init",
+            args: (&admin,).into_val(&env),
+            sub_invocations: &[],
         },
-    ]);
+    }]);
     client.init(&admin);
 
-    env.mock_auths(&[
-        MockAuth {
-            address: &admin,
-            invoke: &MockAuthInvoke {
-                contract: &contract_id,
-                fn_name: "grant_role",
-                args: (&admin, &oracle, Role::Oracle).into_val(&env),
-                sub_invocations: &[],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "grant_role",
+            args: (&admin, &oracle, Role::Oracle).into_val(&env),
+            sub_invocations: &[],
         },
-    ]);
+    }]);
     client.grant_role(&admin, &oracle, &Role::Oracle);
 
-    env.mock_auths(&[
-        MockAuth {
-            address: &admin,
-            invoke: &MockAuthInvoke {
-                contract: &contract_id,
-                fn_name: "grant_role",
-                args: (&admin, &manager, Role::ProjectManager).into_val(&env),
-                sub_invocations: &[],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &contract_id,
+            fn_name: "grant_role",
+            args: (&admin, &manager, Role::ProjectManager).into_val(&env),
+            sub_invocations: &[],
         },
-    ]);
+    }]);
     client.grant_role(&admin, &manager, &Role::ProjectManager);
 
     (env, client, admin, oracle, manager)
@@ -83,33 +77,50 @@ fn register(
     let tokens = soroban_sdk::vec![env, token_addr.clone()];
     let deadline = env.ledger().timestamp() + 86_400;
     let proof = BytesN::from_array(env, &[0xabu8; 32]);
-    let uri = Bytes::from_slice(env, b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi");
+    let uri = Bytes::from_slice(
+        env,
+        b"bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi",
+    );
 
     let milestones = Vec::new(env);
-    env.mock_auths(&[
-        MockAuth {
-            address: manager,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "register_project",
-                args: (
-                    manager,
-                    &tokens,
-                    &goal,
-                    &proof,
-                    &uri,
-                    &deadline,
-                    &false,
-                    &milestones,
-                    &0u32, // categories
-                    &Vec::new(env), // authorized_oracles
-                    &0u32, // threshold
-                ).into_val(env),
-                sub_invocations: &[],
-            },
+    env.mock_auths(&[MockAuth {
+        address: manager,
+        invoke: &MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "register_project",
+            args: (
+                manager,
+                &tokens,
+                &goal,
+                &proof,
+                &uri,
+                &deadline,
+                &false,
+                &milestones,
+                &0u32,          // categories
+                &Vec::new(env), // authorized_oracles
+                &0u32,          // threshold
+            )
+                .into_val(env),
+            sub_invocations: &[],
         },
-    ]);
-    client.register_project(manager, &tokens, &goal, &proof, &uri, &deadline, &false, &milestones, &0u32, &Vec::new(env), &0u32).id
+    }]);
+    client
+        .register_project(
+            manager,
+            &tokens,
+            &goal,
+            &proof,
+            &uri,
+            &deadline,
+            &false,
+            &milestones,
+            &0u32,
+            &Vec::new(env),
+            &0u32,
+        )
+        .id
+}
 
 #[test]
 fn test_batch_deposit_funds_multiple_projects() {
@@ -139,30 +150,28 @@ fn test_batch_deposit_funds_multiple_projects() {
         },
     ];
 
-    env.mock_auths(&[
-        MockAuth {
-            address: &donator,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "batch_deposit",
-                args: (&donator, &deposits).into_val(&env),
-                sub_invocations: &[
-                    MockAuthInvoke {
-                        contract: &tok1.address,
-                        fn_name: "transfer",
-                        args: (&donator, &client.address, 500i128).into_val(&env),
-                        sub_invocations: &[],
-                    },
-                    MockAuthInvoke {
-                        contract: &tok2.address,
-                        fn_name: "transfer",
-                        args: (&donator, &client.address, 800i128).into_val(&env),
-                        sub_invocations: &[],
-                    }
-                ],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &donator,
+        invoke: &MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "batch_deposit",
+            args: (&donator, &deposits).into_val(&env),
+            sub_invocations: &[
+                MockAuthInvoke {
+                    contract: &tok1.address,
+                    fn_name: "transfer",
+                    args: (&donator, &client.address, 500i128).into_val(&env),
+                    sub_invocations: &[],
+                },
+                MockAuthInvoke {
+                    contract: &tok2.address,
+                    fn_name: "transfer",
+                    args: (&donator, &client.address, 800i128).into_val(&env),
+                    sub_invocations: &[],
+                },
+            ],
         },
-    ]);
+    }]);
     client.batch_deposit(&donator, &deposits);
 
     assert_eq!(client.get_balance(&pid1, &tok1.address), 500);
@@ -198,30 +207,28 @@ fn test_batch_deposit_reverts_on_invalid_amount() {
         },
     ];
 
-    env.mock_auths(&[
-        MockAuth {
-            address: &donator,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "batch_deposit",
-                args: (&donator, &deposits).into_val(&env),
-                sub_invocations: &[
-                    MockAuthInvoke {
-                        contract: &tok1.address,
-                        fn_name: "transfer",
-                        args: (&donator, &client.address, 500i128).into_val(&env),
-                        sub_invocations: &[],
-                    },
-                    MockAuthInvoke {
-                        contract: &tok2.address,
-                        fn_name: "transfer",
-                        args: (&donator, &client.address, 0i128).into_val(&env),
-                        sub_invocations: &[],
-                    }
-                ],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &donator,
+        invoke: &MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "batch_deposit",
+            args: (&donator, &deposits).into_val(&env),
+            sub_invocations: &[
+                MockAuthInvoke {
+                    contract: &tok1.address,
+                    fn_name: "transfer",
+                    args: (&donator, &client.address, 500i128).into_val(&env),
+                    sub_invocations: &[],
+                },
+                MockAuthInvoke {
+                    contract: &tok2.address,
+                    fn_name: "transfer",
+                    args: (&donator, &client.address, 0i128).into_val(&env),
+                    sub_invocations: &[],
+                },
+            ],
         },
-    ]);
+    }]);
     client.batch_deposit(&donator, &deposits);
 }
 
@@ -234,17 +241,15 @@ fn test_batch_deposit_blocked_when_paused() {
     let pid1 = register(&env, &client, &manager, &tok1.address, 1_000);
 
     sac1.mint(&donator, &500);
-    env.mock_auths(&[
-        MockAuth {
-            address: &admin,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "pause",
-                args: (&admin,).into_val(&env),
-                sub_invocations: &[],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &admin,
+        invoke: &MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "pause",
+            args: (&admin,).into_val(&env),
+            sub_invocations: &[],
         },
-    ]);
+    }]);
     client.pause(&admin);
 
     let deposits = soroban_sdk::vec![
@@ -255,23 +260,19 @@ fn test_batch_deposit_blocked_when_paused() {
             amount: 500
         },
     ];
-    env.mock_auths(&[
-        MockAuth {
-            address: &donator,
-            invoke: &MockAuthInvoke {
-                contract: &client.address,
-                fn_name: "batch_deposit",
-                args: (&donator, &deposits).into_val(&env),
-                sub_invocations: &[
-                    MockAuthInvoke {
-                        contract: &tok1.address,
-                        fn_name: "transfer",
-                        args: (&donator, &client.address, 500i128).into_val(&env),
-                        sub_invocations: &[],
-                    }
-                ],
-            },
+    env.mock_auths(&[MockAuth {
+        address: &donator,
+        invoke: &MockAuthInvoke {
+            contract: &client.address,
+            fn_name: "batch_deposit",
+            args: (&donator, &deposits).into_val(&env),
+            sub_invocations: &[MockAuthInvoke {
+                contract: &tok1.address,
+                fn_name: "transfer",
+                args: (&donator, &client.address, 500i128).into_val(&env),
+                sub_invocations: &[],
+            }],
         },
-    ]);
+    }]);
     client.batch_deposit(&donator, &deposits);
 }

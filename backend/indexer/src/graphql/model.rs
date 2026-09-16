@@ -1,7 +1,7 @@
-use async_graphql::*;
-use serde::{Deserialize, Serialize};
 use crate::db::ProjectRecord;
 use crate::events::EventRecord;
+use async_graphql::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(SimpleObject, Clone)]
 pub struct Project {

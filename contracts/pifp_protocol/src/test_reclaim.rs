@@ -28,7 +28,11 @@ fn test_reclaim_after_expiry_window() {
     ctx.jump_time(REFUND_WINDOW + 1);
 
     // Creator reclaims unclaimed funds
-    ctx.mock_auth(&ctx.manager, "reclaim_expired_funds", (&ctx.manager, project.id));
+    ctx.mock_auth(
+        &ctx.manager,
+        "reclaim_expired_funds",
+        (&ctx.manager, project.id),
+    );
     ctx.client.reclaim_expired_funds(&ctx.manager, &project.id);
 
     // Funds went to creator
@@ -91,7 +95,11 @@ fn test_partial_refund_then_reclaim_remainder() {
     ctx.client.expire_project(&project.id);
 
     // donator_a claims refund within the window
-    ctx.mock_auth(&donator_a, "refund", (&donator_a, project.id, &token.address));
+    ctx.mock_auth(
+        &donator_a,
+        "refund",
+        (&donator_a, project.id, &token.address),
+    );
     ctx.client.refund(&donator_a, &project.id, &token.address);
     assert_eq!(token.balance(&donator_a), 300);
 
@@ -164,7 +172,11 @@ fn test_reclaim_on_completed_project_fails() {
     let (project, _, _) = ctx.setup_project(1000);
 
     // Verify and release — project becomes Completed
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, ctx.dummy_proof()),
+    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
     ctx.jump_time(86_400); // grace period

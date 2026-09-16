@@ -43,11 +43,7 @@ pub async fn get_last_ledger(pool: &PgPool) -> Result<i64> {
 }
 
 /// Persist the last-seen ledger (and optionally a pagination cursor string).
-pub async fn save_cursor(
-    pool: &PgPool,
-    last_ledger: i64,
-    last_cursor: Option<&str>,
-) -> Result<()> {
+pub async fn save_cursor(pool: &PgPool, last_ledger: i64, last_cursor: Option<&str>) -> Result<()> {
     sqlx::query("UPDATE indexer_cursor SET last_ledger = $1, last_cursor = $2 WHERE id = 1")
         .bind(last_ledger)
         .bind(last_cursor)
@@ -78,10 +74,7 @@ pub async fn insert_events(pool: &PgPool, events: &[PifpEvent]) -> Result<usize>
 }
 
 /// Persist a batch and return only events that were newly inserted.
-pub async fn insert_events_with_new(
-    pool: &PgPool,
-    events: &[PifpEvent],
-) -> Result<Vec<PifpEvent>> {
+pub async fn insert_events_with_new(pool: &PgPool, events: &[PifpEvent]) -> Result<Vec<PifpEvent>> {
     let mut inserted_events = Vec::new();
     for ev in events {
         let rows_affected = sqlx::query(
@@ -107,7 +100,7 @@ pub async fn insert_events_with_new(
 
         if rows_affected > 0 {
             inserted_events.push(ev.clone());
-            
+
             // Real-time notification for GraphQL Subscriptions
             let payload = serde_json::to_string(ev).unwrap_or_default();
             sqlx::query("SELECT pg_notify('events', $1)")

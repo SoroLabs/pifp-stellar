@@ -47,4 +47,3 @@ impl axum::response::IntoResponse for OracleError {
         (status, body).into_response()
     }
 }
-

@@ -8,8 +8,8 @@ use axum::{
 };
 use serde::Serialize;
 use tokio::net::TcpListener;
-use tracing::info;
 use tower_http::cors::{Any, CorsLayer};
+use tracing::info;
 
 use crate::metrics;
 use crate::tx_diagnostics::TxDiagnosticsStore;
@@ -97,13 +97,16 @@ mod tests {
                 web3_storage_token: None,
             },
         });
-        let rollup_state = Arc::new(crate::rollup_api::RollupState::new(std::time::Duration::from_secs(30)));
+        let rollup_state = Arc::new(crate::rollup_api::RollupState::new(
+            std::time::Duration::from_secs(30),
+        ));
         let oracle_state = Arc::new(
             crate::oracle_api::OracleApiState::new(&crate::config::Config {
                 rpc_url: "https://soroban-testnet.stellar.org".to_string(),
                 horizon_url: "https://horizon-testnet.stellar.org".to_string(),
                 contract_id: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM".to_string(),
-                oracle_secret_key: "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                oracle_secret_key: "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                    .to_string(),
                 ipfs_gateway: "https://ipfs.io".to_string(),
                 network_passphrase: "Test SDF Network ; September 2015".to_string(),
                 timeout_secs: 30,
@@ -114,8 +117,11 @@ mod tests {
                 oracle_refresh_secs: 15,
                 oracle_max_staleness_secs: 90,
                 oracle_max_variance_pct: 5.0,
-                oracle_coingecko_url: "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd".to_string(),
-                oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT".to_string(),
+                oracle_coingecko_url:
+                    "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=usd"
+                        .to_string(),
+                oracle_binance_url: "https://api.binance.com/api/v3/ticker/price?symbol=XLMUSDT"
+                    .to_string(),
                 oracle_kraken_url: "https://api.kraken.com/0/public/Ticker?pair=XLMUSD".to_string(),
                 foreign_rpc_url: None,
                 foreign_bridge_address: None,

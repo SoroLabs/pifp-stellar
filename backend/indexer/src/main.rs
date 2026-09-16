@@ -14,6 +14,7 @@ pub(crate) mod config;
 pub(crate) mod db;
 pub(crate) mod errors;
 pub(crate) mod events;
+pub(crate) mod graphql;
 pub(crate) mod indexer;
 pub(crate) mod metrics;
 pub(crate) mod middleware;
@@ -24,7 +25,6 @@ pub(crate) mod rate_limit;
 pub(crate) mod rpc;
 pub(crate) mod webhook;
 pub(crate) mod ws;
-pub(crate) mod graphql;
 
 #[cfg(test)]
 mod auth_test;
@@ -32,20 +32,23 @@ mod auth_test;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::{ routing::{ get, post }, Router };
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use reqwest::Client;
-use sentry::{ self, protocol::Event };
+use sentry::{self, protocol::Event};
 use sysinfo::System;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
-use tracing::{ info, warn };
-use tracing_subscriber::{ prelude::*, EnvFilter };
+use tracing::{info, warn};
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 use cache::Cache;
 use config::Config;
 use indexer::IndexerState;
-use rate_limit::{ AdaptiveStore, RateLimitLayer, RateLimiterStore };
+use rate_limit::{AdaptiveStore, RateLimitLayer, RateLimiterStore};
 use rpc::ProviderManager;
 use ws::WsState;
 
@@ -76,18 +79,15 @@ async fn main() -> anyhow::Result<()> {
             sentry::ClientOptions {
                 release: sentry::release_name!(),
                 traces_sample_rate: 1.0,
-                before_send: Some(
-                    std::sync::Arc::new(|event: Event<'static>| {
-                        Some(redact_sensitive_data(event))
-                    })
-                ),
+                before_send: Some(std::sync::Arc::new(|event: Event<'static>| {
+                    Some(redact_sensitive_data(event))
+                })),
                 ..Default::default()
             },
         ))
     });
 
-    tracing_subscriber
-        ::registry()
+    tracing_subscriber::registry()
         .with(EnvFilter::from_default_env())
         .with(tracing_subscriber::fmt::layer())
         .with(sentry_tracing::layer())
@@ -99,8 +99,10 @@ async fn main() -> anyhow::Result<()> {
     // HTTP client shared between the indexer and (future) outbound calls.
     let client = Client::builder().timeout(Duration::from_secs(30)).build()?;
 
-    let cache = config.redis_url.as_deref().and_then(|url| {
-        match Cache::new(url) {
+    let cache = config
+        .redis_url
+        .as_deref()
+        .and_then(|url| match Cache::new(url) {
             Ok(c) => {
                 info!("Redis cache enabled");
                 Some(c)
@@ -109,13 +111,14 @@ async fn main() -> anyhow::Result<()> {
                 warn!("Failed to initialize Redis cache; continuing without cache: {e}");
                 None
             }
-        }
-    });
+        });
 
     // ─── Adaptive Rate Limiter Store ──────────────────────
-    let rate_limit_store = Arc::new(
-        AdaptiveStore::new(config.api_rate_limit.unwrap_or(rate_limit::DEFAULT_REQUESTS_PER_MINUTE))
-    );
+    let rate_limit_store = Arc::new(AdaptiveStore::new(
+        config
+            .api_rate_limit
+            .unwrap_or(rate_limit::DEFAULT_REQUESTS_PER_MINUTE),
+    ));
 
     // ─── System Metrics Monitor ───────────────────────────
     let rate_limit_store_clone = Arc::clone(&rate_limit_store);
@@ -149,7 +152,7 @@ async fn main() -> anyhow::Result<()> {
     let providers = ProviderManager::new(
         config.rpc_url.clone(),
         config.rpc_fallback_urls.clone(),
-        config.rpc_cooldown_secs
+        config.rpc_cooldown_secs,
     );
     let indexer_state = Arc::new(IndexerState {
         pool: pool.clone(),
@@ -178,7 +181,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/projects/:id/history", get(api::get_project_history_paged))
         .route("/projects/:id/donors", get(api::get_project_donors))
         .route("/projects/top", get(api::get_top_projects))
-        .route("/projects/active/count", get(api::get_active_projects_count))
+        .route(
+            "/projects/active/count",
+            get(api::get_active_projects_count),
+        )
         .route("/stats", get(api::get_stats))
         .route("/webhooks", post(api::register_webhook))
         .route("/webhooks", get(api::list_webhooks))
@@ -186,8 +192,14 @@ async fn main() -> anyhow::Result<()> {
         .route("/projects/:id/vote", post(api::submit_vote))
         .route("/projects/:id/quorum", get(api::get_project_quorum))
         .route("/profiles/:address", get(api::get_profile))
-        .route("/profiles/:address", axum::routing::put(api::upsert_profile))
-        .route("/profiles/:address", axum::routing::delete(api::delete_profile))
+        .route(
+            "/profiles/:address",
+            axum::routing::put(api::upsert_profile),
+        )
+        .route(
+            "/profiles/:address",
+            axum::routing::delete(api::delete_profile),
+        )
         .layer(RateLimitLayer::new(rate_limit_store))
         .with_state(api_state);
 
@@ -203,13 +215,12 @@ async fn main() -> anyhow::Result<()> {
     // ─── Metrics server ───────────────────────────────────
     let metrics_addr = format!("0.0.0.0:{}", config.metrics_port);
     info!("Metrics listening on http://{metrics_addr}/metrics");
-    let metrics_app = Router::new().route(
-        "/metrics",
-        get(|| async { metrics::gather_metrics() })
-    );
+    let metrics_app = Router::new().route("/metrics", get(|| async { metrics::gather_metrics() }));
     let metrics_listener = TcpListener::bind(&metrics_addr).await?;
     tokio::spawn(async move {
-        axum::serve(metrics_listener, metrics_app).await.expect("metrics server failed");
+        axum::serve(metrics_listener, metrics_app)
+            .await
+            .expect("metrics server failed");
     });
 
     // ─── Optimized TCP Acceptor ───────────────────────────
@@ -222,7 +233,11 @@ async fn main() -> anyhow::Result<()> {
     // Standard `axum::serve` uses `tokio::net::TcpListener` which is already
     // quite efficient. For true zero-copy we'd need a more complex setup.
 
-    axum::serve(listener, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

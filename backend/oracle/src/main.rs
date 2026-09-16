@@ -1,34 +1,34 @@
+pub(crate) mod bonding_api;
+pub(crate) mod bonding_curve;
+mod bridge_api;
 mod chain;
 mod config;
-mod dkg;
+pub(crate) mod debt_api;
+pub(crate) mod debt_graph;
 mod did;
+mod dkg;
 mod errors;
 mod health;
+mod ipfs;
+mod ipfs_api;
 mod mempool;
 mod metrics;
 mod mpc;
 mod notifications;
+mod observer;
+pub(crate) mod offchain_api;
+pub(crate) mod state_proof;
 mod tss;
 mod verifier;
 mod wasm_debug;
-mod observer;
-mod bridge_api;
-mod ipfs_api;
-mod ipfs;
-pub(crate) mod state_proof;
-pub(crate) mod offchain_api;
-pub(crate) mod debt_graph;
-pub(crate) mod debt_api;
-pub(crate) mod bonding_curve;
-pub(crate) mod bonding_api;
 
 use std::sync::Arc;
 
 use crate::bridge_api::BridgeState;
-use crate::ipfs_api::IpfsState;
 use crate::ipfs::IpfsConfig;
-use crate::oracle_api::OracleApiState;
+use crate::ipfs_api::IpfsState;
 use crate::observer::BridgeObserver;
+use crate::oracle_api::OracleApiState;
 use crate::rollup_api::RollupState;
 
 use clap::Parser;
@@ -120,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
 
     let metrics = Arc::new(OracleMetrics::new());
     let diagnostics_store = Arc::new(TxDiagnosticsStore::new());
-    
+
     // Initialize Bridge and IPFS states
     let bridge_state = Arc::new(BridgeState::new());
     let ipfs_state = Arc::new(IpfsState {
@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
     // Start Bridge Observer in the background if configured
     let observer_config = Arc::clone(&config);
     // let observer_bridge_state = Arc::clone(&bridge_state);
-    
+
     // In a real scenario, we'd load the node's secret share from DKG
     // For now, we'll use a dummy signer if node_id > 0
     let signer = None; // Simplified for this task
@@ -146,7 +146,14 @@ async fn main() -> anyhow::Result<()> {
     if cli.serve {
         rollup_state.clone().start_settlement_loop();
         let oracle_state = Arc::new(OracleApiState::new(config.as_ref())?);
-        health::serve(config.metrics_port, bridge_state, ipfs_state, rollup_state, oracle_state).await?;
+        health::serve(
+            config.metrics_port,
+            bridge_state,
+            ipfs_state,
+            rollup_state,
+            oracle_state,
+        )
+        .await?;
         return Ok(());
     }
 

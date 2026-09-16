@@ -236,10 +236,9 @@ async fn poll_transaction_until_terminal(
             .await
             .map_err(|e| OracleError::Network(format!("getTransaction request failed: {e}")))?;
 
-        let response_json: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| OracleError::Network(format!("Failed to parse getTransaction response: {e}")))?;
+        let response_json: serde_json::Value = response.json().await.map_err(|e| {
+            OracleError::Network(format!("Failed to parse getTransaction response: {e}"))
+        })?;
 
         if let Some(error) = response_json.get("error") {
             return Err(OracleError::Transaction(format!(
@@ -259,7 +258,8 @@ async fn poll_transaction_until_terminal(
         }
 
         if status.eq_ignore_ascii_case("FAILED") {
-            let diagnostics = build_failed_tx_diagnostics(tx_hash, &response_json, "getTransaction");
+            let diagnostics =
+                build_failed_tx_diagnostics(tx_hash, &response_json, "getTransaction");
             if let Some(store) = diagnostics_store {
                 store.upsert(diagnostics.clone());
             }

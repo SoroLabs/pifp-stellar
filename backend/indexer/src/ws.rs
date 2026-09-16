@@ -50,10 +50,16 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerMessage<'a> {
-    Connected { message: &'static str },
-    Event { payload: &'a PifpEvent },
+    Connected {
+        message: &'static str,
+    },
+    Event {
+        payload: &'a PifpEvent,
+    },
     /// Transaction status update for pending transactions.
-    TransactionUpdate { payload: &'a TransactionUpdate },
+    TransactionUpdate {
+        payload: &'a TransactionUpdate,
+    },
     Pong,
 }
 

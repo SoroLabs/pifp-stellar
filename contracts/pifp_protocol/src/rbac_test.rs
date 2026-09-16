@@ -22,7 +22,11 @@ fn test_super_admin_can_grant_admin() {
 fn test_super_admin_can_grant_oracle() {
     let ctx = TestContext::new();
     let oracle = ctx.generate_address();
-    ctx.mock_auth(&ctx.admin, "grant_role", (&ctx.admin, &oracle, Role::Oracle));
+    ctx.mock_auth(
+        &ctx.admin,
+        "grant_role",
+        (&ctx.admin, &oracle, Role::Oracle),
+    );
     ctx.client.grant_role(&ctx.admin, &oracle, &Role::Oracle);
     assert!(ctx.client.has_role(&oracle, &Role::Oracle));
 }
@@ -112,7 +116,11 @@ fn test_oracle_can_verify() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(100);
 
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, ctx.dummy_proof()),
+    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 

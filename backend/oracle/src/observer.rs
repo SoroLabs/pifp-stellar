@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::time::Duration;
-use reqwest::Client;
-use serde_json::json;
-use tracing::{info, error, debug};
 use crate::config::Config;
 use crate::errors::Result;
-use crate::tss::{TssSigner, PartialSignature};
+use crate::tss::{PartialSignature, TssSigner};
+use reqwest::Client;
+use serde_json::json;
+use std::sync::Arc;
+use std::time::Duration;
+use tracing::{debug, error, info};
 
 /// BridgeObserver monitors a foreign chain (Ethereum/Polygon) for events
 /// and coordinates threshold signatures among keeper nodes.
@@ -74,14 +74,19 @@ impl BridgeObserver {
             }]
         });
 
-        let resp = self.client.post(rpc_url)
+        let resp = self
+            .client
+            .post(rpc_url)
             .json(&payload)
             .send()
             .await
-            .map_err(|e| crate::errors::OracleError::Network(format!("Failed to fetch logs: {}", e)))?;
+            .map_err(|e| {
+                crate::errors::OracleError::Network(format!("Failed to fetch logs: {}", e))
+            })?;
 
-        let json: serde_json::Value = resp.json().await
-            .map_err(|e| crate::errors::OracleError::Network(format!("Failed to parse logs response: {}", e)))?;
+        let json: serde_json::Value = resp.json().await.map_err(|e| {
+            crate::errors::OracleError::Network(format!("Failed to parse logs response: {}", e))
+        })?;
 
         Ok(json)
     }
@@ -90,11 +95,11 @@ impl BridgeObserver {
         if let Some(signer) = &self.signer {
             info!("Producing partial signature for bridge event");
             let _partial = signer.sign(data);
-            
+
             // In a real system, we would broadcast this to other nodes via libp2p
             // or a coordination server. Here we'll simulate the collection.
             info!("Partial signature produced by node {}", signer.node_id);
-            
+
             // For the purpose of the requirement "Show the live accumulation of validator signatures in the UI",
             // we should probably expose the state of signatures via an endpoint.
         }

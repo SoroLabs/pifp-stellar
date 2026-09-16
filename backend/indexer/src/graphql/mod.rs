@@ -1,3 +1,5 @@
+use crate::db;
+use crate::graphql::model::{Event, Project};
 use async_graphql::*;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse, GraphQLSubscription};
 use axum::{
@@ -7,10 +9,8 @@ use axum::{
     Router,
 };
 use futures_util::{Stream, StreamExt};
-use sqlx::{PgPool, postgres::PgNotification};
+use sqlx::{postgres::PgNotification, PgPool};
 use std::sync::Arc;
-use crate::graphql::model::{Project, Event};
-use crate::db;
 
 pub mod model;
 
@@ -34,7 +34,8 @@ impl QueryRoot {
             None,
             limit.unwrap_or(10),
             offset.unwrap_or(0),
-        ).await?;
+        )
+        .await?;
         Ok(records.into_iter().map(Project::from).collect())
     }
 
@@ -42,13 +43,20 @@ impl QueryRoot {
         let pool = ctx.data::<PgPool>()?;
         // Simple mock for specific project fetch if not in db.rs
         let projects = db::list_projects(pool, None, None, None, 1, 0).await?;
-        Ok(projects.into_iter().find(|p| p.project_id == id).map(Project::from))
+        Ok(projects
+            .into_iter()
+            .find(|p| p.project_id == id)
+            .map(Project::from))
     }
 
     async fn events(&self, ctx: &Context<'_>, limit: Option<i64>) -> Result<Vec<Event>> {
         let pool = ctx.data::<PgPool>()?;
         let records = db::get_all_events(pool).await?;
-        Ok(records.into_iter().take(limit.unwrap_or(20) as usize).map(Event::from).collect())
+        Ok(records
+            .into_iter()
+            .take(limit.unwrap_or(20) as usize)
+            .map(Event::from)
+            .collect())
     }
 }
 
@@ -58,13 +66,16 @@ pub struct SubscriptionRoot;
 impl SubscriptionRoot {
     async fn activity_feed(&self, ctx: &Context<'_>) -> impl Stream<Item = Event> {
         let pool = ctx.data::<PgPool>().cloned().unwrap();
-        let mut listener = sqlx::postgres::PgListener::connect_with(&pool).await.unwrap();
+        let mut listener = sqlx::postgres::PgListener::connect_with(&pool)
+            .await
+            .unwrap();
         listener.listen("events").await.unwrap();
 
         listener.into_stream().map(|notification| {
             let notification = notification.unwrap();
-            let payload: crate::events::PifpEvent = serde_json::from_str(notification.payload()).unwrap();
-            
+            let payload: crate::events::PifpEvent =
+                serde_json::from_str(notification.payload()).unwrap();
+
             // Convert PifpEvent to EventRecord mock or directly to GraphQL Event
             Event {
                 id: ID::from(0), // Simplified for subscription
@@ -85,10 +96,7 @@ impl SubscriptionRoot {
 
 pub type AppSchema = Schema<QueryRoot, EmptyMutation, SubscriptionRoot>;
 
-async fn graphql_handler(
-    State(schema): State<AppSchema>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
+async fn graphql_handler(State(schema): State<AppSchema>, req: GraphQLRequest) -> GraphQLResponse {
     schema.execute(req.into_inner()).await.into()
 }
 

@@ -7,14 +7,14 @@ use std::time::Duration;
 use reqwest::Client;
 use sqlx::PgPool;
 use tokio::time::Instant;
-use tracing::{ error, info, warn };
+use tracing::{error, info, warn};
 
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::db;
 use crate::metrics;
-use crate::ml_pipeline::{ self, MLPipeline };
-use crate::rpc::{ self, ProviderManager };
+use crate::ml_pipeline::{self, MLPipeline};
+use crate::rpc::{self, ProviderManager};
 use crate::webhook;
 
 pub struct IndexerState {
@@ -29,7 +29,10 @@ pub struct IndexerState {
 
 /// Spawn the indexer loop as a background [`tokio`] task.
 pub async fn run(state: Arc<IndexerState>) {
-    info!("Indexer starting — contracts: {}", state.config.contract_ids.join(","));
+    info!(
+        "Indexer starting — contracts: {}",
+        state.config.contract_ids.join(",")
+    );
 
     // Load the cursor from the DB; fall back to config start_ledger.
     let last_ledger = db::get_last_ledger(&state.pool).await.unwrap_or(0);
@@ -41,31 +44,35 @@ pub async fn run(state: Arc<IndexerState>) {
         state.config.start_ledger
     };
 
-    let mut current_ledger = state.config.backfill_start_ledger.unwrap_or(persisted_ledger);
-    let mut cursor: Option<String> = if
-        state.config.backfill_start_ledger.is_some() ||
-        state.config.backfill_cursor.is_some()
-    {
-        state.config.backfill_cursor.clone()
-    } else {
-        cursor_str
-    };
+    let mut current_ledger = state
+        .config
+        .backfill_start_ledger
+        .unwrap_or(persisted_ledger);
+    let mut cursor: Option<String> =
+        if state.config.backfill_start_ledger.is_some() || state.config.backfill_cursor.is_some() {
+            state.config.backfill_cursor.clone()
+        } else {
+            cursor_str
+        };
 
-    info!("Resuming from ledger {current_ledger} (cursor={})", cursor.as_deref().unwrap_or("none"));
+    info!(
+        "Resuming from ledger {current_ledger} (cursor={})",
+        cursor.as_deref().unwrap_or("none")
+    );
 
     loop {
-        match
-            poll_once(
-                &state.pool,
-                &state.client,
-                &state.config,
-                &state.providers,
-                state.cache.as_ref(),
-                state.ml_pipeline.clone(),
-                state.ws_state.as_ref(),
-                current_ledger,
-                cursor.as_deref()
-            ).await
+        match poll_once(
+            &state.pool,
+            &state.client,
+            &state.config,
+            &state.providers,
+            state.cache.as_ref(),
+            state.ml_pipeline.clone(),
+            state.ws_state.as_ref(),
+            current_ledger,
+            cursor.as_deref(),
+        )
+        .await
         {
             Ok((next_ledger, next_cursor)) => {
                 current_ledger = next_ledger;
@@ -93,7 +100,7 @@ async fn poll_once(
     ml_pipeline: Arc<MLPipeline>,
     ws_state: Option<&Arc<crate::ws::WsState>>,
     start_ledger: u32,
-    cursor: Option<&str>
+    cursor: Option<&str>,
 ) -> crate::errors::Result<(u32, Option<String>)> {
     let (raw_events, next_cursor, latest_ledger) = rpc::fetch_events(
         client,
@@ -101,8 +108,9 @@ async fn poll_once(
         &config.contract_ids,
         start_ledger,
         cursor,
-        config.events_per_page
-    ).await?;
+        config.events_per_page,
+    )
+    .await?;
 
     // ─── ML Anomaly Detection ─────────────────────────────
     if !raw_events.is_empty() && ml_pipeline::process_events(ml_pipeline, &raw_events).await {
@@ -123,7 +131,11 @@ async fn poll_once(
         let decoded = rpc::decode_events(&raw_events, &config.contract_ids);
         let inserted_events = db::insert_events_with_new(pool, &decoded).await?;
         let inserted = inserted_events.len();
-        info!("Polled {} raw events → {} decoded PIFP events stored", raw_events.len(), inserted);
+        info!(
+            "Polled {} raw events → {} decoded PIFP events stored",
+            raw_events.len(),
+            inserted
+        );
 
         if inserted > 0 {
             if let Some(cache) = cache {
@@ -153,7 +165,9 @@ async fn poll_once(
     // - If there is a next_cursor string, keep the same start_ledger so the next
     //   call paginates within the same ledger range.
     // - Otherwise advance to the latest known ledger.
-    let next_ledger = latest_ledger.map(|l| (l as u32).max(start_ledger)).unwrap_or(start_ledger);
+    let next_ledger = latest_ledger
+        .map(|l| (l as u32).max(start_ledger))
+        .unwrap_or(start_ledger);
 
     // Persist cursor so restarts are deterministic.
     db::save_cursor(pool, next_ledger as i64, next_cursor.as_deref()).await?;

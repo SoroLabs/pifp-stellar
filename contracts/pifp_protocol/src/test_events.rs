@@ -17,7 +17,8 @@ fn test_project_funded_event() {
     let donator = ctx.generate_address();
     sac.mint(&donator, &1000i128);
     ctx.mock_deposit_auth(&donator, project.id, &token.address, 1000i128);
-    ctx.client.deposit(&project.id, &donator, &token.address, &1000i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &1000i128);
 }
 
 #[test]
@@ -25,7 +26,11 @@ fn test_project_verified_event() {
     let ctx = TestContext::new();
     let (project, _, _) = ctx.setup_project(1000);
     let proof = ctx.dummy_proof();
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, &proof));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, &proof),
+    );
     ctx.client.verify_proof(&ctx.oracle, &project.id, &proof);
 }
 
@@ -54,9 +59,11 @@ fn test_get_project_balances() {
     sac_a.mint(&donator, &2_500i128);
     sac_b.mint(&donator, &7_000i128);
     ctx.mock_deposit_auth(&donator, project.id, &token_a.address, 2_500i128);
-    ctx.client.deposit(&project.id, &donator, &token_a.address, &2_500i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token_a.address, &2_500i128);
     ctx.mock_deposit_auth(&donator, project.id, &token_b.address, 7_000i128);
-    ctx.client.deposit(&project.id, &donator, &token_b.address, &7_000i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token_b.address, &7_000i128);
 
     let balances = ctx.client.get_project_balances(&project.id);
     assert_eq!(balances.project_id, project.id);
@@ -78,7 +85,11 @@ fn test_funds_released_to_creator() {
         .deposit(&project.id, &donator, &token.address, &deposit_amount);
 
     // Verify
-    ctx.mock_auth(&ctx.oracle, "verify_proof", (&ctx.oracle, project.id, ctx.dummy_proof()));
+    ctx.mock_auth(
+        &ctx.oracle,
+        "verify_proof",
+        (&ctx.oracle, project.id, ctx.dummy_proof()),
+    );
     ctx.client
         .verify_proof(&ctx.oracle, &project.id, &ctx.dummy_proof());
 
@@ -100,7 +111,8 @@ fn test_refunded_event() {
     let donator = ctx.generate_address();
     sac.mint(&donator, &400i128);
     ctx.mock_deposit_auth(&donator, project.id, &token.address, 400i128);
-    ctx.client.deposit(&project.id, &donator, &token.address, &400i128);
+    ctx.client
+        .deposit(&project.id, &donator, &token.address, &400i128);
     ctx.jump_time(86_401);
     ctx.mock_auth(&donator, "refund", (&donator, project.id, &token.address));
     ctx.client.refund(&donator, &project.id, &token.address);

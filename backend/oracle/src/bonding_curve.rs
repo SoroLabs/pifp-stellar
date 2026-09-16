@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BondingCurve {
@@ -18,36 +18,51 @@ impl BondingCurve {
 
     /// Calculate tokens received for a given reserve deposit (e.g., USDC -> Token)
     pub fn calculate_purchase_return(&self, deposit_amount: f64) -> f64 {
-        if deposit_amount <= 0.0 { return 0.0; }
-        
+        if deposit_amount <= 0.0 {
+            return 0.0;
+        }
+
         // Bancor Formula: T = S * ((1 + dR/R)^F - 1)
         self.supply * ((1.0 + deposit_amount / self.reserve_balance).powf(self.reserve_ratio) - 1.0)
     }
 
     /// Calculate reserve tokens received for selling supply tokens (e.g., Token -> USDC)
     pub fn calculate_sale_return(&self, sell_amount: f64) -> f64 {
-        if sell_amount <= 0.0 || sell_amount >= self.supply { return 0.0; }
+        if sell_amount <= 0.0 || sell_amount >= self.supply {
+            return 0.0;
+        }
 
         // Bancor Formula: dR = R * (1 - (1 - dT/S)^(1/F))
-        self.reserve_balance * (1.0 - (1.0 - sell_amount / self.supply).powf(1.0 / self.reserve_ratio))
+        self.reserve_balance
+            * (1.0 - (1.0 - sell_amount / self.supply).powf(1.0 / self.reserve_ratio))
     }
 
     /// Current instantaneous price
     pub fn current_price(&self) -> f64 {
-        if self.supply <= 0.0 { return 0.0; }
+        if self.supply <= 0.0 {
+            return 0.0;
+        }
         self.reserve_balance / (self.supply * self.reserve_ratio)
     }
 
     /// Simulated impact of a trade
     pub fn simulate_trade(&self, amount: f64, is_buy: bool) -> TradeImpact {
         let current_price = self.current_price();
-        
+
         let (output_amount, new_reserve, new_supply) = if is_buy {
             let received = self.calculate_purchase_return(amount);
-            (received, self.reserve_balance + amount, self.supply + received)
+            (
+                received,
+                self.reserve_balance + amount,
+                self.supply + received,
+            )
         } else {
             let received = self.calculate_sale_return(amount);
-            (received, self.reserve_balance - received, self.supply - amount)
+            (
+                received,
+                self.reserve_balance - received,
+                self.supply - amount,
+            )
         };
 
         let new_price = new_reserve / (new_supply * self.reserve_ratio);

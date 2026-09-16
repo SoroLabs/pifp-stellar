@@ -2,7 +2,10 @@ extern crate std;
 
 use soroban_sdk::{vec, Address, Bytes, BytesN, Vec};
 
-use crate::{types::{Milestone, ProjectRegistrationRequest}, test_utils::TestContext};
+use crate::{
+    test_utils::TestContext,
+    types::{Milestone, ProjectRegistrationRequest},
+};
 
 #[test]
 fn test_batch_register_projects_success() {

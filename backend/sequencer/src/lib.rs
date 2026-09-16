@@ -8,11 +8,7 @@ mod tests {
     use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
 
-    use crate::{
-        prover::ExternalProverClient,
-        sequencer::Sequencer,
-        types::SignedIntent,
-    };
+    use crate::{prover::ExternalProverClient, sequencer::Sequencer, types::SignedIntent};
 
     fn signed_intent(
         from: &str,
@@ -58,4 +54,3 @@ mod tests {
         assert!(submission.l1_tx_hash.starts_with("0x"));
     }
 }
-

@@ -156,7 +156,11 @@ pub trait ChainListener: Send + Sync {
     /// Poll the chain for new HTLC lock events since `from_block`.
     async fn poll_lock_events(&self, from_block: u64) -> anyhow::Result<Vec<HtlcLockEvent>>;
     /// Broadcast a claim transaction using `secret`.
-    async fn broadcast_claim(&self, event: &HtlcLockEvent, secret: &Secret) -> anyhow::Result<String>;
+    async fn broadcast_claim(
+        &self,
+        event: &HtlcLockEvent,
+        secret: &Secret,
+    ) -> anyhow::Result<String>;
     /// Broadcast a refund/reclaim transaction after timeout.
     async fn broadcast_refund(&self, event: &HtlcLockEvent) -> anyhow::Result<String>;
 }
@@ -180,7 +184,11 @@ impl ChainListener for SorobanListener {
         Ok(vec![])
     }
 
-    async fn broadcast_claim(&self, event: &HtlcLockEvent, secret: &Secret) -> anyhow::Result<String> {
+    async fn broadcast_claim(
+        &self,
+        event: &HtlcLockEvent,
+        secret: &Secret,
+    ) -> anyhow::Result<String> {
         info!(
             chain = "Stellar",
             tx = event.tx_id,
@@ -192,7 +200,11 @@ impl ChainListener for SorobanListener {
     }
 
     async fn broadcast_refund(&self, event: &HtlcLockEvent) -> anyhow::Result<String> {
-        warn!(chain = "Stellar", tx = event.tx_id, "broadcasting HTLC refund (timeout)");
+        warn!(
+            chain = "Stellar",
+            tx = event.tx_id,
+            "broadcasting HTLC refund (timeout)"
+        );
         Ok(format!("stub-stellar-refund-{}", event.tx_id))
     }
 }
@@ -214,7 +226,11 @@ impl ChainListener for EvmListener {
         Ok(vec![])
     }
 
-    async fn broadcast_claim(&self, event: &HtlcLockEvent, secret: &Secret) -> anyhow::Result<String> {
+    async fn broadcast_claim(
+        &self,
+        event: &HtlcLockEvent,
+        secret: &Secret,
+    ) -> anyhow::Result<String> {
         info!(
             chain = "Ethereum",
             tx = event.tx_id,
@@ -225,7 +241,11 @@ impl ChainListener for EvmListener {
     }
 
     async fn broadcast_refund(&self, event: &HtlcLockEvent) -> anyhow::Result<String> {
-        warn!(chain = "Ethereum", tx = event.tx_id, "broadcasting HTLC refund (timeout)");
+        warn!(
+            chain = "Ethereum",
+            tx = event.tx_id,
+            "broadcasting HTLC refund (timeout)"
+        );
         Ok(format!("stub-evm-refund-{}", event.tx_id))
     }
 }
@@ -277,8 +297,15 @@ impl AtomicSwapCoordinator {
             source_lock_event: None,
             dest_lock_event: None,
         };
-        self.swaps.lock().unwrap().insert(swap_id.to_string(), record);
-        info!(swap_id, hash_lock = hex::encode(hash_lock), "swap initiated");
+        self.swaps
+            .lock()
+            .unwrap()
+            .insert(swap_id.to_string(), record);
+        info!(
+            swap_id,
+            hash_lock = hex::encode(hash_lock),
+            "swap initiated"
+        );
         hash_lock
     }
 
@@ -362,7 +389,11 @@ impl AtomicSwapCoordinator {
     }
 
     pub fn swap_status(&self, swap_id: &str) -> Option<SwapStatus> {
-        self.swaps.lock().unwrap().get(swap_id).map(|r| r.status.clone())
+        self.swaps
+            .lock()
+            .unwrap()
+            .get(swap_id)
+            .map(|r| r.status.clone())
     }
 
     // ── Internal helpers ────────────────────────────────────────────────────
@@ -480,7 +511,10 @@ mod tests {
     fn initiate_swap_status_is_initiated() {
         let coordinator = AtomicSwapCoordinator::new(vec![], Duration::from_secs(1));
         coordinator.initiate_swap("swapB", Chain::Stellar, Chain::Ethereum, 3600);
-        assert_eq!(coordinator.swap_status("swapB"), Some(SwapStatus::Initiated));
+        assert_eq!(
+            coordinator.swap_status("swapB"),
+            Some(SwapStatus::Initiated)
+        );
     }
 
     #[tokio::test]
@@ -497,7 +531,10 @@ mod tests {
             recipient: "0xABCD".to_string(),
         };
         coordinator.handle_lock_event(event).await;
-        assert_eq!(coordinator.swap_status("swapC"), Some(SwapStatus::SourceLocked));
+        assert_eq!(
+            coordinator.swap_status("swapC"),
+            Some(SwapStatus::SourceLocked)
+        );
     }
 
     #[tokio::test]
@@ -508,6 +545,9 @@ mod tests {
         // tick_refunds should handle gracefully even with no source_lock_event.
         coordinator.tick_refunds().await;
         // Status stays Initiated because there's no lock event to refund.
-        assert_eq!(coordinator.swap_status("swapD"), Some(SwapStatus::Initiated));
+        assert_eq!(
+            coordinator.swap_status("swapD"),
+            Some(SwapStatus::Initiated)
+        );
     }
 }

@@ -26,12 +26,14 @@ pub struct BridgeState {
 pub fn router() -> Router<Arc<crate::health::ServerState>> {
     Router::new()
         .route("/bridge/messages", get(get_messages))
-    .route("/bridge/messages/{id}", get(get_message))
-    .route("/bridge/sign/{id}", post(add_signature))
+        .route("/bridge/messages/{id}", get(get_message))
+        .route("/bridge/sign/{id}", post(add_signature))
         .with_state(state)
 }
 
-async fn get_messages(State(state): State<Arc<crate::health::ServerState>>) -> Json<Vec<BridgeMessage>> {
+async fn get_messages(
+    State(state): State<Arc<crate::health::ServerState>>,
+) -> Json<Vec<BridgeMessage>> {
     let messages = state.bridge.messages.lock().unwrap();
     Json(messages.values().cloned().collect())
 }

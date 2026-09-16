@@ -43,4 +43,3 @@ pub fn account_key(account: &str) -> u64 {
     let out = hasher.finalize();
     u64::from_be_bytes(out[..8].try_into().expect("slice length is 8"))
 }
-
